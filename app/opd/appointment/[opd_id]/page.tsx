@@ -65,6 +65,8 @@ import {
   Casualty,
   CardiologyStudyOptions,
   type ServiceOption,
+  TitleOptions,
+  AgeUnit, // Import TitleOptions
 } from "@/app/opd/types"
 
 // Server Actions
@@ -118,7 +120,6 @@ const EditAppointmentPage = () => {
   const [doctors, setDoctors] = useState<Doctor[]>([])
   const [onCallAppointments, setOnCallAppointments] = useState<OnCallAppointment[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [searchUhIdInput, setSearchUhIdInput] = useState("")
   const [searchPhoneInput, setSearchPhoneInput] = useState("")
   const [searchedPatientResults, setSearchedPatientResults] = useState<PatientDetail[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
@@ -157,7 +158,8 @@ const EditAppointmentPage = () => {
       specialist: "",
       visitType: "first",
       study: "",
-      uhid: "",
+      title: "MR", // Default title
+      totalDay: 0, // Default totalDay
     },
     mode: "onChange",
   })
@@ -184,6 +186,36 @@ const EditAppointmentPage = () => {
   const watchedCashAmount = watch("cashAmount")
   const watchedOnlineAmount = watch("onlineAmount")
   const watchedDiscount = watch("discount")
+  const watchedAge = watch("age")
+  const watchedAgeUnit = watch("ageUnit")
+  const titleValue = watch("title")
+
+  const calculateTotalDays = useCallback((age?: number, unit?: AgeUnit): number => {
+    if (age === undefined || unit === undefined) return 0
+    switch (unit) {
+      case "year":
+        return age * 365
+      case "month":
+        return age * 30
+      case "day":
+        return age
+      default:
+        return 0
+    }
+  }, [])
+
+  useEffect(() => {
+    setValue("totalDay", calculateTotalDays(watchedAge, watchedAgeUnit), { shouldValidate: true })
+  }, [watchedAge, watchedAgeUnit, setValue, calculateTotalDays])
+
+  useEffect(() => {
+    const male = new Set(["MR", "MAST", "BABA"])
+    const female = new Set(["MS", "MISS", "MRS", "BABY", "SMT"])
+    const none = new Set(["BABY OF", "DR", "", "."])
+    if (typeof titleValue === "string" && male.has(titleValue)) setValue("gender", "male")
+    else if (typeof titleValue === "string" && female.has(titleValue)) setValue("gender", "female")
+    else if (typeof titleValue === "string" && none.has(titleValue)) setValue("gender", "")
+  }, [titleValue, setValue])
 
   // --- Initial Data Fetch ---
   useEffect(() => {
@@ -254,6 +286,8 @@ const EditAppointmentPage = () => {
           setValue("date", new Date(data.date))
           setValue("uhid", data.patient_detail.uhid || "")
           setValue("opdType", data.opdType || "OPD")
+          setValue("title", data.patient_detail.title || "MR", { shouldValidate: true }) // Set title from patient data
+          setValue("totalDay", data.patient_detail.total_day || 0, { shouldValidate: true }) // Set totalDay from patient data
           setCurrentBillNo(data.bill_no)
 
           setSelectedPatient({
@@ -265,6 +299,8 @@ const EditAppointmentPage = () => {
             age_unit: data.patient_detail.age_unit || "year",
             gender: data.patient_detail.gender || "",
             address: data.patient_detail.address || "",
+            title: data.patient_detail.title || "MR",
+            total_day: data.patient_detail.total_day || 0,
           })
 
           const mappedModalities = (data.service_info || []).map((modality: any) => {
@@ -345,11 +381,11 @@ const EditAppointmentPage = () => {
     setValue("discount", 0)
     setValue("onlineThrough", "upi")
     setValue("cashThrough", "cash")
-    setValue("uhid", patient.uhid || "")
+    setValue("title", patient.title || "MR", { shouldValidate: true }) // Set title from patient data
+    setValue("totalDay", patient.total_day || 0, { shouldValidate: true }) // Set totalDay from patient data
     setSelectedPatient(patient)
     setValue("modalities", [])
     setActiveTab("book")
-    setSearchUhIdInput("")
     setSearchPhoneInput("")
     setSearchedPatientResults(null)
   }
@@ -379,11 +415,11 @@ const EditAppointmentPage = () => {
       specialist: "",
       visitType: "first",
       study: "",
-      uhid: "",
+      title: "MR", // Default title
+      totalDay: 0, // Default totalDay
     })
     setSelectedPatient(null)
     setSearchedPatientResults(null)
-    setSearchUhIdInput("")
     setSearchPhoneInput("")
     setEditingChargeIndex(null)
   }
@@ -395,14 +431,13 @@ const EditAppointmentPage = () => {
   }
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newName = e.target.value
+    const newName = e.target.value.toUpperCase()
     setValue("name", newName)
     if (opdId && selectedPatient) {
       setSelectedPatient({ ...selectedPatient, name: newName })
     } else {
       setSelectedPatient(null)
       setValue("uhid", "")
-      setSearchUhIdInput("")
       setSearchedPatientResults(null)
     }
   }
@@ -415,34 +450,7 @@ const EditAppointmentPage = () => {
     } else {
       setSelectedPatient(null)
       setValue("uhid", "")
-      setSearchUhIdInput("")
       setSearchedPatientResults(null)
-    }
-  }
-
-  const handleSearchByUhId = async () => {
-    if (!searchUhIdInput.trim()) {
-      toast.error("Please enter a UHID to search.")
-      return
-    }
-    setIsSearching(true)
-    setSearchedPatientResults(null)
-    resetFormForNewPatient()
-    try {
-      const result = await searchPatientByUhId(searchUhIdInput.trim().toUpperCase())
-      if (result.success && result.patient) {
-        fillFormWithPatientData(result.patient)
-        toast.success("Patient found and details filled.")
-      } else {
-        toast.error(result.message || "Patient not found.")
-        resetFormForNewPatient()
-      }
-    } catch (error) {
-      console.error("Search by UHID failed:", error)
-      toast.error("An error occurred during UHID search.")
-      resetFormForNewPatient()
-    } finally {
-      setIsSearching(false)
     }
   }
 
@@ -607,6 +615,8 @@ const EditAppointmentPage = () => {
       uhid: selectedPatient.uhid,
       date: currentFormData.date instanceof Date ? currentFormData.date : new Date(currentFormData.date),
       time: currentFormData.time || formatAMPM(new Date()),
+      title: currentFormData.title || "MR", // Include title
+      totalDay: currentFormData.totalDay || 0, // Include totalDay
     }
 
     try {
@@ -645,7 +655,7 @@ const EditAppointmentPage = () => {
     try {
       const { data: patientData, error } = await supabase
         .from("patient_detail")
-        .select("patient_id, name, number, age, age_unit, dob, gender, address, uhid")
+        .select("patient_id, name, number, age, age_unit, dob, gender, address, uhid, title, total_day")
         .eq("patient_id", appointment.patient_id)
         .single()
 
@@ -660,6 +670,8 @@ const EditAppointmentPage = () => {
         age_unit: patientData.age_unit || "year",
         gender: patientData.gender || "",
         address: patientData.address || "",
+        title: patientData.title || "MR",
+        total_day: patientData.total_day || 0,
       }
 
       fillFormWithPatientData(formattedPatientData)
@@ -695,6 +707,8 @@ const EditAppointmentPage = () => {
         number: appointment.patient_detail?.number || "",
         age: appointment.patient_detail?.age || 0,
         gender: appointment.patient_detail?.gender || "",
+        title: appointment.patient_detail?.title || "MR",
+        total_day: appointment.patient_detail?.total_day || 0,
       }
       setSelectedPatient(formattedPatientDetail)
       setValue("uhid", appointment.uhid)
@@ -758,24 +772,53 @@ const EditAppointmentPage = () => {
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {/* Patient Name */}
-                          <div className="space-y-2">
-                            <Label htmlFor="name" className="text-sm font-medium">
-                              Patient Name <span className="text-red-500">*</span>
-                            </Label>
-                            <div className="relative">
-                              <PersonIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                              <Input
-                                id="name"
-                                type="text"
-                                {...register("name", { required: "Name is required" })}
-                                onChange={handleNameChange}
-                                placeholder="Enter patient name"
-                                className={`pl-10 ${errors.name ? "border-red-500" : ""}`}
-                                autoComplete="off"
-                              />
+                          {/* Patient Name and TITLE */}
+                          <div className="col-span-full md:col-span-1">
+                            <div className="flex items-end gap-2">
+                              <div className="space-y-2 w-[120px] shrink-0">
+                                <Label htmlFor="patient-title" className="text-sm font-medium">
+                                  Title <span className="text-red-500">*</span>
+                                </Label>
+                                <Controller
+                                  control={control}
+                                  name="title"
+                                  rules={{ required: "Title is required" }}
+                                  render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                      <SelectTrigger className={errors.title ? "border-red-500" : ""}>
+                                        <SelectValue placeholder="Title" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {TitleOptions.map((option) => (
+                                          <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                />
+                                {errors.title && <p className="text-sm text-red-500">{errors.title.message}</p>}
+                              </div>
+                              <div className="space-y-2 flex-1">
+                                <Label htmlFor="name" className="text-sm font-medium">
+                                  Patient Name <span className="text-red-500">*</span>
+                                </Label>
+                                <div className="relative">
+                                  <PersonIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                                  <Input
+                                    id="name"
+                                    type="text"
+                                    {...register("name", { required: "Name is required" })}
+                                    onChange={(e) => setValue("name", e.target.value.toUpperCase())}
+                                    placeholder="Enter patient name"
+                                    className={`pl-10 ${errors.name ? "border-red-500" : ""}`}
+                                    autoComplete="off"
+                                  />
+                                </div>
+                                {errors.name && <p className="text-sm text-red-500">{errors.name.message}</p>}
+                              </div>
                             </div>
-                            {errors.name && <p className="text-sm text-red-500">{errors.name.message}</p>}
                           </div>
 
                           {/* Phone */}
@@ -882,9 +925,8 @@ const EditAppointmentPage = () => {
                             />
                             {errors.gender && <p className="text-sm text-red-500">{errors.gender.message}</p>}
                           </div>
-
-                          {/* Appointment Type */}
-                          <div className="space-y-3">
+                          {/* APPOINTMENT TYPE */}
+                          <div className="space-y-2">
                             <Label className="text-sm font-medium">
                               Appointment Type <span className="text-red-500">*</span>
                             </Label>
@@ -1504,6 +1546,14 @@ const EditAppointmentPage = () => {
                                         Notes: {appointment.additional_notes}
                                       </p>
                                     )}
+                                    <p>
+                                      <User className="inline h-3 w-3 mr-1" />
+                                      Title: {appointment.patient_detail?.title || "N/A"}
+                                    </p>
+                                    <p>
+                                      <Calendar className="inline h-3 w-3 mr-1" />
+                                      Total Days: {appointment.patient_detail?.total_day || "N/A"}
+                                    </p>
                                   </div>
                                 </div>
                                 <div className="flex flex-col space-y-2">
@@ -1551,11 +1601,11 @@ const EditAppointmentPage = () => {
                     <Input
                       id="searchUhId"
                       placeholder="Enter UHID or counter number (e.g., MG-070525-00001 or 00001)"
-                      value={searchUhIdInput}
-                      onChange={(e) => setSearchUhIdInput(e.target.value)}
+                      value={searchPhoneInput}
+                      onChange={(e) => setSearchPhoneInput(e.target.value)}
                       disabled={isSearching}
                     />
-                    <Button onClick={handleSearchByUhId} disabled={isSearching}>
+                    <Button onClick={handleSearchByPhoneNumber} disabled={isSearching}>
                       {isSearching ? "Searching..." : "Search"}
                     </Button>
                   </div>

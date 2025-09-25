@@ -27,7 +27,24 @@ export interface IFormInput {
   onlineThrough?: "upi" | "card-debit" | "card-credit" | "netbanking" | "wallet"
   cashThrough?: "cash"
   uhid?: string // UHID can be pre-filled or generated
+  title?: string // New field for patient's title
+  totalDay?: number // New field for total_day
 }
+
+export const TitleOptions = [
+  { value: "MR", label: "MR" },
+  { value: "MRS", label: "MRS" },
+  { value: "MAST", label: "MAST" },
+  { value: "BABA", label: "BABA" },
+  { value: "MISS", label: "MISS" },
+  { value: "MS", label: "MS" },
+  { value: "BABY", label: "BABY" },
+  { value: "SMT", label: "SMT" },
+  { value: "BABY OF", label: "BABY OF" },
+  { value: "DR", label: "DR" },
+  { value: ".", label: "No Title" },
+]
+
 
 export interface ModalitySelection {
   id: string // Client-side unique ID for React keys
@@ -54,6 +71,8 @@ export interface PatientDetail {
   uhid: string // Unique Hospital ID
   created_at?: string // Kept as optional, as it might exist as auto-managed
   updated_at?: string // Kept as optional, as it might exist as auto-managed
+  title?: string // New field for patient's title
+  total_day?: number // New field for total_day
 }
 
 // Represents a doctor record as fetched from Supabase's doctor table

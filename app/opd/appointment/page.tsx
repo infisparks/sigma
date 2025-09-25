@@ -64,6 +64,8 @@ import {
   Casualty,
   CardiologyStudyOptions,
   type ServiceOption,
+  TitleOptions, // Import TitleOptions
+  AgeUnit, // Import AgeUnit
 } from "@/app/opd/types" // IMPORTANT: Ensure your ModalitySelection, Doctor types are updated here.
 
 // Ensure correct path to your action functions
@@ -157,6 +159,8 @@ const AppointmentPage = () => {
       visitType: "first",
       study: "",
       uhid: "",
+      title: "MR", // Default title
+      totalDay: 0, // Default totalDay
     },
     mode: "onChange",
   })
@@ -188,6 +192,36 @@ const AppointmentPage = () => {
   const watchedCashAmount = watch("cashAmount")
   const watchedOnlineAmount = watch("onlineAmount")
   const watchedDiscount = watch("discount")
+  const watchedAge = watch("age")
+  const watchedAgeUnit = watch("ageUnit")
+  const titleValue = watch("title")
+
+  const calculateTotalDays = useCallback((age?: number, unit?: AgeUnit): number => {
+    if (age === undefined || unit === undefined) return 0
+    switch (unit) {
+      case "year":
+        return age * 365
+      case "month":
+        return age * 30
+      case "day":
+        return age
+      default:
+        return 0
+    }
+  }, [])
+
+  useEffect(() => {
+    setValue("totalDay", calculateTotalDays(watchedAge, watchedAgeUnit), { shouldValidate: true })
+  }, [watchedAge, watchedAgeUnit, setValue, calculateTotalDays])
+
+  useEffect(() => {
+    const male = new Set(["MR", "MAST", "BABA"])
+    const female = new Set(["MS", "MISS", "MRS", "BABY", "SMT"])
+    const none = new Set(["BABY OF", "DR", "", "."])
+    if (male.has(titleValue || "")) setValue("gender", "male")
+    else if (female.has(titleValue || "")) setValue("gender", "female")
+    else if (none.has(titleValue || "")) setValue("gender", "")
+  }, [titleValue, setValue])
 
   // Function to fetch and set doctors and on-call appointments
   const fetchInitialData = useCallback(async () => {
@@ -229,6 +263,8 @@ const AppointmentPage = () => {
     setValue("onlineThrough", "upi")
     setValue("cashThrough", "cash")
     setValue("uhid", p.uhid || "")
+    setValue("title", p.title || "MR", { shouldValidate: true }) // Set title from patient data
+    setValue("totalDay", p.total_day || 0, { shouldValidate: true }) // Set totalDay from patient data
     setSelectedPatient(p)
     setValue("modalities", [])
     setActiveTab("book")
@@ -266,6 +302,8 @@ const AppointmentPage = () => {
       visitType: "first",
       study: "",
       uhid: "",
+      title: "MR", // Default title
+      totalDay: 0, // Default totalDay
     })
     setSelectedPatient(null)
     setSearchedPatientResults(null)
@@ -653,6 +691,8 @@ const AppointmentPage = () => {
           age_unit: formData.ageUnit || null,
           gender: formData.gender || null,
           address: formData.address?.trim() || null,
+          title: formData.title || null,
+          total_day: formData.totalDay || null,
         })
         .eq("patient_id", selectedPatient.patient_id)
         .eq("uhid", selectedPatient.uhid)
@@ -671,6 +711,8 @@ const AppointmentPage = () => {
         age_unit: formData.ageUnit || undefined,
         gender: formData.gender || undefined,
         address: formData.address?.trim() || undefined,
+        title: formData.title || undefined,
+        total_day: formData.totalDay || undefined,
       }
       setSelectedPatient(updatedPatient)
       
@@ -970,38 +1012,71 @@ const AppointmentPage = () => {
                           </div>
                         )}
                         <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-6">
-                          {/* NAME */}
-                          <div className="space-y-2">
-                            <Label htmlFor="patient-name">
-                              Patient Name <span className="text-red-500">*</span>
-                            </Label>
-                            <div className="relative">
-                              <PersonIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                              <Controller
-                                control={control}
-                                name="name"
-                                rules={{ required: "Name is required" }}
-                                render={({ field }) => (
-                                  <Input
-                                    key={`name-${isEditingPatient}`}
-                                    id="patient-name"
-                                    type="text"
-                                    {...field}
-                                    ref={(el) => {
-                                      field.ref(el)
-                                      nameInputRef.current = el
-                                    }}
-                                    placeholder="Enter patient name"
-                                    className={`pl-10 h-10 ${errors.name ? "border-red-500" : ""} ${
-                                      isEditingPatient && selectedPatient ? "border-yellow-400 bg-yellow-50" : ""
-                                    }`}
-                                    autoComplete="off"
-                                    disabled={selectedPatient ? !isEditingPatient : false}
+                          {/* NAME and TITLE */}
+                          <div className="col-span-full md:col-span-1">
+                            <div className="flex items-end gap-2">
+                              <div className="space-y-2 w-[120px] shrink-0">
+                                <Label htmlFor="patient-title">
+                                  Title <span className="text-red-500">*</span>
+                                </Label>
+                                <Controller
+                                  control={control}
+                                  name="title"
+                                  rules={{ required: "Title is required" }}
+                                  render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value} disabled={selectedPatient ? !isEditingPatient : false}>
+                                      <SelectTrigger
+                                        id="patient-title"
+                                        className={`h-10 ${errors.title ? "border-red-500" : ""}`}
+                                      >
+                                        <SelectValue placeholder="Title" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {TitleOptions.map((o) => (
+                                          <SelectItem key={o.value} value={o.value}>
+                                            {o.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                />
+                                {errors.title && <p className="text-red-500 text-sm">{errors.title.message}</p>}
+                              </div>
+                              <div className="space-y-2 flex-1">
+                                <Label htmlFor="patient-name">
+                                  Patient Name <span className="text-red-500">*</span>
+                                </Label>
+                                <div className="relative">
+                                  <PersonIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                                  <Controller
+                                    control={control}
+                                    name="name"
+                                    rules={{ required: "Name is required" }}
+                                    render={({ field }) => (
+                                      <Input
+                                        key={`name-${isEditingPatient}`}
+                                        id="patient-name"
+                                        type="text"
+                                        {...field}
+                                        onChange={(e) => field.onChange(e.target.value.toUpperCase())} // Convert to uppercase
+                                        ref={(el) => {
+                                          field.ref(el)
+                                          nameInputRef.current = el
+                                        }}
+                                        placeholder="Enter patient name"
+                                        className={`pl-10 h-10 ${errors.name ? "border-red-500" : ""} ${
+                                          isEditingPatient && selectedPatient ? "border-yellow-400 bg-yellow-50" : ""
+                                        }`}
+                                        autoComplete="off"
+                                        disabled={selectedPatient ? !isEditingPatient : false}
+                                      />
+                                    )}
                                   />
-                                )}
-                              />
+                                </div>
+                                {errors.name && <p className="text-red-500 text-sm">{errors.name.message}</p>}
+                              </div>
                             </div>
-                            {errors.name && <p className="text-red-500 text-sm">{errors.name.message}</p>}
                           </div>
                           {/* PHONE */}
                           <div className="space-y-2">
@@ -1137,8 +1212,9 @@ const AppointmentPage = () => {
                             />
                             {errors.gender && <p className="text-red-500 text-sm">{errors.gender.message}</p>}
                           </div>
-                          {/* APPOINTMENT TYPE */}
-                          <div className="space-y-2">
+                        </div>
+                        {/* APPOINTMENT TYPE */}
+                        <div className="space-y-2">
                             <Label>
                               Appointment Type <span className="text-red-500">*</span>
                             </Label>
@@ -1179,7 +1255,6 @@ const AppointmentPage = () => {
                               <p className="text-sm text-red-500">{errors.appointmentType.message}</p>
                             )}
                           </div>
-                        </div>
                         {/* Address and Referred By */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="space-y-2">

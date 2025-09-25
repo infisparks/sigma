@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase"
-import { generateNextUHID } from "@/components/uhid-generator" // Import the new UHID generator
+
 import type { IFormInput, ModalitySelection, PatientDetail, Doctor, OnCallAppointment } from "@/app/opd/types"
 
 interface CreateAppointmentResult {
@@ -138,9 +138,12 @@ export async function createAppointment(
           dob: dob,
           gender: formData.gender || null,
           address: formData.address?.trim() || null,
+          title: formData.title || null,
+          total_day: formData.totalDay || null,
           // Removed: updated_at: currentTimestamp, // Rely on Supabase default if it's set to now()
         })
         .eq("patient_id", patientIdToUse)
+        .eq("uhid", uhidToUse) // Re-added this condition for composite primary key
         .select()
         .single()
       if (updateError) {
@@ -151,11 +154,8 @@ export async function createAppointment(
       uhidToUse = data.uhid
     } else {
       // New patient: Generate UHID and insert new record
-      const uhidGenResult = await generateNextUHID()
-      if (!uhidGenResult.success || !uhidGenResult.uhid) {
-        throw new Error(uhidGenResult.message || "Failed to generate unique UHID.")
-      }
-      uhidToUse = uhidGenResult.uhid
+     
+    
       const { data, error: insertError } = await supabase
         .from("patient_detail")
         .insert({
@@ -166,7 +166,9 @@ export async function createAppointment(
           dob: dob,
           gender: formData.gender || null,
           address: formData.address?.trim() || null,
-          uhid: uhidToUse,
+          
+          title: formData.title || null,
+          total_day: formData.totalDay || null,
           // Removed: created_at: currentTimestamp, // Rely on Supabase default if it's set to now()
           // Removed: updated_at: currentTimestamp, // Rely on Supabase default if it's set to now()
         })
@@ -178,6 +180,7 @@ export async function createAppointment(
       }
       newPatientData = data
       patientIdToUse = data.patient_id
+      uhidToUse = data.uhid // Assign uhid for new patients
     }
 
     if (!patientIdToUse || !uhidToUse) {
@@ -368,6 +371,8 @@ export async function updateAppointment(
         dob: dob,
         gender: formData.gender || null,
         address: formData.address?.trim() || null,
+        title: formData.title || null,
+        total_day: formData.totalDay || null,
       })
       .eq("patient_id", patientId)
       .eq("uhid", uhid) // Re-added this condition for composite primary key
@@ -456,7 +461,7 @@ export async function fetchOnCallAppointmentsSupabase(): Promise<OnCallAppointme
       additional_notes,
       entered_by,
       created_at,
-      patient_detail (name, number, age, gender, age_unit, dob, address) // Include all fields that PatientDetail might have
+      patient_detail (name, number, age, gender, age_unit, dob, address, title, total_day) // Include all fields that PatientDetail might have
       `,
     )
     .order("created_at", { ascending: false })
@@ -483,9 +488,11 @@ export async function fetchOnCallAppointmentsSupabase(): Promise<OnCallAppointme
           age_unit: item.patient_detail.age_unit,
           dob: item.patient_detail.dob,
           address: item.patient_detail.address,
+          title: item.patient_detail.title,
+          total_day: item.patient_detail.total_day,
           // uhid is already at the top level of OnCallAppointment, no need to duplicate
         }
-      : { name: null, number: null, age: null, gender: null, age_unit: null, dob: null, address: null }, // Provide default empty object if patient_detail is null
+      : { name: null, number: null, age: null, gender: null, age_unit: null, dob: null, address: null, title: null, total_day: null }, // Provide default empty object if patient_detail is null
   })) as OnCallAppointment[]
 }
 

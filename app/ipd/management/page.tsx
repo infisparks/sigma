@@ -19,6 +19,7 @@ import {
   UserCheck,
   Calendar,
   Phone,
+  Droplet, // New icon for Blood Test
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -388,6 +389,14 @@ export default function IPDManagementPage() {
     e.stopPropagation()
     router.push(`/ipd/ot/${record.ipdId}`)
   }, [router])
+  
+  // --- UPDATED HANDLER for Blood Test: Pass ipdId ---
+  const handleBloodTest = useCallback((e: React.MouseEvent, record: BillingRecord) => {
+    e.stopPropagation()
+    // Navigate to the blood test page, passing the IPD ID
+    router.push(`/ipd/bloodtest/${record.ipdId}`)
+  }, [router])
+  // --- END UPDATED HANDLER ---
 
   const handleDeleteRecord = useCallback(async (record: BillingRecord) => {
     try {
@@ -593,10 +602,10 @@ export default function IPDManagementPage() {
                 {/* Tab Content */}
                 <div className="mt-6">
                   <TabsContent value="non-discharge" className="mt-0">
-                    {renderPatientsTable(filteredActiveRecords, handleRowClick, handleEditRecord, handleManagePatient, handleIPDRecord, handleOTForm, handleDeleteRecord, isRefreshing, formatCurrency)}
+                    {renderPatientsTable(filteredActiveRecords, handleRowClick, handleEditRecord, handleManagePatient, handleIPDRecord, handleOTForm, handleBloodTest, handleDeleteRecord, isRefreshing, formatCurrency)}
                   </TabsContent>
                   <TabsContent value="discharge-partially" className="mt-0">
-                    {renderPatientsTable(filteredActiveRecords, handleRowClick, handleEditRecord, handleManagePatient, handleIPDRecord, handleOTForm, handleDeleteRecord, isRefreshing, formatCurrency)}
+                    {renderPatientsTable(filteredActiveRecords, handleRowClick, handleEditRecord, handleManagePatient, handleIPDRecord, handleOTForm, handleBloodTest, handleDeleteRecord, isRefreshing, formatCurrency)}
                   </TabsContent>
                   <TabsContent value="discharge" className="mt-0">
                     { !hasSearchedDischarged ? (
@@ -606,7 +615,7 @@ export default function IPDManagementPage() {
                           <p className="text-gray-500 text-sm">Enter phone number, UHID, or name to search</p>
                         </div>
                       ) :
-                      renderPatientsTable(filteredDischargedRecords, handleRowClick, handleEditRecord, handleManagePatient, handleIPDRecord, handleOTForm, handleDeleteRecord, isSearchingDischarged, formatCurrency)
+                      renderPatientsTable(filteredDischargedRecords, handleRowClick, handleEditRecord, handleManagePatient, handleIPDRecord, handleOTForm, handleBloodTest, handleDeleteRecord, isSearchingDischarged, formatCurrency)
                     }
                   </TabsContent>
                 </div>
@@ -626,6 +635,7 @@ function renderPatientsTable(
   handleManagePatient: (e: React.MouseEvent, record: BillingRecord) => void,
   handleIPDRecord: (e: React.MouseEvent, record: BillingRecord) => void,
   handleOTForm: (e: React.MouseEvent, record: BillingRecord) => void,
+  handleBloodTest: (e: React.MouseEvent, record: BillingRecord) => void, // NEW PROP
   handleDeleteRecord: (record: BillingRecord) => void,
   isLoading: boolean,
   formatCurrency: (amount: number) => string,
@@ -663,7 +673,7 @@ function renderPatientsTable(
                 <th className="px-3 py-2 text-left font-medium text-gray-700 text-xs">Room</th>
                 <th className="px-3 py-2 text-left font-medium text-gray-700 text-xs">Doctor</th>
                 <th className="px-3 py-2 text-left font-medium text-gray-700 text-xs">Status</th>
-                <th className="px-3 py-2 text-right font-medium text-gray-700 text-xs min-w-[200px]">Actions</th>
+                <th className="px-3 py-2 text-right font-medium text-gray-700 text-xs min-w-[240px]">Actions</th> {/* Increased min-width */}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -831,6 +841,21 @@ function renderPatientsTable(
                         </TooltipTrigger>
                         <TooltipContent>OT Form</TooltipContent>
                       </Tooltip>
+                      {/* --- NEW BLOOD TEST BUTTON --- */}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            onClick={e => handleBloodTest(e, record)}
+                            className="h-8 w-8 text-xs hover:bg-indigo-100 text-indigo-600 border-indigo-200"
+                          >
+                            <Droplet className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Blood Test</TooltipContent>
+                      </Tooltip>
+                      {/* --- END NEW BLOOD TEST BUTTON --- */}
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button 
