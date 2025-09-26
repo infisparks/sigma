@@ -146,7 +146,7 @@ async function generatePdfDocument({ appointmentData, uhid, doctors, billNo }: G
   // Table header
   doc.setFontSize(8)
   doc.setFont("helvetica", "bold")
-  doc.setFillColor(220, 220, 220)
+  doc.setFillColor(204, 229, 255);
   doc.rect(20, yPos - 2, pageWidth - 40, 5, "F")
   doc.text("No.", 22, yPos + 1)
   doc.text("Modality", 32, yPos + 1)
