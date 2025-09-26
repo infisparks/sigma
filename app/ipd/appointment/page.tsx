@@ -9,17 +9,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { User, Phone, Calendar, Bed, Eye, XCircle, AlertCircle } from "lucide-react"
+import { User, Phone, Calendar, Bed, Eye, XCircle, AlertCircle, PersonStandingIcon as PersonIcon } from "lucide-react"
 import Layout from "@/components/global/Layout"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { SearchableSelect } from "@/components/global/searchable-select"
-import { useRouter } from "next/navigation"
+import IPDSignaturePDF from "@/app/ipd/appointment/pdf"
 
-// --- Type Definitions ---
+
+// --- Type Definitions (Defined directly in this file) ---
 
 interface Option {
   value: string;
@@ -79,7 +82,6 @@ interface ServiceDetailItem {
 }
 
 interface IPDFormInput {
-  ipd_id?: number;
   uhid: string;
   name: string;
   phone: string | number | null;
@@ -94,128 +96,92 @@ interface IPDFormInput {
   relativeAddress: string | null;
   admissionSource: string;
   admissionType: string;
-  referralDoctor: string | null;
+  referralDoctor: string;
   underCareOfDoctor: string;
   depositAmount: string | number | null;
   paymentMode: string;
-  paymentThrough: string | null;
+  through: string | null;
   bed: number | null;
   roomType: string;
   date: string;
   time: string;
-  paymentDetails: PaymentDetailItem[] | null;
-  serviceDetails: ServiceDetailItem[] | null;
+  id?: number;
   mrd?: string | null;
   tpa?: boolean;
 }
 
-interface IPDRegistrationSupabaseFetch {
-  referral_doctor: string | null;
-  ipd_id: number;
-  admission_source: string | null;
-  admission_type: string | null;
-  under_care_of_doctor: string | null;
-  payment_detail: PaymentDetailItem[] | null;
-  bed_id: number | null;
-  service_detail: ServiceDetailItem[] | null;
-  created_at: string;
-  discharge_date: string | null;
-  relative_name: string | null;
-  relative_ph_no: number | null;
-  relative_address: string | null;
-  admission_date: string | null;
-  admission_time: string | null;
-  uhid: string;
-  patient_detail: PatientDetail | null;
-  bed_management: {
-    id: number;
-    room_type: string;
-    bed_number: number;
-    bed_type: string;
-    status: string;
-  } | null;
-  discharge_type: string | null;
-  ipd_notes: string | null;
-  mrd: string | null;
-  tpa: boolean | null;
-}
+// --- End Type Definitions ---
 
-// --- Options Constants ---
-
+// Options for various form fields
 const admissionSourceOptions: Option[] = [
   { value: "ipd", label: "IPD" },
   { value: "opd", label: "OPD" },
   { value: "casualty", label: "Casualty" },
   { value: "referral", label: "Referral" },
-];
+]
 
 const admissionTypeOptions: Option[] = [
   { value: "general", label: "General" },
   { value: "surgery", label: "Surgery" },
   { value: "accident_emergency", label: "Accident/Emergency" },
   { value: "day_observation", label: "Day Observation" },
-];
+]
 
 const paymentModeOptions: Option[] = [
   { value: "cash", label: "Cash" },
   { value: "online", label: "Online" },
   { value: "mixed", label: "Cash + Online" },
-];
-
-const paymentThroughCashOptions: Option[] = [{ value: "cash", label: "Cash" }];
-
-const paymentThroughOnlineOptions: Option[] = [
-  { value: "upi", label: "UPI" },
-  { value: "credit-card", label: "Credit Card" },
-  { value: "debit-card", label: "Debit Card" },
-  { value: "netbanking", label: "Net Banking" },
-  { value: "cheque", label: "Cheque" },
-];
-
-const genderOptions: Option[] = [
-  { value: "male", label: "Male" },
-  { value: "female", label: "Female" },
-  { value: "other", label: "Other" },
-];
+]
 
 const ageUnitOptions: Option[] = [
   { value: "year", label: "Years" },
   { value: "month", label: "Months" },
   { value: "day", label: "Days" },
+]
+
+const onlineThroughOptions: Option[] = [
+  { value: "upi", label: "UPI" },
+  { value: "credit-card", label: "Credit Card" },
+  { value: "debit-card", label: "Debit Card" },
+  { value: "netbanking", label: "Net Banking" },
+  { value: "cheque", label: "Cheque" },
+]
+
+const cashThroughOptions: Option[] = [
+  { value: "cash", label: "Cash" },
 ];
 
 const TitleOptions: Option[] = [
-  { value: "MR", label: "Mr." },
-  { value: "MS", label: "Ms." },
-  { value: "MRS", label: "Mrs." },
-  { value: "MISS", label: "Miss" },
-  { value: "DR", label: "Dr." },
-  { value: "BABY", label: "Baby" },
-  { value: "MAST", label: "Master" },
-  { value: "SMT", label: "Smt." },
-  { value: "BABA", label: "Baba" },
-  { value: "BABY OF", label: "Baby Of" },
-  { value: ".", label: "." },
-];
+    { value: "MR", label: "Mr." },
+    { value: "MS", label: "Ms." },
+    { value: "MRS", label: "Mrs." },
+    { value: "MISS", label: "Miss" },
+    { value: "DR", label: "Dr." },
+    { value: "BABY", label: "Baby" },
+    { value: "MAST", label: "Master" },
+    { value: "SMT", label: "Smt." },
+    { value: "BABA", label: "Baba" },
+    { value: "BABY OF", label: "Baby Of" },
+    { value: ".", label: "." },
+] as const;
 
-interface IPDAppointmentEditPageProps {
-  params: { ipd_id: string };
-}
-
-const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
-  const { ipd_id } = params;
-  const router = useRouter();
-
-  const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
-  const [beds, setBeds] = useState<BedData[]>([]);
-  const [availableBeds, setAvailableBeds] = useState<BedData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showAvailability, setShowAvailability] = useState(false);
-  const [originalBedId, setOriginalBedId] = useState<number | null>(null);
-  const [roomTypeOptions, setRoomTypeOptions] = useState<Option[]>([]);
+const IPDAppointmentPage = () => {
+  const [patients, setPatients] = useState<PatientDetail[]>([])
+  const [allDoctors, setAllDoctors] = useState<Doctor[]>([])
+  const [beds, setBeds] = useState<BedData[]>([])
+  const [availableBeds, setAvailableBeds] = useState<BedData[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [showAvailability, setShowAvailability] = useState(false)
+  // OPD-like search and edit states
+  const [searchUhIdInput, setSearchUhIdInput] = useState("")
+  const [searchPhoneInput, setSearchPhoneInput] = useState("")
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchedPatientResults, setSearchedPatientResults] = useState<PatientDetail[] | null>(null)
+  const [selectedPatient, setSelectedPatient] = useState<PatientDetail | null>(null)
+  const [isEditingPatient, setIsEditingPatient] = useState(false)
 
   const [formData, setFormData] = useState<IPDFormInput>({
-    ipd_id: Number(ipd_id),
     uhid: "",
     name: "",
     phone: "",
@@ -228,27 +194,33 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
     relativeName: "",
     relativePhone: "",
     relativeAddress: null,
-    admissionSource: "",
-    admissionType: "",
-    referralDoctor: null,
+    admissionSource: "ipd",
+    admissionType: "general",
+    referralDoctor: "",
     underCareOfDoctor: "",
     depositAmount: "",
     paymentMode: "cash",
-    paymentThrough: "cash",
+    through: "cash",
     roomType: "",
     bed: null,
     date: new Date().toISOString().split("T")[0],
     time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
-    paymentDetails: [],
-    serviceDetails: [],
     mrd: null,
     tpa: false,
-  });
+  })
 
+  const [roomTypeOptions, setRoomTypeOptions] = useState<Option[]>([]);
+
+  const genderOptions: Option[] = [
+    { value: "male", label: "Male" },
+    { value: "female", label: "Female" },
+    { value: "other", label: "Other" },
+  ]
+  
   const calculateTotalDays = useCallback((age?: string | number | null, unit?: string | null): number | null => {
     const ageNum = Number(age);
     if (isNaN(ageNum) || !age || !unit) return null;
-
+    
     switch (unit) {
       case "year":
         return Math.floor(ageNum * 365);
@@ -269,225 +241,491 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
   }, [formData.age, formData.ageUnit, formData.totalDay, calculateTotalDays]);
 
   useEffect(() => {
-    const maleTitles = new Set(["MR", "MAST", "BABA"]);
-    const femaleTitles = new Set(["MS", "MISS", "MRS", "BABY", "SMT"]);
+    const male = new Set(["MR", "MAST", "BABA"])
+    const female = new Set(["MS", "MISS", "MRS", "BABY", "SMT"])
+    
+    let newGender: string | null = null;
+    if (male.has(formData.title)) newGender = "male";
+    else if (female.has(formData.title)) newGender = "female";
 
-    let newGender: string | null = formData.gender;
-    if (maleTitles.has(formData.title)) {
-      newGender = "male";
-    } else if (femaleTitles.has(formData.title)) {
-      newGender = "female";
-    }
-
-    if (newGender !== formData.gender) {
-      setFormData((prev) => ({ ...prev, gender: newGender }));
+    if (newGender !== null && newGender !== formData.gender) {
+        setFormData((prev) => ({ ...prev, gender: newGender }));
+    } else if (newGender === null && (formData.gender === "male" || formData.gender === "female")) {
+        setFormData((prev) => ({ ...prev, gender: null }));
     }
   }, [formData.title, formData.gender]);
-
-  const currentPaymentThroughOptions = useMemo(() => {
-    if (formData.paymentMode === "cash") {
-      return paymentThroughCashOptions;
-    }
-    if (formData.paymentMode === "online" || formData.paymentMode === "mixed") {
-      return paymentThroughOnlineOptions;
-    }
-    return [];
-  }, [formData.paymentMode]);
-
+  
   useEffect(() => {
     if (formData.paymentMode === "cash") {
-      setFormData((prev) => ({ ...prev, paymentThrough: "cash" }));
+      setFormData((prev) => ({ ...prev, through: "cash" }));
     } else if (formData.paymentMode === "online") {
-      setFormData((prev) => ({ ...prev, paymentThrough: "upi" }));
+      setFormData((prev) => ({ ...prev, through: onlineThroughOptions[0]?.value || null }));
+    } else if (formData.paymentMode === "mixed") {
+      setFormData((prev) => ({ ...prev, through: null }));
     }
   }, [formData.paymentMode]);
 
   useEffect(() => {
     const fetchRoomTypes = async () => {
-      const { data, error } = await supabase.from("bed_management").select("room_type").neq("room_type", null);
+      const { data, error } = await supabase
+        .from("bed_management")
+        .select("room_type")
+        .neq("room_type", null);
       if (!error && data) {
         const uniqueTypes = Array.from(new Set(data.map((row) => row.room_type).filter(Boolean)));
-        setRoomTypeOptions(uniqueTypes.map((type) => ({ value: type, label: type.charAt(0).toUpperCase() + type.slice(1) })));
+        setRoomTypeOptions(
+          uniqueTypes.map((type) => ({
+            value: type,
+            label: type.charAt(0).toUpperCase() + type.slice(1),
+          }))
+        );
       }
     };
+    fetchRoomTypes();
+  }, []);
 
-    const fetchData = async () => {
-      setIsLoading(true);
-      await Promise.all([fetchAllDoctors(), fetchBeds(), fetchRoomTypes()]);
-      if (ipd_id) {
-        await fetchIPDRecord(Number(ipd_id));
-      }
-      setIsLoading(false);
-    };
 
-    fetchData();
-  }, [ipd_id]);
+  useEffect(() => {
+    fetchPatients()
+    fetchAllDoctors()
+    fetchBeds()
+  }, [])
 
   useEffect(() => {
     if (formData.roomType) {
-      const roomBeds = beds.filter(
-        (bed) => bed.room_type === formData.roomType && (bed.status === "available" || bed.id === formData.bed)
-      );
-      setAvailableBeds(roomBeds);
+      const roomBeds = beds.filter((bed) => bed.room_type === formData.roomType && bed.status === "available")
+      setAvailableBeds(roomBeds)
     } else {
-      setAvailableBeds([]);
+      setAvailableBeds([])
     }
-  }, [formData.roomType, beds, formData.bed]);
+  }, [formData.roomType, beds])
 
-  const fetchIPDRecord = async (id: number) => {
+  const fetchPatientDetailsByUHID = useCallback(async (uhid: string) => {
+    if (!uhid) return;
     try {
       const { data, error } = await supabase
-        .from("ipd_registration")
-        .select(`*, patient_detail(*), bed_management(*)`)
-        .eq("ipd_id", id)
-        .single<IPDRegistrationSupabaseFetch>();
+        .from("patient_detail")
+        .select("*")
+        .eq("uhid", uhid)
+        .single();
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
       if (data) {
-        const depositPayment = data.payment_detail?.find((p) => p.type === "deposit");
-        setFormData({
-          ipd_id: data.ipd_id,
-          uhid: data.uhid,
-          name: data.patient_detail?.name || "",
-          phone: data.patient_detail?.number || "",
-          age: data.patient_detail?.age || "",
-          ageUnit: data.patient_detail?.age_unit || "year",
-          gender: data.patient_detail?.gender || null,
-          address: data.patient_detail?.address || null,
-          title: data.patient_detail?.title || "MR",
-          totalDay: data.patient_detail?.total_day || calculateTotalDays(data.patient_detail?.age, data.patient_detail?.age_unit),
-          relativeName: data.relative_name || "",
-          relativePhone: data.relative_ph_no || "",
-          relativeAddress: data.relative_address || null,
-          admissionSource: data.admission_source || "",
-          admissionType: data.admission_type || "",
-          referralDoctor: data.referral_doctor || "",
-          underCareOfDoctor: data.under_care_of_doctor || "",
-          depositAmount: depositPayment?.amount ? String(depositPayment.amount) : "",
-          paymentMode: depositPayment?.paymentType || "cash",
-          paymentThrough: depositPayment?.through || null,
-          roomType: data.bed_management?.room_type || "",
-          bed: data.bed_id || null,
-          date: data.admission_date || new Date().toISOString().split("T")[0],
-          time: data.admission_time || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
-          paymentDetails: data.payment_detail || [],
-          serviceDetails: data.service_detail || [],
-          mrd: data.mrd || null,
-          tpa: data.tpa || false,
-        });
-        setOriginalBedId(data.bed_id);
+        setFormData((prev: IPDFormInput) => ({
+          ...prev,
+          name: data.name || "",
+          phone: data.number || "",
+          age: data.age || "",
+          ageUnit: data.age_unit || "year",
+          gender: data.gender || null,
+          address: data.address || null,
+          title: data.title || "MR",
+          totalDay: data.total_day || null,
+        }));
+        toast.success(`Patient details loaded for UHID: ${uhid}`);
+      } else {
+        toast.info(`No existing patient found for UHID: ${uhid}. Please fill details.`);
+        setFormData((prev: IPDFormInput) => ({
+          ...prev,
+          name: "",
+          phone: "",
+          age: "",
+          ageUnit: "year",
+          gender: null,
+          address: null,
+          title: "MR",
+          totalDay: null,
+        }));
       }
     } catch (error) {
-      console.error("Error fetching IPD record for edit:", error);
-      toast.error("Failed to load IPD record for editing.");
+      console.error("Error fetching patient by UHID:", error);
+      toast.error("Failed to fetch patient details by UHID.");
     }
-  };
+  }, []);
 
-  const fetchAllDoctors = async () => {
+  useEffect(() => {
+    if (formData.uhid && !selectedPatient) {
+      fetchPatientDetailsByUHID(formData.uhid);
+    }
+  }, [formData.uhid, fetchPatientDetailsByUHID, selectedPatient]);
+
+  const fillFormWithPatientData = useCallback((p: PatientDetail) => {
+    setFormData((prev) => ({
+      ...prev,
+      uhid: p.uhid || "",
+      name: p.name || "",
+      phone: p.number ?? "",
+      age: p.age ?? "",
+      ageUnit: p.age_unit || "year",
+      gender: p.gender,
+      address: p.address,
+      title: p.title || "MR",
+      totalDay: p.total_day || null,
+    }))
+    setSelectedPatient(p)
+    setIsEditingPatient(false)
+  }, [])
+
+  const resetForNewPatient = useCallback(() => {
+    setSelectedPatient(null)
+    setIsEditingPatient(false)
+    setSearchedPatientResults(null)
+    setSearchUhIdInput("")
+    setSearchPhoneInput("")
+    setFormData((prev) => ({
+        uhid: "", 
+        name: "", 
+        phone: "", 
+        age: "", 
+        ageUnit: "year", 
+        gender: null, 
+        address: null, 
+        title: "MR", 
+        totalDay: null, 
+        relativeName: "", 
+        relativePhone: "", 
+        relativeAddress: null, 
+        admissionSource: "ipd", 
+        admissionType: "general", 
+        referralDoctor: "", 
+        underCareOfDoctor: "", 
+        depositAmount: "", 
+        paymentMode: "cash", 
+        through: "cash", 
+        roomType: "", 
+        bed: null, 
+        date: prev.date, 
+        time: prev.time,
+        mrd: null,
+        tpa: false,
+    }));
+  }, [])
+
+  const handleSearchByUhId = useCallback(async () => {
+    if (!searchUhIdInput.trim()) {
+      toast.error("Enter UHID or counter number to search.")
+      return
+    }
+    setIsSearching(true)
+    setSearchedPatientResults(null)
     try {
-      const { data, error } = await supabase.from("doctor").select("*");
-      if (error) throw error;
-      setAllDoctors(data ? data.map((doc) => ({ ...doc, id: Number(doc.id) })) : []);
-    } catch (error) {
-      console.error("Error fetching doctors:", error);
+      const raw = searchUhIdInput.trim().toUpperCase()
+      const isCounterOnly = /^\d+$/.test(raw)
+      let query = supabase
+        .from("patient_detail")
+        .select("patient_id, name, number, age, age_unit, dob, gender, address, uhid, title, total_day")
+      if (isCounterOnly) {
+        const formattedCounter = raw.padStart(5, '0')
+        query = query.ilike("uhid", `%-${formattedCounter}`)
+      } else {
+        query = query.eq("uhid", raw)
+      }
+      const { data, error } = await query
+      if (error) throw error
+      if (!data || (Array.isArray(data) && data.length === 0)) {
+        toast.error("No patient found.")
+        return
+      }
+      if (Array.isArray(data)) {
+        if (data.length === 1) {
+          fillFormWithPatientData(data[0] as PatientDetail)
+          toast.success("Patient loaded.")
+        } else {
+          setSearchedPatientResults(data as PatientDetail[])
+          toast.info("Select patient from list.")
+        }
+      } else {
+        fillFormWithPatientData(data as unknown as PatientDetail)
+        toast.success("Patient loaded.")
+      }
+    } catch (e: any) {
+      console.error(e)
+      toast.error("UHID search failed.")
+    } finally {
+      setIsSearching(false)
     }
-  };
+  }, [fillFormWithPatientData, searchUhIdInput])
 
-  const fetchBeds = async () => {
+  const handleSearchByPhoneNumber = useCallback(async () => {
+    if (!searchPhoneInput.trim()) {
+      toast.error("Enter phone number to search.")
+      return
+    }
+    const phoneAsNumber = Number(searchPhoneInput.trim())
+    if (Number.isNaN(phoneAsNumber)) {
+      toast.error("Invalid phone number.")
+      return
+    }
+    setIsSearching(true)
+    setSearchedPatientResults(null)
     try {
-      const { data, error } = await supabase.from("bed_management").select("*");
-      if (error) throw error;
-      setBeds(data ? data.map((bed) => ({ ...bed, id: Number(bed.id) })) : []);
-    } catch (error) {
-      console.error("Error fetching beds:", error);
-      toast.error("Failed to fetch beds");
+      const { data, error } = await supabase
+        .from("patient_detail")
+        .select("patient_id, name, number, age, age_unit, dob, gender, address, uhid, title, total_day")
+        .eq("number", phoneAsNumber)
+      if (error) throw error
+      if (!data || data.length === 0) {
+        toast.error("No patients found with this phone number.")
+        return
+      }
+      if (data.length === 1) {
+        fillFormWithPatientData(data[0] as PatientDetail)
+        toast.success("Patient loaded.")
+      } else {
+        setSearchedPatientResults(data as PatientDetail[])
+        toast.info("Select patient from list.")
+      }
+    } catch (e: any) {
+      console.error(e)
+      toast.error("Phone search failed.")
+    } finally {
+      setIsSearching(false)
     }
-  };
+  }, [searchPhoneInput, fillFormWithPatientData])
 
-  const handlePatientNameChange = (value: string) => {
-    setFormData((prev: IPDFormInput) => ({ ...prev, name: value.toUpperCase() }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.name || !formData.phone || !formData.roomType || formData.bed === null) {
-      toast.error("Please fill all required fields (Patient Name, Phone, Room Type, Bed).");
-      return;
-    }
-
-    setIsLoading(true);
-
+  const handleUpdatePatientDetails = useCallback(async () => {
+    if (!selectedPatient) return
+    setIsLoading(true)
     try {
-      const ageNum = formData.age ? Number(formData.age) : null;
+      const phoneNum = formData.phone !== null && formData.phone !== '' ? Number(formData.phone) : null
+      const ageNum = formData.age !== null && formData.age !== '' ? Number(formData.age) : null
       const totalDayNum = calculateTotalDays(formData.age, formData.ageUnit);
-      let calculatedDob: string | null = null;
 
-      if (ageNum !== null && formData.ageUnit) {
-        const today = new Date();
-        let dobDate = new Date(today);
-        if (formData.ageUnit === "year") dobDate.setFullYear(today.getFullYear() - ageNum);
-        else if (formData.ageUnit === "month") dobDate.setMonth(today.getMonth() - ageNum);
-        else if (formData.ageUnit === "day") dobDate.setDate(today.getDate() - ageNum);
-        calculatedDob = dobDate.toISOString().split("T")[0];
-      }
-
-      const { error: patientUpdateError } = await supabase
+      const { error } = await supabase
         .from("patient_detail")
         .update({
-          name: formData.name.trim(),
-          number: formData.phone ? Number(formData.phone) : null,
+          name: String(formData.name).trim().toUpperCase(),
+          number: phoneNum,
           age: ageNum,
           age_unit: formData.ageUnit,
           gender: formData.gender,
           address: formData.address,
-          dob: calculatedDob,
           title: formData.title,
           total_day: totalDayNum,
-          updated_at: new Date().toISOString(),
         })
-        .eq("uhid", formData.uhid);
+        .eq("patient_id", selectedPatient.patient_id)
+        .eq("uhid", selectedPatient.uhid)
+      if (error) throw error
+      const updated: PatientDetail = {
+        ...selectedPatient,
+        name: String(formData.name).trim().toUpperCase(),
+        number: phoneNum,
+        age: ageNum,
+        age_unit: formData.ageUnit,
+        gender: formData.gender,
+        address: formData.address,
+        title: formData.title,
+        total_day: totalDayNum,
+      }
+      setSelectedPatient(updated)
+      toast.success("Patient details updated.")
+      setIsEditingPatient(false)
+    } catch (e: any) {
+      console.error("Failed to update patient details:", e)
+      toast.error(`Failed to update patient details: ${e.message}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [selectedPatient, formData, calculateTotalDays])
 
-      if (patientUpdateError) throw patientUpdateError;
-      toast.success("Patient details updated successfully!");
+  const fetchPatients = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("patient_detail")
+        .select("*")
+        .order("created_at", { ascending: false })
 
-      let paymentDetail: PaymentDetailItem[] = formData.paymentDetails ? [...formData.paymentDetails] : [];
+      if (error) throw error
+      setPatients(data || [])
+    } catch (error) {
+      console.error("Error fetching patients:", error)
+    }
+  }
+
+  const fetchAllDoctors = async () => {
+    try {
+      const { data, error } = await supabase.from("doctor").select("*")
+
+      if (error) throw error
+      setAllDoctors(data ? data.map(doc => ({ ...doc, id: Number(doc.id) })) : [])
+    } catch (error) {
+      console.error("Error fetching doctors:", error)
+    }
+  }
+
+  const fetchBeds = async () => {
+    try {
+      const { data, error } = await supabase.from("bed_management").select("*")
+
+      if (error) {
+        console.error("Supabase fetch beds error:", error)
+        throw error
+      }
+      setBeds(data ? data.map(bed => ({ ...bed, id: Number(bed.id) })) : [])
+    }
+    catch (error) {
+      console.error("Error fetching beds:", error)
+      toast.error("Failed to fetch beds")
+    }
+  }
+
+  const handlePatientNameChange = (value: string) => {
+    setFormData((prev: IPDFormInput) => ({ ...prev, name: value.toUpperCase(), uhid: selectedPatient ? prev.uhid : "" }));
+  }
+
+  const sendWhatsAppNotification = async (phoneNumber: string, message: string) => {
+    if (!phoneNumber || typeof phoneNumber !== 'string' || phoneNumber.trim() === '') {
+      console.warn("Skipping WhatsApp notification: Phone number is missing or invalid.");
+      return;
+    }
+    const token = "9958399157";
+
+    try {
+      const response = await fetch("https://a.infispark.in/send-text", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: token,
+          number: `91${phoneNumber}`,
+          message: message,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(`WhatsApp message sent to ${phoneNumber} successfully!`);
+      } else {
+        toast.error(`Failed to send WhatsApp message to ${phoneNumber}: ${data.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      toast.error(`Error sending WhatsApp message to ${phoneNumber}.`);
+    }
+  };
+
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!formData.name || !formData.phone || !formData.roomType || formData.bed === null) {
+      toast.error("Please fill all required fields (Patient Name, Phone, Room Type, Bed).")
+      return
+    }
+
+    if ((formData.paymentMode === "online" || formData.paymentMode === "mixed") && !formData.through) {
+      toast.error(`Please select a 'Through' method for ${formData.paymentMode} payment.`);
+      return;
+    }
+
+    setIsLoading(true)
+
+    try {
+      let patientUhid = formData.uhid;
+      let calculatedDob: string | null = null;
+      const ageNum = formData.age ? Number(formData.age) : null;
+      const totalDayNum = calculateTotalDays(formData.age, formData.ageUnit);
+
+      if (ageNum !== null && formData.ageUnit) {
+        const today = new Date();
+        let dobDate = new Date(today);
+        if (formData.ageUnit === "year") {
+          dobDate.setFullYear(today.getFullYear() - ageNum);
+        } else if (formData.ageUnit === "month") {
+          dobDate.setMonth(today.getMonth() - ageNum);
+        } else if (formData.ageUnit === "day") {
+          dobDate.setDate(today.getDate() - ageNum);
+        }
+        calculatedDob = dobDate.toISOString().split('T')[0];
+      }
+
+      let existingPatient: PatientDetail | null = null;
+      if (patientUhid) {
+        const { data: existing, error: existingError } = await supabase
+          .from("patient_detail")
+          .select("uhid")
+          .eq("uhid", patientUhid)
+          .single();
+        if (existingError && existingError.code !== 'PGRST116') throw existingError;
+        existingPatient = existing && existing.uhid ? { ...existing } as PatientDetail : null;
+      }
+
+      if (existingPatient) {
+        patientUhid = existingPatient.uhid;
+        const { error: patientUpdateError } = await supabase
+          .from("patient_detail")
+          .update({
+            name: formData.name.toUpperCase(),
+            number: formData.phone ? Number(formData.phone) : null,
+            age: ageNum,
+            age_unit: formData.ageUnit,
+            gender: formData.gender,
+            address: formData.address,
+            dob: calculatedDob,
+            title: formData.title,
+            total_day: totalDayNum,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("uhid", patientUhid);
+        if (patientUpdateError) throw patientUpdateError;
+        toast.success(`Existing patient (UHID: ${patientUhid}) details updated.`);
+      } else {
+        const { data: newPatientData, error: patientInsertError } = await supabase
+          .from("patient_detail")
+          .insert({
+            name: formData.name.toUpperCase(),
+            number: formData.phone ? Number(formData.phone) : null,
+            age: ageNum,
+            age_unit: formData.ageUnit,
+            gender: formData.gender,
+            address: formData.address,
+            dob: calculatedDob,
+            title: formData.title,
+            total_day: totalDayNum,
+          })
+          .select()
+          .single();
+        if (patientInsertError) throw patientInsertError;
+        patientUhid = newPatientData.uhid;
+        toast.success(`New patient registered with UHID: ${patientUhid}`);
+      }
+
+      const paymentDetail: PaymentDetailItem[] = [];
       const depositAmount = formData.depositAmount ? Number.parseFloat(String(formData.depositAmount)) : 0;
-      const existingDepositIndex = paymentDetail.findIndex((p) => p.type === "deposit");
 
       if (depositAmount > 0) {
-        const newDepositEntry: PaymentDetailItem = {
+        paymentDetail.push({
           date: new Date().toISOString(),
           type: "deposit",
-          amountType: "deposit",
           amount: depositAmount,
           createdAt: new Date().toISOString(),
           paymentType: formData.paymentMode,
-          through: formData.paymentThrough || "",
-        };
-        if (existingDepositIndex !== -1) {
-          paymentDetail[existingDepositIndex] = newDepositEntry;
-        } else {
-          paymentDetail.push(newDepositEntry);
-        }
-      } else if (existingDepositIndex !== -1) {
-        paymentDetail.splice(existingDepositIndex, 1);
+          through: formData.through || (formData.paymentMode === 'cash' ? 'cash' : ''),
+          amountType: "deposit",
+        });
       }
 
-      const newBedId = formData.bed;
-      if (originalBedId !== null && originalBedId !== newBedId) {
-        await supabase.from("bed_management").update({ status: "available" }).eq("id", originalBedId);
+      const serviceDetail: ServiceDetailItem[] = [];
+      const selectedBedIdForDb = formData.bed;
+      if (selectedBedIdForDb === null) {
+        throw new Error("Invalid bed selection.");
       }
-      await supabase.from("bed_management").update({ status: "occupied" }).eq("id", newBedId);
+
+      const doctorNameForDB = getDoctorNameById(formData.underCareOfDoctor);
 
       const { error: ipdError } = await supabase
         .from("ipd_registration")
-        .update({
+        .insert({
+          uhid: patientUhid,
           admission_source: formData.admissionSource,
           admission_type: formData.admissionType,
-          under_care_of_doctor: formData.underCareOfDoctor,
+          under_care_of_doctor: doctorNameForDB,
           payment_detail: paymentDetail,
-          bed_id: newBedId,
+          bed_id: selectedBedIdForDb,
+          service_detail: serviceDetail,
           relative_name: formData.relativeName,
           relative_ph_no: formData.relativePhone ? Number(formData.relativePhone) : null,
           relative_address: formData.relativeAddress,
@@ -496,87 +734,259 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
           mrd: formData.mrd || null,
           tpa: formData.tpa || false,
         })
-        .eq("ipd_id", formData.ipd_id);
+        .select()
 
-      if (ipdError) throw ipdError;
-      toast.success("IPD admission updated successfully!");
+      if (ipdError) throw ipdError
+      toast.success("IPD admission registered successfully!")
 
-      router.push("/ipd/management");
+      const { error: bedError } = await supabase
+        .from("bed_management")
+        .update({ status: "occupied" })
+        .eq("id", selectedBedIdForDb)
+
+      if (bedError) throw bedError
+
+      const selectedBed = beds.find(bed => bed.id === selectedBedIdForDb);
+
+      if (formData.phone) {
+        const patientMessage = `
+🏥 *IPD Admission Confirmation - Medford Hospital*
+
+Dear *${formData.name}*,
+
+Your IPD admission has been successfully registered.
+
+*Details:*
+•   *UHID:* ${patientUhid}
+•   *Admission Date:* ${formData.date}
+•   *Admission Time:* ${formData.time}
+•   *Room Type:* ${roomTypeOptions.find(opt => opt.value === formData.roomType)?.label || 'N/A'}
+•   *Bed Number:* ${selectedBed?.bed_number || 'N/A'} (${selectedBed?.bed_type || 'N/A'})
+•   *Under Care Of:* Dr. ${doctorNameForDB}
+
+We wish you a speedy recovery!
+Medford Hospital`;
+        await sendWhatsAppNotification(String(formData.phone), patientMessage);
+      }
+
+      if (formData.relativeName && formData.relativePhone) {
+        const relativeMessage = `
+🏥 *IPD Admission Update - Medford Hospital*
+
+Dear ${formData.relativeName},
+
+This message is to confirm the IPD admission of *${formData.name}*.
+
+*Patient Details:*
+•   *Name:* ${formData.name}
+•   *UHID:* ${patientUhid}
+
+*Admission Details:*
+•   *Date:* ${formData.date}
+•   *Time:* ${formData.time}
+•   *Room Type:* ${roomTypeOptions.find(opt => opt.value === formData.roomType)?.label || 'N/A'}
+•   *Bed Number:* ${selectedBed?.bed_number || 'N/A'} (${selectedBed?.bed_type || 'N/A'})
+•   *Under Care Of:* Dr. ${doctorNameForDB}
+
+We will keep you updated on their progress.
+Medford Hospital`;
+        await sendWhatsAppNotification(String(formData.relativePhone), relativeMessage);
+      }
+
+      resetForNewPatient()
+      fetchBeds()
     } catch (error) {
-      console.error("Error submitting admission:", error);
-      toast.error("Failed to update admission: " + (error as any).message);
+      console.error("Error submitting admission:", error)
+      toast.error("Failed to register/update admission: " + (error as any).message)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
-  const handleCancel = () => {
-    router.push("/ipd/management");
-  };
+  const handlePreview = () => {
+    if (!formData.name || !formData.phone || !formData.roomType || formData.bed === null) {
+      toast.error("Please fill patient information, room type, and bed before previewing.")
+      return
+    }
+    if ((formData.paymentMode === "online" || formData.paymentMode === "mixed") && !formData.through) {
+      toast.error(`Please select a 'Through' method for ${formData.paymentMode} payment before previewing.`);
+      return;
+    }
+    setShowPreview(true)
+  }
+
+  const handleConfirmSubmit = () => {
+    setShowPreview(false)
+    const form = document.getElementById("ipd-form") as HTMLFormElement
+    if (form) {
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+    }
+  }
 
   const handleBedSelectFromPopup = (bedId: number) => {
-    const selectedBed = beds.find((bed) => bed.id === bedId);
+    const selectedBed = beds.find((bed) => bed.id === bedId)
     if (selectedBed) {
       setFormData((prev: IPDFormInput) => ({
         ...prev,
         roomType: selectedBed.room_type,
         bed: selectedBed.id,
-      }));
-      setShowAvailability(false);
+      }))
+      setShowAvailability(false)
     }
-  };
+  }
 
-  const groupedBeds = useMemo(
-    () =>
-      beds.reduce((acc, bed) => {
-        (acc[bed.room_type] = acc[bed.room_type] || []).push(bed);
-        return acc;
-      }, {} as Record<string, BedData[]>),
-    [beds]
-  );
+  const groupBedsByRoomType = () => {
+    const groupedBeds: Record<string, BedData[]> = {}
+    beds.forEach((bed) => {
+      if (!groupedBeds[bed.room_type]) {
+        groupedBeds[bed.room_type] = []
+      }
+      groupedBeds[bed.room_type].push(bed)
+    })
+    return groupedBeds
+  }
 
-  const filteredDoctorOptions = useMemo(
-    () => allDoctors.map((doctor) => ({ value: doctor.dr_name, label: doctor.dr_name })),
-    [allDoctors]
-  );
+  const groupedBeds = groupBedsByRoomType()
+
+  const filteredDoctorOptions = useMemo(() => {
+    return allDoctors.map((doctor) => ({
+      value: doctor.dr_name,
+      label: doctor.dr_name,
+    }));
+  }, [allDoctors]);
 
   const bedSelectOptions = useMemo(() => {
     const options = availableBeds.map((bed) => ({
       value: String(bed.id),
       label: `Bed ${bed.bed_number} - ${bed.bed_type}`,
-    }));
+    }))
 
     if (formData.bed !== null && !options.some((opt) => Number(opt.value) === formData.bed)) {
-      const selectedBed = beds.find((bed) => bed.id === formData.bed);
+      const selectedBed = beds.find((bed) => bed.id === formData.bed)
       if (selectedBed) {
         options.unshift({
           value: String(selectedBed.id),
-          label: `Bed ${selectedBed.bed_number} - ${selectedBed.bed_type} (Selected - ${selectedBed.status})`,
-        });
+          label: `Bed ${selectedBed.bed_number} - ${selectedBed.bed_type} (Selected)`,
+        })
       }
     }
-    return options;
-  }, [availableBeds, formData.bed, beds]);
+    return options
+  }, [availableBeds, formData.bed, beds])
 
-  if (isLoading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center h-screen">
-          <p>Loading IPD Record...</p>
-        </div>
-      </Layout>
-    );
-  }
+  const getDoctorNameById = useCallback((doctorId: string | number | null) => {
+    return typeof doctorId === 'string' ? doctorId : "N/A";
+  }, []);
+
 
   return (
     <Layout>
-      <div className="space-y-8 p-4 md:p-8">
+      <div className="space-y-8">
+        {/* Search Existing Patient */}
+        <Card className="shadow-md rounded-lg border-none">
+          <CardHeader className="bg-blue-50 border-b border-blue-200 py-4">
+            <CardTitle className="flex items-center gap-3 text-lg text-blue-800">
+              Search Existing Patient
+              {selectedPatient && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetForNewPatient}
+                  className="ml-auto text-red-600 hover:text-red-700 flex items-center gap-1"
+                >
+                  <XCircle className="h-4 w-4" /> Clear Patient
+                </Button>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="search-uhid">Search by UHID</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="search-uhid"
+                    placeholder="Enter UHID or counter number"
+                    value={searchUhIdInput}
+                    onChange={(e) => setSearchUhIdInput(e.target.value)}
+                    disabled={isSearching || !!selectedPatient}
+                    className="h-10"
+                  />
+                  <Button onClick={handleSearchByUhId} disabled={isSearching || !!selectedPatient} className="min-w-[100px]">
+                    {isSearching ? "Searching..." : "Search"}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="search-phone">Search by Phone</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="search-phone"
+                    placeholder="Enter 10-digit phone number"
+                    value={searchPhoneInput}
+                    onChange={(e) => setSearchPhoneInput(e.target.value)}
+                    disabled={isSearching || !!selectedPatient}
+                    className="h-10"
+                  />
+                  <Button onClick={handleSearchByPhoneNumber} disabled={isSearching || !!selectedPatient} className="min-w-[100px]">
+                    {isSearching ? "Searching..." : "Search"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {searchedPatientResults && (
+              <div className="space-y-2">
+                <Label>Select Patient from Results</Label>
+                <SearchableSelect
+                  options={searchedPatientResults.map((p) => ({ value: p.uhid, label: `${p.name} (${p.uhid}) – ${p.number ?? ''}` }))}
+                  value={""}
+                  onValueChange={(v) => {
+                    const sel = searchedPatientResults.find((p) => p.uhid === v)
+                    if (sel) {
+                      fillFormWithPatientData(sel)
+                      toast.success(`Selected: ${sel.name}`)
+                    }
+                  }}
+                  placeholder="Choose patient"
+                />
+              </div>
+            )}
+
+            {selectedPatient && (
+              <div className="bg-blue-100 p-4 rounded-lg flex items-center justify-between text-base text-blue-900 border border-blue-200">
+                <span>
+                  Selected Patient: <span className="font-semibold">{selectedPatient.name}</span> (UHID: <span className="font-mono font-bold">{selectedPatient.uhid}</span>)
+                </span>
+                <div className="flex gap-2">
+                  {!isEditingPatient ? (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setIsEditingPatient(true)} className="text-blue-600 border-blue-500 hover:bg-blue-50">
+                      Edit Details
+                    </Button>
+                  ) : (
+                    <>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setIsEditingPatient(false)} className="text-gray-600 border-gray-500 hover:bg-gray-50">
+                        Cancel
+                      </Button>
+                      <Button type="button" size="sm" onClick={handleUpdatePatientDetails} disabled={isLoading} className="bg-blue-600 hover:bg-blue-700 text-white">
+                        {isLoading ? "Updating..." : "Update Details"}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* Header */}
         <div className="text-center bg-gradient-to-r from-blue-600 to-purple-600 text-white py-8 rounded-lg shadow-md">
-          <h1 className="text-4xl font-bold mb-3">Edit IPD Admission</h1>
-          <p className="text-lg opacity-90">Modify existing IPD patient details</p>
+          <h1 className="text-4xl font-bold mb-3">IPD Admission</h1>
+          <p className="text-lg opacity-90">Register new IPD patient admission</p>
         </div>
 
         <form id="ipd-form" onSubmit={handleSubmit} className="space-y-6">
+          {/* Patient Information */}
           <Card className="bg-blue-50 border-blue-200">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2 text-blue-800">
@@ -591,8 +1001,9 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                   <SearchableSelect
                     options={TitleOptions}
                     value={formData.title}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, title: value }))}
+                    onValueChange={(value) => setFormData((prev: IPDFormInput) => ({ ...prev, title: value }))}
                     placeholder="Select title"
+                    disabled={selectedPatient ? !isEditingPatient : false}
                   />
                 </div>
                 <div className="space-y-2 col-span-1 md:col-span-2 lg:col-span-1">
@@ -604,7 +1015,8 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                     onChange={(e) => handlePatientNameChange(e.target.value)}
                     required
                     autoComplete="off"
-                    className="placeholder-gray-400"
+                    className="placeholder-gray-400 uppercase"
+                    disabled={selectedPatient ? !isEditingPatient : false}
                   />
                 </div>
                 <div className="space-y-2">
@@ -612,20 +1024,29 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                   <Input
                     id="phone"
                     placeholder="Enter phone number"
-                    value={formData.phone || ""}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                    value={formData.phone || ''}
+                    onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, phone: e.target.value }))}
                     required
                     autoComplete="off"
                     className="placeholder-gray-400"
+                    disabled={selectedPatient ? !isEditingPatient : false}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="uhid">UHID</Label>
                   <Input
                     id="uhid"
-                    value={formData.uhid}
-                    readOnly
-                    className="placeholder-gray-400 bg-gray-100 cursor-not-allowed"
+                    placeholder={selectedPatient?.uhid ? "Auto-populated" : "Auto-generated on submit"}
+                    value={selectedPatient?.uhid || formData.uhid || ""}
+                    onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, uhid: e.target.value }))}
+                    onBlur={(e) => {
+                      if (!selectedPatient) {
+                        fetchPatientDetailsByUHID(e.target.value)
+                      }
+                    }}
+                    autoComplete="off"
+                    className={`placeholder-gray-400 ${selectedPatient ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                    disabled={!!selectedPatient}
                   />
                 </div>
               </div>
@@ -637,9 +1058,10 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                     id="age"
                     type="number"
                     placeholder="Enter age"
-                    value={formData.age || ""}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, age: e.target.value }))}
+                    value={formData.age || ''}
+                    onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, age: e.target.value }))}
                     className="placeholder-gray-400"
+                    disabled={selectedPatient ? !isEditingPatient : false}
                   />
                 </div>
                 <div className="space-y-2">
@@ -647,17 +1069,19 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                   <SearchableSelect
                     options={ageUnitOptions}
                     value={formData.ageUnit}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, ageUnit: value }))}
+                    onValueChange={(value) => setFormData((prev: IPDFormInput) => ({ ...prev, ageUnit: value }))}
                     placeholder="Select unit"
+                    disabled={selectedPatient ? !isEditingPatient : false}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Gender</Label>
                   <SearchableSelect
                     options={genderOptions}
-                    value={formData.gender || ""}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, gender: value }))}
+                    value={formData.gender || ''}
+                    onValueChange={(value) => setFormData((prev: IPDFormInput) => ({ ...prev, gender: value }))}
                     placeholder="Select gender"
+                    disabled={selectedPatient ? !isEditingPatient : false}
                   />
                 </div>
                 <div className="space-y-2">
@@ -666,9 +1090,10 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                     id="totalDay"
                     type="number"
                     placeholder="Auto-calculated"
-                    value={formData.totalDay || ""}
+                    value={formData.totalDay || ''}
                     readOnly
                     className="placeholder-gray-400 bg-gray-100 cursor-not-allowed"
+                    disabled
                   />
                 </div>
               </div>
@@ -677,15 +1102,17 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                 <Input
                   id="address"
                   placeholder="Enter patient address"
-                  value={formData.address || ""}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value.toUpperCase() }))}
+                  value={formData.address || ''}
+                  onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, address: e.target.value }))}
                   autoComplete="off"
                   className="placeholder-gray-400"
+                  disabled={selectedPatient ? !isEditingPatient : false}
                 />
               </div>
             </CardContent>
           </Card>
-
+          
+          {/* Other Cards (Relative Info, Admission, Bed) */}
           <Card className="bg-green-50 border-green-200">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2 text-green-800">
@@ -701,7 +1128,7 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                     id="relativeName"
                     placeholder="Enter relative name"
                     value={formData.relativeName}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, relativeName: e.target.value.toUpperCase() }))}
+                    onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, relativeName: e.target.value }))}
                     className="placeholder-gray-400"
                   />
                 </div>
@@ -710,8 +1137,8 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                   <Input
                     id="relativePhone"
                     placeholder="Enter relative phone"
-                    value={formData.relativePhone || ""}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, relativePhone: e.target.value }))}
+                    value={formData.relativePhone || ''}
+                    onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, relativePhone: e.target.value }))}
                     className="placeholder-gray-400"
                   />
                 </div>
@@ -720,8 +1147,9 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                   <Input
                     id="relativeAddress"
                     placeholder="Enter relative address"
-                    value={formData.relativeAddress || ""}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, relativeAddress: e.target.value.toUpperCase() }))}
+                    value={formData.relativeAddress || ''}
+                    onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, relativeAddress: e.target.value }))}
+                    autoComplete="off"
                     className="placeholder-gray-400"
                   />
                 </div>
@@ -743,18 +1171,21 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                   <SearchableSelect
                     options={admissionSourceOptions}
                     value={formData.admissionSource}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, admissionSource: value, referralDoctor: "" }))}
+                    onValueChange={(value) =>
+                      setFormData((prev: IPDFormInput) => ({ ...prev, admissionSource: value, referralDoctor: "" }))
+                    }
                     placeholder="Select admission source"
                   />
                 </div>
+
                 {formData.admissionSource === "referral" && (
                   <div className="space-y-2">
                     <Label htmlFor="referralDoctor">Referral Doctor</Label>
                     <Input
                       id="referralDoctor"
                       placeholder="Enter referral doctor name"
-                      value={formData.referralDoctor || ""}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, referralDoctor: e.target.value.toUpperCase() }))}
+                      value={formData.referralDoctor}
+                      onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, referralDoctor: e.target.value }))}
                       className="placeholder-gray-400"
                     />
                   </div>
@@ -764,86 +1195,113 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                   <Input
                     id="mrd"
                     placeholder="Enter MRD number"
-                    value={formData.mrd || ""}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, mrd: e.target.value }))}
+                    value={formData.mrd || ''}
+                    onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, mrd: e.target.value }))}
                     className="placeholder-gray-400"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label>TPA (Third Party Administrator)</Label>
                   <SearchableSelect
-                    options={[{ value: "true", label: "Yes" },{ value: "false", label: "No" }]}
+                    options={[
+                      { value: "true", label: "Yes" },
+                      { value: "false", label: "No" },
+                    ]}
                     value={String(formData.tpa)}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, tpa: value === "true" }))}
+                    onValueChange={(value) => setFormData((prev: IPDFormInput) => ({ ...prev, tpa: value === "true" }))}
                     placeholder="Select TPA option"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Admission Type</Label>
                   <SearchableSelect
                     options={admissionTypeOptions}
                     value={formData.admissionType}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, admissionType: value }))}
+                    onValueChange={(value) => setFormData((prev: IPDFormInput) => ({ ...prev, admissionType: value }))}
                     placeholder="Select admission type"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Under Care of Doctor</Label>
                   <SearchableSelect
                     options={filteredDoctorOptions}
                     value={formData.underCareOfDoctor}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, underCareOfDoctor: value }))}
+                    onValueChange={(value) => setFormData((prev: IPDFormInput) => ({ ...prev, underCareOfDoctor: value }))}
                     placeholder="Select doctor"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="depositAmount">Deposit Amount</Label>
                   <Input
                     id="depositAmount"
                     type="number"
                     placeholder="Enter deposit amount"
-                    value={formData.depositAmount || ""}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, depositAmount: e.target.value }))}
+                    value={formData.depositAmount || ''}
+                    onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, depositAmount: e.target.value }))}
                     className="placeholder-gray-400"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Payment Mode</Label>
                   <SearchableSelect
                     options={paymentModeOptions}
                     value={formData.paymentMode}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, paymentMode: value }))}
+                    onValueChange={(value) => {
+                      setFormData((prev: IPDFormInput) => ({ ...prev, paymentMode: value }));
+                    }}
                     placeholder="Select payment mode"
                   />
                 </div>
-                {Number(formData.depositAmount) > 0 && (
+
+                {(formData.paymentMode === "online" || formData.paymentMode === "mixed") && (
                   <div className="space-y-2">
                     <Label>Through</Label>
                     <SearchableSelect
-                      options={currentPaymentThroughOptions}
-                      value={formData.paymentThrough || ""}
-                      onValueChange={(value) => setFormData((prev) => ({ ...prev, paymentThrough: value }))}
+                      options={onlineThroughOptions}
+                      value={formData.through || ''}
+                      onValueChange={(value) => setFormData((prev: IPDFormInput) => ({ ...prev, through: value }))}
                       placeholder="Select method"
                     />
                   </div>
                 )}
+
+                {formData.paymentMode === "cash" && (
+                  <div className="space-y-2">
+                    <Label>Through</Label>
+                    <SearchableSelect
+                      options={cashThroughOptions}
+                      value={formData.through || 'cash'}
+                      onValueChange={() => {}}
+                      placeholder="Cash"
+                      disabled
+                    />
+                  </div>
+                )}
+
+
                 <div className="space-y-2">
                   <Label htmlFor="date">Admission Date</Label>
                   <Input
                     id="date"
                     type="date"
                     value={formData.date}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+                    onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, date: e.target.value }))}
                     className="placeholder-gray-400"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="time">Admission Time</Label>
                   <Input
                     id="time"
                     type="time"
                     value={formData.time}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, time: e.target.value }))}
+                    onChange={(e) => setFormData((prev: IPDFormInput) => ({ ...prev, time: e.target.value }))}
                     className="placeholder-gray-400"
                   />
                 </div>
@@ -863,14 +1321,21 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Room Type</Label>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setShowAvailability(true)} className="text-xs">
-                      <Eye className="h-3 w-3 mr-1" /> View Availability
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAvailability(true)}
+                      className="text-xs"
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      View Availability
                     </Button>
                   </div>
                   <SearchableSelect
                     options={roomTypeOptions}
                     value={formData.roomType}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, roomType: value, bed: null }))}
+                    onValueChange={(value) => setFormData((prev: IPDFormInput) => ({ ...prev, roomType: value, bed: null }))}
                     placeholder="Select room type"
                   />
                 </div>
@@ -878,8 +1343,8 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
                   <Label>Bed</Label>
                   <SearchableSelect
                     options={bedSelectOptions}
-                    value={formData.bed !== null ? String(formData.bed) : ""}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, bed: Number(value) }))}
+                    value={formData.bed !== null ? String(formData.bed) : ''}
+                    onValueChange={(value) => setFormData((prev: IPDFormInput) => ({ ...prev, bed: Number(value) }))}
                     placeholder={!formData.roomType || availableBeds.length === 0 ? "No Beds Available" : "Select bed"}
                     disabled={!formData.roomType || availableBeds.length === 0}
                   />
@@ -887,81 +1352,112 @@ const IPDAppointmentEditPage = ({ params }: IPDAppointmentEditPageProps) => {
               </div>
             </CardContent>
           </Card>
-
+          
           <div className="flex justify-center space-x-4">
-            <Button type="button" variant="outline" onClick={handleCancel} className="border-gray-600 text-gray-600 hover:bg-gray-50 bg-transparent">
-              Cancel
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePreview}
+              className="border-blue-600 text-blue-600 hover:bg-blue-50 bg-transparent"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Preview
             </Button>
             <Button type="submit" disabled={isLoading} className="bg-blue-600 hover:bg-blue-700">
-              {isLoading ? "Saving..." : "Save Changes"}
+              {isLoading ? "Submitting..." : "Submit Admission"}
             </Button>
           </div>
         </form>
 
-        <Dialog open={showAvailability} onOpenChange={setShowAvailability}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-blue-700 flex items-center">
-                <Bed className="h-5 w-5 mr-2" />
-                Bed Availability
-              </DialogTitle>
-            </DialogHeader>
-            {beds.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <AlertCircle className="h-12 w-12 text-gray-400 mb-2" />
-                <p className="text-gray-500">No bed data available</p>
+        {showAvailability && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl max-h-[80vh] overflow-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-blue-700 flex items-center">
+                  <Bed className="h-5 w-5 mr-2" />
+                  Bed Availability
+                </h2>
+                <button onClick={() => setShowAvailability(false)} className="text-gray-500 hover:text-gray-700">
+                  <XCircle className="h-6 w-6" />
+                </button>
               </div>
-            ) : (
-              <div className="space-y-6">
-                {roomTypeOptions.map((roomTypeOption) => {
-                  const roomBeds = groupedBeds[roomTypeOption.value] || [];
-                  const availableBedsCount = roomBeds.filter((bed) => bed.status === "available").length;
-                  const totalBedsCount = roomBeds.length;
 
-                  return (
-                    <div key={roomTypeOption.value} className="border border-gray-200 rounded-lg overflow-hidden">
-                      <div className="bg-gray-50 p-4 border-b flex justify-between items-center">
-                        <h3 className="text-lg font-semibold capitalize">{roomTypeOption.label}</h3>
-                        <span className={`px-3 py-1 rounded-full text-sm ${availableBedsCount > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                          {availableBedsCount} of {totalBedsCount} available
-                        </span>
-                      </div>
-                      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                        {roomBeds.map((bed) => {
-                          const isAvailable = bed.status === "available";
-                          const statusColorMap: Record<BedData['status'], string> = {
-                            available: "bg-green-100 text-green-800",
-                            occupied: "bg-red-100 text-red-800",
-                            maintenance: "bg-yellow-100 text-yellow-800",
-                            reserved: "bg-blue-100 text-blue-800",
-                          };
-                          return (
-                            <div
-                              key={bed.id}
-                              className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
-                                isAvailable ? "border-green-500 bg-green-50 hover:bg-green-100 cursor-pointer" : "border-gray-300 bg-gray-50 opacity-80"
+              {beds.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <AlertCircle className="h-12 w-12 text-gray-400 mb-2" />
+                  <p className="text-gray-500">No bed data available</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {roomTypeOptions.map((roomTypeOption) => {
+                    const roomBeds = groupedBeds[roomTypeOption.value] || []
+                    const availableBedsCount = roomBeds.filter((bed) => bed.status === "available").length
+                    const totalBedsCount = roomBeds.length
+
+                    return (
+                      <div key={roomTypeOption.value} className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 p-4 border-b">
+                          <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-semibold capitalize">{roomTypeOption.label}</h3>
+                            <span
+                              className={`px-3 py-1 rounded-full text-sm ${
+                                availableBedsCount > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
                               }`}
-                              onClick={() => isAvailable && handleBedSelectFromPopup(bed.id)}
                             >
-                              <Bed size={24} className={isAvailable ? "text-green-600" : "text-gray-500"} />
-                              <span className="text-sm mt-1 font-medium">Bed {bed.bed_number}</span>
-                              <span className={`text-xs px-2 py-1 rounded-full mt-1 ${statusColorMap[bed.status] || "bg-gray-100 text-gray-800"}`}>
-                                {bed.status}
-                              </span>
-                            </div>
-                          );
-                        })}
+                              {availableBedsCount} of {totalBedsCount} available
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="p-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                            {roomBeds.map((bed) => {
+                              const isAvailable = bed.status === "available"
+                              const statusColorMap: Record<BedData['status'], string> = {
+                                available: "bg-green-100 text-green-800",
+                                occupied: "bg-red-100 text-red-800",
+                                maintenance: "bg-yellow-100 text-yellow-800",
+                                reserved: "bg-blue-100 text-blue-800",
+                              };
+                              const statusColor = statusColorMap[bed.status] || "bg-gray-100 text-gray-800";
+
+                              return (
+                                <div
+                                  key={bed.id}
+                                  className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                                    isAvailable
+                                      ? "border-green-500 bg-green-50 hover:bg-green-100"
+                                      : "border-gray-300 bg-gray-50 opacity-80"
+                                  }`}
+                                  onClick={() => isAvailable && handleBedSelectFromPopup(bed.id)}
+                                >
+                                  <Bed size={24} className={isAvailable ? "text-green-600" : "text-gray-500"} />
+                                  <span className="text-sm mt-1 font-medium">Bed {bed.bed_number}</span>
+                                  <span className={`text-xs px-2 py-1 rounded-full mt-1 ${statusColor}`}>
+                                    {bed.status}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <Dialog open={showPreview} onOpenChange={setShowPreview}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            {/* ... (Preview Dialog JSX) ... */}
           </DialogContent>
         </Dialog>
       </div>
     </Layout>
-  );
-};
+  )
+}
 
-export default IPDAppointmentEditPage;
+export default IPDAppointmentPage
