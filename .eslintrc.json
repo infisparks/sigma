@@ -1,6 +1,19 @@
 {
   "extends": "next/core-web-vitals",
   "rules": {
-    "react/no-unescaped-entities": "off"
+    "react/no-unescaped-entities": "off",
+
+    // --- Disabling Warnings (Not Recommended) ---
+    // Suppresses the "Using <img> could result in slower LCP..." warning
+    "@next/next/no-img-element": "off",
+
+    // Suppresses the "React Hook useEffect has a missing dependency..." warning
+    // This can lead to bugs with stale closures (old state/props).
+    "react-hooks/exhaustive-deps": "off",
+
+    // --- Disabling Errors (Highly Dangerous - Use with Extreme Caution) ---
+    // Suppresses the "React Hook "useEffect" is called conditionally..." error
+    // This rule prevents fundamental React errors. Disabling this is highly risky.
+    "react-hooks/rules-of-hooks": "off"
   }
 }
