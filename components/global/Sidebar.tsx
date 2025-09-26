@@ -9,26 +9,43 @@ import {
   LayoutDashboard, 
   Users, 
   FileText, 
-  Calendar, 
   Bed, 
-  Skull, 
   LogOut,
   Hospital,
-  ChevronDown,
   ChevronRight,
   UserPlus,
   Settings,
-  Activity,
-  ClipboardList,
-  UserCheck,
-  Building,
-  Stethoscope
+  Stethoscope,
+  FlaskConical,
+  Package,
+  Clock,
+  Scan, // Added Scan icon for X-ray
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
-import { useUserRole } from '../userrole';
+import { useUserRole } from '../userrole' // Assuming your hook is here
+
+// Define the menu items for the Pathology section, excluding X-ray items
+const pathologyMenuItems = [
+  { icon: LayoutDashboard, label: 'Dashboard', href: '/pathology/dashboard', roles: ['admin', 'technician', 'phlebo'] },
+  { icon: UserPlus, label: 'Patient Entry', href: '/pathology/patient-entry', roles: ['admin', 'technician'] },
+  
+  { icon: Clock, label: 'Turn Around Time', href: '/pathology/turnAroundTime', roles: ['admin'] },
+  { icon: Users, label: 'Deleted Entry', href: '/pathology/deleted', roles: ['admin'] },
+  { icon: FlaskConical, label: 'Billing', href: '/pathology/billing', roles: ['admin'] },
+  { icon: FlaskConical, label: 'Blood Tests', href: '/pathology/blood-tests', roles: ['admin'] },
+  { icon: Package, label: 'Packages', href: '/pathology/packages', roles: ['admin'] },
+ 
+];
+
+// Define the X-ray menu items
+const xrayMenuItems = [
+  { title: 'X-ray Entry', href: '/pathology/x-ray' },
+  { title: 'X-ray Dashboard', href: '/pathology/x-rayDashboard' },
+];
+
 
 const Sidebar = () => {
   const { role, loading } = useUserRole();
@@ -69,14 +86,18 @@ const Sidebar = () => {
     router.push('/login')
   }
 
+  type SubMenuItem = { title: string; href: string };
+
   type MenuItem = {
     title: string;
     icon: React.ElementType;
     href?: string;
-    submenu: { title: string; href: string }[];
+    submenu: SubMenuItem[];
   };
   
+  // Dynamically build the menu items based on the user's role
   let menuItems: MenuItem[] = [];
+  
   if (role === 'admin') {
     menuItems = [
       {
@@ -119,6 +140,18 @@ const Sidebar = () => {
           { title: 'Daily Reports', href: '/amount' },
         ]
       },
+      // Admin sees a separate X-ray group
+      {
+        title: 'X-ray',
+        icon: Scan,
+        submenu: xrayMenuItems,
+      },
+      // Admin sees all other pathology links
+      {
+        title: 'Pathology',
+        icon: FlaskConical,
+        submenu: pathologyMenuItems.map(item => ({ title: item.label, href: item.href }))
+      }
     ];
   } else if (role === 'opd-ipd') {
     menuItems = [
@@ -143,6 +176,26 @@ const Sidebar = () => {
           { title: 'Daily Reports', href: '/amount' },
         ]
       },
+    ];
+  } else if (role === 'xray') {
+    // X-ray role only sees the dedicated X-ray group
+    menuItems = [
+      {
+        title: 'X-ray',
+        icon: Scan,
+        submenu: xrayMenuItems,
+      }
+    ];
+  } else if (['technician', 'phlebo'].includes(role)) {
+    // Technician/Phlebo only see their specific pathology links (excluding X-ray)
+    menuItems = [
+      {
+        title: 'Pathology',
+        icon: FlaskConical,
+        submenu: pathologyMenuItems
+          .filter(item => item.roles.includes(role as 'technician' | 'phlebo'))
+          .map(item => ({ title: item.label, href: item.href }))
+      }
     ];
   }
 
@@ -222,14 +275,14 @@ const Sidebar = () => {
                       </button>
                       <div className={cn(
                         "overflow-hidden transition-all duration-200 ease-out",
-                        expandedMenus.includes(item.title) ? "max-h-64 opacity-100" : "max-h-0 opacity-0"
+                        expandedMenus.includes(item.title) ? "max-h-96 opacity-100" : "max-h-0 opacity-0" 
                       )}>
                         {Array.isArray(item.submenu) && (
                           <ul className="mt-1 space-y-0.5 ml-4 border-l border-gray-100">
-                            {(item.submenu as { title: string; href: string }[]).map((subItem) => (
+                            {(item.submenu as SubMenuItem[]).map((subItem) => (
                               <li key={subItem.title}>
                                 <Link
-                                  href={(subItem.href ?? '/') as string}
+                                  href={subItem.href}
                                   className={cn(
                                     "block px-3 py-1.5 text-xs rounded-md transition-all duration-150 ml-2",
                                     pathname === subItem.href
