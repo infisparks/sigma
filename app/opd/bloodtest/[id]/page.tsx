@@ -72,7 +72,7 @@ interface Registration {
   total_day?: number
   hospitalName?: string
   UHID?: string
-  source_ipd_id?: string | number
+  source_opd_id?: string | number
   reportDate: string
 }
 
@@ -322,7 +322,7 @@ export default function IpdBloodTestPage() {
         .select(
           `
           id, registration_time, bloodtest_detail, 
-          UHID, bloodtest_data, source_ipd_id,
+          UHID, bloodtest_data, source_opd_id,
           patient_detail ( uhid )
           `,
         )
@@ -351,7 +351,7 @@ export default function IpdBloodTestPage() {
           name: '', age: 0, gender: '',
           reportDate: latestReportedOnForReg,
           tpa: false,
-          source_ipd_id: row.source_ipd_id,
+          source_opd_id: row.source_opd_id,
         };
       });
       
@@ -379,14 +379,14 @@ export default function IpdBloodTestPage() {
           tpa,
           bill_no,
           UHID,
-          source_ipd_id,
+          source_opd_id,
           hospital_name,
           patient_detail ( 
             patient_id, name, age, gender, number, address, age_unit, total_day, title, uhid 
           )
           `,
         )
-        .eq('source_ipd_id', id)
+        .eq('source_opd_id', id)
         .order("registration_time", { ascending: false })
 
       if (error) throw error;
@@ -420,7 +420,7 @@ export default function IpdBloodTestPage() {
           day_type: patientDetail.age_unit,
           total_day: patientDetail.total_day,
           UHID: registrationRow.UHID,
-          source_ipd_id: registrationRow.source_ipd_id,
+          source_opd_id: registrationRow.source_opd_id,
           tpa: registrationRow.tpa === true,
           hospitalName: registrationRow.hospital_name,
           reportDate: latestReportedOnForReg,

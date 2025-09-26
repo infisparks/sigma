@@ -100,7 +100,7 @@ export function DashboardModals({
 
       // WhatsApp API payload
       const payload = {
-        token: "99583991573",
+        token: "9958399157",
         number: "91" + selectedRegistration.contact,
         imageUrl: url,
         caption: `Dear ${selectedRegistration.name},\n\nYour bill is now available:\n${url}\n\nRegards,\nYour Lab Team`,

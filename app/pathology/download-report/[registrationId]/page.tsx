@@ -692,7 +692,7 @@ function DownloadReport() {
       const { data: publicUrlData } = supabase.storage.from("reports").getPublicUrl(filename)
       const url = publicUrlData.publicUrl
       const payload = {
-        token: "99583991573",
+        token: "9958399157",
         number: "91" + patientData.contact,
         imageUrl: url,
         caption: `Dear ${patientData.name},\n\nYour blood test report is now available:\n${url}\n\nRegards,\nYour Lab Team`,
@@ -744,7 +744,7 @@ function DownloadReport() {
       const { data: publicUrlData } = supabase.storage.from("reports").getPublicUrl(filename)
       const url = publicUrlData.publicUrl
       const payload = {
-        token: "99583991573",
+        token: "9958399157",
         number: "91" + patientData.contact,
         imageUrl: url,
         caption: `Dear ${patientData.name},\n\nYour blood test report is now available:\n${url}\n\nRegards,\nYour Lab Team`,
@@ -818,7 +818,7 @@ function DownloadReport() {
 
       // 5. Create the WhatsApp payload for the group
       const payload = {
-        token: "99583991573", 
+        token: "9958399157", 
         number: "120363404060783775@g.us", // The target group ID
         imageUrl: url,
         caption: caption,

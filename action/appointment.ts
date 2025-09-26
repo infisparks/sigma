@@ -69,28 +69,36 @@ export async function searchPatientByCounterNumber(counterNumber: string) {
   }
 }
 
-export async function searchPatientsByPhoneNumber(phoneNumber: string) {
+export async function searchPatients(query: string, searchBy: 'phone' | 'name' = 'phone') {
   try {
-    // Supabase needs exact match for numbers, convert input to number for query
-    const phoneNumberAsNumber = Number(phoneNumber)
-    if (isNaN(phoneNumberAsNumber)) {
-      return { success: false, message: "Invalid phone number format." }
-    }
-    const { data, error } = await supabase
+    let queryBuilder = supabase
       .from("patient_detail")
-      .select("patient_id, name, number, age, age_unit, dob, gender, address, uhid")
-      .eq("number", phoneNumberAsNumber)
+      .select("patient_id, name, number, age, age_unit, dob, gender, address, uhid, title, total_day")
+
+    if (searchBy === 'name') {
+      // Search by name using ilike for case-insensitive partial match
+      queryBuilder = queryBuilder.ilike("name", `%${query.toUpperCase()}%`)
+    } else {
+      // Original search by phone number
+      const phoneNumberAsNumber = Number(query)
+      if (isNaN(phoneNumberAsNumber)) {
+        return { success: false, message: "Invalid phone number format." }
+      }
+      queryBuilder = queryBuilder.eq("number", phoneNumberAsNumber)
+    }
+
+    const { data, error } = await queryBuilder
     if (error) {
-      console.error("Error searching patients by phone number:", error)
+      console.error("Error searching patients:", error)
       throw error
     }
     if (!data || data.length === 0) {
-      return { success: false, message: "No patients found with this phone number." }
+      return { success: false, message: `No patients found with this ${searchBy === 'name' ? "name" : "phone number"}.` }
     }
     return { success: true, patients: data }
   } catch (error: any) {
-    console.error("Error in searchPatientsByPhoneNumber:", error)
-    return { success: false, message: "Failed to search patients by phone number: " + error.message }
+    console.error("Error in searchPatientsByPhoneNumber/Name:", error)
+    return { success: false, message: `Failed to search patients: ${error.message}` }
   }
 }
 

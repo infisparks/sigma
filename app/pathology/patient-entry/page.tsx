@@ -654,7 +654,7 @@ export default function PatientEntry() {
         const whatsappCaption = `Dear *${patientName}*,\n\nWe have received your request for: *${registrationDate}* at *${registrationTime}* \n\n*UHID (Patient ID)*: ${finalUHID}\n*Registration ID*: ${registrationId}\n*Tests Booked*: ${bloodTestNames}\n\n*Summary*:\n*Total Amount*: ₹${totalAmountFormatted}\n*Amount Paid*: ₹${totalPaidFormatted}\n*Remaining Balance*: ₹${remainingAmountFormatted}\n\nThank you for choosing us!`
 
         const whatsappPayload = {
-          token: "99583991573",
+          token: "9958399157",
           number: `91${patientContact}`,
           message: whatsappCaption
         }

@@ -72,7 +72,7 @@ import {
 import {
   createAppointment,
   searchPatientByUhId,
-  searchPatientsByPhoneNumber,
+  searchPatients, // Use the generic search function
   fetchDoctorsSupabase,
   fetchOnCallAppointmentsSupabase,
   deleteOnCallAppointment,
@@ -120,6 +120,7 @@ const AppointmentPage = () => {
   const [lastBillNo, setLastBillNo] = useState<number | null>(null)
   const [searchUhIdInput, setSearchUhIdInput] = useState("")
   const [searchPhoneInput, setSearchPhoneInput] = useState("")
+  const [searchNameInput, setSearchNameInput] = useState("") // New state for name search
   const [searchedPatientResults, setSearchedPatientResults] = useState<PatientDetail[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState<PatientDetail | null>(null)
@@ -270,6 +271,7 @@ const AppointmentPage = () => {
     setActiveTab("book")
     setSearchUhIdInput("")
     setSearchPhoneInput("")
+    setSearchNameInput("") // Clear name search input
     setSearchedPatientResults(null)
     setIsEditingPatient(false) // Reset editing mode when loading new patient
     if (nameInputRef.current) nameInputRef.current.value = p.name || ""
@@ -309,6 +311,7 @@ const AppointmentPage = () => {
     setSearchedPatientResults(null)
     setSearchUhIdInput("")
     setSearchPhoneInput("")
+    setSearchNameInput("") // Clear name search input
     setEditingChargeIndex(null) // Reset editing state on form reset
     setEditingServiceNameIndex(null) // Reset editing state for service name
     setIsEditingPatient(false) // Reset editing mode
@@ -319,6 +322,7 @@ const AppointmentPage = () => {
     if (activeTab !== "oncall" && activeTab !== "book") {
       setSearchUhIdInput("")
       setSearchPhoneInput("")
+      setSearchNameInput("") // Clear name search input
       setSearchedPatientResults(null)
       setIsSearching(false)
     }
@@ -484,7 +488,7 @@ const AppointmentPage = () => {
     setSearchedPatientResults(null)
     resetFormForNewPatient()
     try {
-      const res = await searchPatientsByPhoneNumber(searchPhoneInput.trim())
+      const res = await searchPatients(searchPhoneInput.trim(), "phone") // Use generic searchPatients function
       if (res.success && res.patients) {
         if (res.patients.length === 1) {
           fillFormWithPatientData(res.patients[0])
@@ -495,8 +499,32 @@ const AppointmentPage = () => {
         }
       } else toast.error(res.message || "No match.")
     } catch (e) {
-      //  console.error(e) // Already handled by the catch block
+      console.error(e)
       toast.error("Phone search failed.")
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const handleSearchByName = async () => {
+    if (!searchNameInput.trim()) return toast.error("Enter name to search.")
+    setIsSearching(true)
+    setSearchedPatientResults(null)
+    resetFormForNewPatient()
+    try {
+      const res = await searchPatients(searchNameInput.trim(), "name") // Use generic searchPatients function
+      if (res.success && res.patients) {
+        if (res.patients.length === 1) {
+          fillFormWithPatientData(res.patients[0])
+          toast.success("Patient loaded.")
+        } else {
+          setSearchedPatientResults(res.patients)
+          toast.info("Select patient from list.")
+        }
+      } else toast.error(res.message || "No match.")
+    } catch (e) {
+      console.error(e)
+      toast.error("Name search failed.")
     } finally {
       setIsSearching(false)
     }
@@ -833,7 +861,7 @@ const AppointmentPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid md:grid-cols-3 gap-6"> {/* Changed to 3 columns */}
               <div className="space-y-2">
                 <Label htmlFor="search-uhid">Search by UHID</Label>
                 <div className="flex gap-2">
@@ -868,6 +896,27 @@ const AppointmentPage = () => {
                   />
                   <Button
                     onClick={handleSearchByPhoneNumber}
+                    disabled={isSearching || !!selectedPatient}
+                    className="min-w-[100px]"
+                  >
+                    {isSearching ? "Searching..." : "Search"}
+                  </Button>
+                </div>
+              </div>
+              {/* New Search by Name Input */}
+              <div className="space-y-2">
+                <Label htmlFor="search-name">Search by Name</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="search-name"
+                    placeholder="Enter patient name"
+                    value={searchNameInput}
+                    onChange={(e) => setSearchNameInput(e.target.value)}
+                    disabled={isSearching || !!selectedPatient}
+                    className="h-10"
+                  />
+                  <Button
+                    onClick={handleSearchByName} // Use new handler
                     disabled={isSearching || !!selectedPatient}
                     className="min-w-[100px]"
                   >
