@@ -424,7 +424,7 @@ const IPDBloodTestModal: React.FC<IPDBloodTestModalProps> = ({ isOpen, onClose, 
         testName: test.test_name,
         testType: "inhospital",
       })),
-      amount_paid_history: JSON.stringify({
+      amount_paid_history:({
         discount: 0,
         totalAmount: totalAmount,
         paymentHistory: [],
