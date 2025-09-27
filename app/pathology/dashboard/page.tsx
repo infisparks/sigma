@@ -65,10 +65,6 @@ function format12HourLocal(dateString?: string) {
   return `${day}/${month}/${year}, ${hours}:${minutesStr} ${ampm}`
 }
 
-// NOTE: Table constants are usually defined outside the component function, but
-// since they were present in the previous component, I'll include them for context.
-// The queries below are explicitly updated.
-
 export default function Dashboard() {
   /* --- state --- */
   const [registrations, setRegistrations] = useState<Registration[]>([])
@@ -96,9 +92,8 @@ export default function Dashboard() {
 
   const [isLoading, setIsLoading] = useState(true)
 
-  // Using Asia/Kolkata timezone for todayStr
   const todayKolkata = getKolkataDateString(new Date().toISOString())
-  const todayStr = todayKolkata // YYYY-MM-DD
+  const todayStr = todayKolkata
   const [startDate, setStartDate] = useState<string>(todayStr)
   const [endDate, setEndDate] = useState<string>(todayStr)
 
@@ -122,18 +117,14 @@ export default function Dashboard() {
   const [dbSearchResults, setDbSearchResults] = useState<Registration[] | null>(null)
   const [isDbSearchLoading, setIsDbSearchLoading] = useState(false)
 
-  // Role-based redirect for x-ray users
   const router = useRouter()
   useEffect(() => {
-    // Assuming role is fetched from an external hook/context
-    // For this demonstration, we'll keep the role check logic
-    if (role === 'xray') {
-      router.replace('/x-rayDashboard')
+    if (role === "xray") {
+      router.replace("/x-rayDashboard")
     }
   }, [role, router])
 
-  // If user is x-ray role, don't render dashboard content
-  if (role === 'xray') {
+  if (role === "xray") {
     return null
   }
 
@@ -160,31 +151,29 @@ export default function Dashboard() {
       const kolkataStartOfDay = `${startDate || today}T00:00:00+05:30`
       const kolkataEndOfDay = `${endDate || today}T23:59:59+05:30`
 
-      // Fetch all registrations to calculate totals and pending reports accurately
       const { data: allRegistrationsData, error: allRegistrationsError } = await supabase
         .from("zregistration")
         .select(
           `
-        id, registration_time, amount_paid, amount_paid_history, samplecollected_time, bloodtest_data, bloodtest_detail, bill_no,
+        id, registration_time, amount_paid, amount_paid_history, samplecollected_time, bloodtest_data, bloodtest_detail, bill_no, is_enterbydoctor,
         patient_detail ( 
           patient_id, name, age, gender, number, address, age_unit, total_day, title, uhid 
         )
-      `
+      `,
         )
         .gte("registration_time", kolkataStartOfDay)
         .lte("registration_time", kolkataEndOfDay)
 
       if (allRegistrationsError) throw allRegistrationsError
 
-      let totalRegistrationsCount = 0;
-      let totalRevenue = 0;
-      let pendingReportsCount = 0;
-      let completedTestsCount = 0;
+      let totalRegistrationsCount = 0
+      let totalRevenue = 0
+      let pendingReportsCount = 0
+      let completedTestsCount = 0
 
       if (allRegistrationsData) {
         const mappedRegistrations: Registration[] = allRegistrationsData.map((registrationRow: any) => {
-          // *** FIX APPLIED: Using 'patient_detail' instead of 'zpatientdetial' ***
-          const patientDetail = registrationRow.patient_detail || {} 
+          const patientDetail = registrationRow.patient_detail || {}
           return {
             id: registrationRow.id,
             bloodtest_detail: registrationRow.bloodtest_detail || {},
@@ -194,7 +183,7 @@ export default function Dashboard() {
             discountAmount: registrationRow.discount_amount || 0,
             amountPaid: registrationRow.amount_paid || 0,
             doctor_name: registrationRow.doctor_name,
-            bloodTests: (registrationRow.bloodtest_data || []).map((test: any) => ({ 
+            bloodTests: (registrationRow.bloodtest_data || []).map((test: any) => ({
               ...test,
               testName: String(test.testName || ""),
             })),
@@ -202,45 +191,45 @@ export default function Dashboard() {
             sampleCollectedAt: registrationRow.samplecollected_time,
             paymentHistory: registrationRow.amount_paid_history || null,
             hospitalName: registrationRow.hospital_name,
-            patient_id: patientDetail.uhid || "", // Use UHID for external ID
+            patient_id: patientDetail.uhid || "",
             name: patientDetail.name || "Unknown",
-            patientId: patientDetail.uhid || "", // Use UHID for display
+            patientId: patientDetail.uhid || "",
             age: patientDetail.age || 0,
             gender: patientDetail.gender,
             contact: patientDetail.number,
             address: patientDetail.address,
-            day_type: patientDetail.age_unit, // Corrected column name
+            day_type: patientDetail.age_unit,
             total_day: patientDetail.total_day,
             title: patientDetail.title,
             tpa: registrationRow.tpa === true,
+            is_enterbydoctor: registrationRow.is_enterbydoctor === true, // Added field
           }
-        });
+        })
 
-        mappedRegistrations.forEach((reg) => {
-            totalRegistrationsCount++;
+        mappedRegistrations.forEach(reg => {
+          totalRegistrationsCount++
 
-            let regRevenue = 0
-            if (
-              reg.paymentHistory &&
-              typeof reg.paymentHistory === "object" &&
-              "paymentHistory" in reg.paymentHistory
-            ) {
-              const paymentData = reg.paymentHistory as PaymentHistory
-              regRevenue = paymentData.paymentHistory?.reduce((sum, payment) => sum + payment.amount, 0) || 0
-            } else {
-              regRevenue = reg.amountPaid || 0
-            }
-            totalRevenue += regRevenue;
+          let regRevenue = 0
+          if (
+            reg.paymentHistory &&
+            typeof reg.paymentHistory === "object" &&
+            "paymentHistory" in reg.paymentHistory
+          ) {
+            const paymentData = reg.paymentHistory as PaymentHistory
+            regRevenue = paymentData.paymentHistory?.reduce((sum, payment) => sum + payment.amount, 0) || 0
+          } else {
+            regRevenue = reg.amountPaid || 0
+          }
+          totalRevenue += regRevenue
 
-            // Check status for completed tests and pending reports
-            const sampleCollected = !!reg.sampleCollectedAt
-            const complete = isAllTestsComplete(reg)
+          const sampleCollected = !!reg.sampleCollectedAt
+          const complete = isAllTestsComplete(reg)
 
-            if (sampleCollected && complete) {
-              completedTestsCount++;
-            } else if (sampleCollected && !complete) {
-              pendingReportsCount++;
-            }
+          if (sampleCollected && complete) {
+            completedTestsCount++
+          } else if (sampleCollected && !complete) {
+            pendingReportsCount++
+          }
         })
       }
 
@@ -268,6 +257,7 @@ export default function Dashboard() {
           *,
           tpa,
           bill_no,
+          is_enterbydoctor,
           patient_detail (
             patient_id, name, age, gender, number, address, age_unit, total_day, title, uhid 
           )
@@ -290,7 +280,6 @@ export default function Dashboard() {
       }
 
       const mappedData: Registration[] = (data || []).map((registrationRow: any) => {
-        // *** FIX APPLIED: Using 'patient_detail' instead of 'zpatientdetial' ***
         const patientDetail = registrationRow.patient_detail || {}
 
         return {
@@ -302,7 +291,7 @@ export default function Dashboard() {
           discountAmount: registrationRow.discount_amount || 0,
           amountPaid: registrationRow.amount_paid || 0,
           doctor_name: registrationRow.doctor_name,
-          bloodTests: (registrationRow.bloodtest_data || []).map((test: any) => ({ 
+          bloodTests: (registrationRow.bloodtest_data || []).map((test: any) => ({
             ...test,
             testName: String(test.testName || ""),
           })),
@@ -310,18 +299,19 @@ export default function Dashboard() {
           sampleCollectedAt: registrationRow.samplecollected_time,
           paymentHistory: registrationRow.amount_paid_history || null,
           hospitalName: registrationRow.hospital_name,
-          patient_id: patientDetail?.uhid ?? "", // Use UHID for external ID
+          patient_id: patientDetail?.uhid ?? "",
           name: patientDetail?.name ?? "Unknown",
-          patientId: patientDetail?.uhid ?? "", // Use UHID for display
+          patientId: patientDetail?.uhid ?? "",
           age: patientDetail?.age ?? 0,
           gender: patientDetail.gender,
           contact: patientDetail.number,
           address: patientDetail.address,
-          day_type: patientDetail.age_unit, // Corrected column name
+          day_type: patientDetail.age_unit,
           total_day: patientDetail.total_day,
           title: patientDetail.title,
           tpa: registrationRow.tpa === true,
           bill_no: registrationRow.bill_no || undefined,
+          is_enterbydoctor: registrationRow.is_enterbydoctor === true, // Added field
         }
       })
 
@@ -340,20 +330,17 @@ export default function Dashboard() {
 
   // Realtime Subscriptions
   useEffect(() => {
-    // Note: The 'registration' table name in the channel config below should be 'zregistration'
-    // but assuming it's correctly configured in your environment for simplicity.
     const registrationChannel = supabase
       .channel("registration_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "zregistration" }, (payload) => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "zregistration" }, payload => {
         fetchRegistrations(startDate, endDate)
         fetchDashboardStats()
       })
       .subscribe()
 
-    // *** FIX APPLIED: Changed table name to 'patient_detail' ***
     const patientDetialChannel = supabase
       .channel("patient_detail_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "patient_detail" }, (payload) => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "patient_detail" }, payload => {
         fetchRegistrations(startDate, endDate)
         fetchDashboardStats()
       })
@@ -379,22 +366,19 @@ export default function Dashboard() {
   // DB search effect for long search terms
   useEffect(() => {
     const term = searchTerm.trim()
-    // *** FIX APPLIED: Updated column filtering to use 'patient_detail' and 'uhid' ***
-    // Note: Supabase RLS policies might require specific access for cross-table joins like this.
-    if (term.length > 8) {
+    if (term.length > 30) {
       setIsDbSearchLoading(true)
-      // Query Supabase for name or number match (case-insensitive)
       supabase
         .from("zregistration")
         .select(
           `*,
           tpa,
           bill_no,
+          is_enterbydoctor,
           patient_detail (
             patient_id, name, age, gender, number, address, age_unit, total_day, title, uhid 
-          )`
+          )`,
         )
-        // Adjusting .or() filter to match the new table structure:
         .or(`patient_detail.name.ilike.%${term}%,patient_detail.number.ilike.%${term}%,patient_detail.uhid.ilike.%${term}%`)
         .order("registration_time", { ascending: false })
         .then(({ data, error }) => {
@@ -404,7 +388,6 @@ export default function Dashboard() {
             return
           }
           const mappedData: Registration[] = (data || []).map((registrationRow: any) => {
-            // *** FIX APPLIED: Using 'patient_detail' instead of 'zpatientdetial' ***
             const patientDetail = registrationRow.patient_detail || {}
             return {
               id: registrationRow.id,
@@ -415,7 +398,7 @@ export default function Dashboard() {
               discountAmount: registrationRow.discount_amount || 0,
               amountPaid: registrationRow.amount_paid || 0,
               doctor_name: registrationRow.doctor_name,
-              bloodTests: (registrationRow.bloodtest_data || []).map((test: any) => ({ 
+              bloodTests: (registrationRow.bloodtest_data || []).map((test: any) => ({
                 ...test,
                 testName: String(test.testName || ""),
               })),
@@ -423,17 +406,18 @@ export default function Dashboard() {
               sampleCollectedAt: registrationRow.samplecollected_time,
               paymentHistory: registrationRow.amount_paid_history || null,
               hospitalName: registrationRow.hospital_name,
-              patient_id: patientDetail?.uhid ?? "", 
+              patient_id: patientDetail?.uhid ?? "",
               name: patientDetail?.name ?? "Unknown",
               patientId: patientDetail?.uhid ?? "",
               age: patientDetail?.age ?? 0,
               gender: patientDetail.gender,
               contact: patientDetail.number,
               address: patientDetail.address,
-              day_type: patientDetail.age_unit, 
+              day_type: patientDetail.age_unit,
               total_day: patientDetail.total_day,
               title: patientDetail.title,
               tpa: registrationRow.tpa === true,
+              is_enterbydoctor: registrationRow.is_enterbydoctor === true, // Added field
             }
           })
           const sorted = mappedData.sort((a, b) => {
@@ -455,18 +439,14 @@ export default function Dashboard() {
     const start = startDate ? new Date(`${startDate}T00:00:00`) : null
     const end = endDate ? new Date(`${endDate}T23:59:59`) : null
 
-    return registrations.filter((r) => {
+    return registrations.filter(r => {
       const term = searchTerm.trim().toLowerCase()
       const matchesSearch =
         !term ||
         (r.name && r.name.toLowerCase().includes(term)) ||
         (r.contact ? r.contact.toString().includes(term) : false) ||
-        (r.patientId && r.patientId.toLowerCase().includes(term)) // patientId is now UHID
+        (r.patientId && r.patientId.toLowerCase().includes(term))
       if (!matchesSearch) return false
-
-      const regDate = new Date(r.createdAt)
-      // if (start && regDate < start) return false
-      // if (end && regDate > end) return false
 
       const sampleCollected = !!r.sampleCollectedAt
       const complete = isAllTestsComplete(r)
@@ -474,7 +454,7 @@ export default function Dashboard() {
         case "notCollected":
           if (sampleCollected) return false
           break
-        case "sampleCollected": // This means sample collected but tests not complete (Pending)
+        case "sampleCollected":
           if (!sampleCollected || complete) return false
           break
         case "completed":
@@ -511,7 +491,8 @@ export default function Dashboard() {
 
   const handleDeleteRegistration = useCallback(
     async (r: Registration) => {
-      if (!confirm(`Delete registration for ${r.name}? This will permanently remove the registration record.`)) return
+      if (!confirm(`Delete registration for ${r.name}? This will permanently remove the registration record.`))
+        return
 
       try {
         const { data: regData, error: regError } = await supabase
@@ -534,7 +515,7 @@ export default function Dashboard() {
         const { error: delRegError } = await supabase.from("zregistration").delete().eq("id", r.id)
         if (delRegError) throw delRegError
 
-        setRegistrations((prev) => prev.filter((registration) => registration.id !== r.id))
+        setRegistrations(prev => prev.filter(registration => registration.id !== r.id))
         fetchDashboardStats()
 
         alert("Registration deleted and moved to deleted_data.")
@@ -550,14 +531,14 @@ export default function Dashboard() {
     if (selectAll) {
       setSelectedRegistrations([])
     } else {
-      setSelectedRegistrations(filteredRegistrations.map((r) => r.id))
+      setSelectedRegistrations(filteredRegistrations.map(r => r.id))
     }
     setSelectAll(!selectAll)
   }, [selectAll, filteredRegistrations])
 
   const handleToggleSelect = useCallback((registrationId: number) => {
-    setSelectedRegistrations((prev) =>
-      prev.includes(registrationId) ? prev.filter((id) => id !== registrationId) : [...prev, registrationId],
+    setSelectedRegistrations(prev =>
+      prev.includes(registrationId) ? prev.filter(id => id !== registrationId) : [...prev, registrationId],
     )
   }, [])
 
@@ -582,7 +563,6 @@ export default function Dashboard() {
     downloadMultipleBills(selectedRegistrations, registrations)
   }, [selectedRegistrations, registrations])
 
-  // ---------- PAYMENT UPDATE FUNCTION ----------
   const handleUpdateAmountAndDiscount = useCallback(async () => {
     if (!selectedRegistration) return
 
@@ -632,10 +612,7 @@ export default function Dashboard() {
             : currentPaymentHistory.paymentHistory,
       }
 
-      const newTotalPaid = updatedPaymentHistory.paymentHistory.reduce(
-        (sum, payment) => sum + payment.amount,
-        0,
-      )
+      const newTotalPaid = updatedPaymentHistory.paymentHistory.reduce((sum, payment) => sum + payment.amount, 0)
 
       const updateData: any = {
         discount_amount: newDiscountAmount,
@@ -663,16 +640,25 @@ export default function Dashboard() {
       setBillNo("")
       setPaymentMode("online")
       alert("Payment and discount updated successfully!")
-      fetchRegistrations(startDate, endDate) // Explicitly call to refresh the list
-      fetchDashboardStats() // Explicitly call to refresh dashboard stats
+      fetchRegistrations(startDate, endDate)
+      fetchDashboardStats()
     } catch (error: any) {
       console.error("Dashboard: Error updating payment and discount:", error.message)
       alert("Error updating payment and discount. Please try again.")
     }
-  }, [selectedRegistration, newAmountPaid, tempDiscount, paymentMode, amountId, billNo, fetchRegistrations, fetchDashboardStats, startDate, endDate])
-  // ---------- END PAYMENT UPDATE FUNCTION ----------
+  }, [
+    selectedRegistration,
+    newAmountPaid,
+    tempDiscount,
+    paymentMode,
+    amountId,
+    billNo,
+    fetchRegistrations,
+    fetchDashboardStats,
+    startDate,
+    endDate,
+  ])
 
-  // When passing to FakeBill, ensure TPA price is used if tpa is true
   const getFakeBillPatient = (reg: Registration | null) => {
     if (!reg) return null
     const tpa = reg.tpa === true
@@ -680,10 +666,10 @@ export default function Dashboard() {
       ...reg,
       bloodTests: (reg.bloodTests || []).map((t: any) => ({
         ...t,
-        price: tpa && typeof t.tpa_price === 'number' ? t.tpa_price : t.price,
+        price: tpa && typeof t.tpa_price === "number" ? t.tpa_price : t.price,
       })),
       tpa,
-      bill_no: reg.bill_no, // Explicitly pass bill_no
+      bill_no: reg.bill_no,
     }
   }
 
@@ -711,8 +697,8 @@ export default function Dashboard() {
             isFilterContentMounted={isFilterContentMounted}
             hospitalFilterTerm={hospitalFilterTerm}
             setHospitalFilterTerm={setHospitalFilterTerm}
-            loadedDataStartDate={startDate} // Pass the startDate to display
-            loadedDataEndDate={endDate} // Pass the endDate to display
+            loadedDataStartDate={startDate}
+            loadedDataEndDate={endDate}
           />
 
           <RegistrationList

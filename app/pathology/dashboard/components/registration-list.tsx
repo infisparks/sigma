@@ -102,13 +102,12 @@ export function RegistrationList({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filteredRegistrations.map((r) => {
+            {filteredRegistrations.map(r => {
               const sampleCollected = !!r.sampleCollectedAt
               const complete = isAllTestsComplete(r)
               const status = !sampleCollected ? "Not Collected" : complete ? "Completed" : "Pending"
               const { testTotal, remaining, totalPaid } = calculateAmounts(r)
 
-              // --- SHOW y/m/d as per day_type ---
               let ageUnit = "y"
               if (r.day_type === "month") ageUnit = "m"
               else if (r.day_type === "day") ageUnit = "d"
@@ -149,8 +148,17 @@ export function RegistrationList({
                             </span>
                           )}
                           {r.tpa && (
-                            <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800 border-blue-200">TPA</Badge>
+                            <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800 border-blue-200">
+                              TPA
+                            </Badge>
                           )}
+                          {/* --- NEW DOCTOR TAG --- */}
+                          {r.is_enterbydoctor && (
+                            <Badge variant="outline" className="ml-1 bg-purple-100 text-purple-800 border-purple-200">
+                              Doctor
+                            </Badge>
+                          )}
+                          {/* --- END NEW TAG --- */}
                         </div>
                         <div className="mt-1 text-sm text-gray-600">
                           {r.age}
@@ -163,7 +171,7 @@ export function RegistrationList({
                       {r.bloodTests?.length ? (
                         <div className="max-h-20 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                           <ul className="space-y-1">
-                            {r.bloodTests.map((t) => {
+                            {r.bloodTests.map(t => {
                               const done = t.testType?.toLowerCase() === "outsource" || isTestFullyEntered(r, t)
                               return (
                                 <li key={t.testId} className="flex items-center text-xs">
@@ -182,7 +190,9 @@ export function RegistrationList({
                         <span className="text-xs text-gray-400">No tests</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{new Date(r.createdAt).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {new Date(r.createdAt).toLocaleDateString()}
+                    </td>
                     <td className="px-4 py-3">
                       {status === "Not Collected" && (
                         <span
@@ -257,12 +267,16 @@ export function RegistrationList({
                                 <button
                                   onClick={() => {
                                     setSampleModalRegistration(r)
-                                    setSampleDateTime(r.sampleCollectedAt ? new Date(r.sampleCollectedAt).toISOString().slice(0, 16) : formatLocalDateTime())
+                                    setSampleDateTime(
+                                      r.sampleCollectedAt
+                                        ? new Date(r.sampleCollectedAt).toISOString().slice(0, 16)
+                                        : formatLocalDateTime(),
+                                    )
                                   }}
-                                  className={`inline-flex items-center px-3.5 py-2 ${sampleCollected ? 'bg-blue-600 hover:bg-blue-700' : 'bg-orange-600 hover:bg-orange-700'} text-white rounded-md text-sm font-medium shadow-sm`}
+                                  className={`inline-flex items-center px-3.5 py-2 ${sampleCollected ? "bg-blue-600 hover:bg-blue-700" : "bg-orange-600 hover:bg-orange-700"} text-white rounded-md text-sm font-medium shadow-sm`}
                                 >
                                   <DocumentTextIcon className="h-4 w-4 mr-2" />
-                                  {sampleCollected ? 'Sample Collected On' : 'Collect Sample'}
+                                  {sampleCollected ? "Sample Collected On" : "Collect Sample"}
                                 </button>
                                 {sampleCollected && (
                                   <Link
@@ -314,15 +328,15 @@ export function RegistrationList({
 
                                 <button
                                   onClick={() => {
-                                    const tpa = r.tpa === true;
+                                    const tpa = r.tpa === true
                                     setFakeBillRegistration({
                                       ...r,
                                       bloodTests: (r.bloodTests || []).map((t: any) => ({
                                         ...t,
-                                        price: tpa && typeof t.tpa_price === 'number' ? t.tpa_price : t.price,
+                                        price: tpa && typeof t.tpa_price === "number" ? t.tpa_price : t.price,
                                       })),
                                       tpa,
-                                    });
+                                    })
                                   }}
                                   className="inline-flex items-center px-3.5 py-2 bg-pink-600 text-white rounded-md text-sm font-medium hover:bg-pink-700 shadow-sm"
                                 >

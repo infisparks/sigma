@@ -21,6 +21,7 @@ export interface PaymentHistory {
 }
 
 export interface Registration {
+  is_enterbydoctor: any
   bloodtest_detail: any
   id: number
   registration_id: number

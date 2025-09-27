@@ -49,13 +49,24 @@ interface PatientDetail {
   uhid: string
 }
 
+// Service Info Structure (as used in the component)
+interface ServiceInfo {
+  type: string
+  doctor: string | null // Doctor name
+  specialist: string | null
+  visitType: string
+  service: string | null
+  charges: number
+}
+
+
 // OPD Appointment as used in the component
 interface OPDAppointment {
   opd_id: number
   created_at: string
   date: string // The actual appointment date (timestamp without time zone)
   refer_by: string | null
-  service_info: any[] | null
+  service_info: ServiceInfo[] | null // Updated type
   payment_info: any
   uhid_from_registration: string
   patient_detail: PatientDetail | null
@@ -75,6 +86,30 @@ interface ModalState {
   isOpen: boolean
   appointment: OPDAppointment | null
 }
+
+// Function to determine the doctor's name
+const getDoctorName = (serviceInfo: ServiceInfo[] | null, referBy: string | null): string | null => {
+    if (!serviceInfo || serviceInfo.length === 0) {
+        return referBy
+    }
+
+    // 1. Check for a service with type "consultation"
+    const consultationService = serviceInfo.find(s => s.type?.toLowerCase() === "consultation")
+
+    if (consultationService && consultationService.doctor) {
+        return consultationService.doctor
+    }
+
+    // 2. If no consultation, check the first service for a doctor name
+    const firstServiceWithDoctor = serviceInfo.find(s => s.doctor)
+    if (firstServiceWithDoctor && firstServiceWithDoctor.doctor) {
+        return firstServiceWithDoctor.doctor
+    }
+
+    // 3. Fallback to appointment's refer_by if present
+    return referBy
+}
+
 
 const OPDListPrescriptionPage = () => {
   const [appointments, setAppointments] = useState<OPDAppointment[]>([])
@@ -111,7 +146,7 @@ const OPDListPrescriptionPage = () => {
         created_at: appt.created_at,
         date: appt.date,
         refer_by: appt.refer_by,
-        service_info: appt.service_info,
+        service_info: appt.service_info as ServiceInfo[] | null,
         payment_info: appt.payment_info,
         uhid_from_registration: appt.uhid,
         patient_detail: appt.patient_detail,
@@ -174,7 +209,7 @@ const OPDListPrescriptionPage = () => {
     return (paymentInfo.cashAmount || 0) + (paymentInfo.onlineAmount || 0)
   }
 
-  const getAppointmentType = (serviceInfo: any[] | null) => {
+  const getAppointmentType = (serviceInfo: ServiceInfo[] | null) => {
     if (!serviceInfo || serviceInfo.length === 0) return "N/A"
     const types = serviceInfo.map(s => s.type)
     const uniqueTypes = [...new Set(types)]
@@ -312,7 +347,7 @@ const OPDListPrescriptionPage = () => {
 interface AppointmentsListProps {
   filteredAppointments: OPDAppointment[]
   isLoading: boolean
-  getAppointmentType: (serviceInfo: any[] | null) => string
+  getAppointmentType: (serviceInfo: ServiceInfo[] | null) => string
   getTotalAmount: (paymentInfo: any) => number
   formatDate: (dateString: string) => string
   handleViewPrescription: (opd_id: number) => void
@@ -478,9 +513,19 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isTPA, setIsTPA] = useState(false) 
+  const [customDoctorName, setCustomDoctorName] = useState<string>("") // New state for editable doctor name
+
+  // Function to determine the doctor's name (moved outside for helper access)
+  const initialDoctorName = useMemo(() => {
+    return getDoctorName(appointment.service_info, appointment.refer_by) || ""
+  }, [appointment.service_info, appointment.refer_by])
 
   useEffect(() => {
     if (isOpen) {
+      // Set the initial doctor name when the modal opens
+      setCustomDoctorName(initialDoctorName)
+      
       const fetchBloodTests = async () => {
         setIsLoading(true)
         const { data, error } = await supabase
@@ -501,8 +546,10 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
       setAllTests([])
       setSelectedTests(new Set())
       setSearchTerm("")
+      setIsTPA(false) 
+      setCustomDoctorName("") // Reset custom doctor name
     }
-  }, [isOpen])
+  }, [isOpen, initialDoctorName]) // Depend on initialDoctorName to update when appointment changes
 
   const filteredTests = useMemo(() => {
     return allTests.filter(test => test.test_name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -520,6 +567,7 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
     })
   }
 
+
   const handleSubmit = async () => {
     if (selectedTests.size === 0) {
       toast.warning("Please select at least one test to book.")
@@ -534,6 +582,10 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
     const testsToBook = allTests.filter(test => selectedTests.has(test.id))
     const totalAmount = testsToBook.reduce((sum, test) => sum + test.price, 0)
     const currentTime = new Date().toISOString()
+    
+    // Use the potentially custom doctor name
+    const doctorName = customDoctorName.trim() || null;
+
 
     const newRegistrationData = {
       UHID: appointment.patient_detail.uhid,
@@ -556,8 +608,8 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
         totalAmount: totalAmount,
         paymentHistory: [],
       }),
-      doctor_name: appointment.refer_by,
-      tpa: "false",
+      doctor_name: doctorName, // Use the editable state
+      tpa: isTPA, 
       source_opd_id: appointment.opd_id,
       is_enterbydoctor: true,
     }
@@ -584,6 +636,34 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
             {appointment.patient_detail?.uhid}).
           </DialogDescription>
         </DialogHeader>
+
+        <div className="grid grid-cols-2 gap-4">
+             <div className="flex items-center space-x-3">
+                <Checkbox
+                    id="is-tpa"
+                    checked={isTPA}
+                    onCheckedChange={(checked) => setIsTPA(checked === true)}
+                />
+                <label
+                    htmlFor="is-tpa"
+                    className="text-sm font-medium leading-none cursor-pointer"
+                >
+                    Book under **TPA**
+                </label>
+            </div>
+            <div className="space-y-1">
+                <label htmlFor="doctor-name" className="text-sm font-medium leading-none block">
+                    Referring Doctor Name
+                </label>
+                <Input
+                    id="doctor-name"
+                    placeholder="Enter custom doctor name"
+                    value={customDoctorName}
+                    onChange={e => setCustomDoctorName(e.target.value)}
+                    className="h-9"
+                />
+            </div>
+        </div>
 
         <div className="relative my-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
