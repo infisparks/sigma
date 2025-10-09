@@ -660,8 +660,15 @@ export default function PatientEntry() {
         }
 
         try {
-          // Placeholder for actual WhatsApp API call
-          console.log("WhatsApp message payload ready but not sent in this environment.")
+          const response = await fetch("https://a.infispark.in/send-text", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(whatsappPayload),
+          })
+          if (!response.ok) {
+            const errorText = await response.text()
+            console.error("WhatsApp API error:", errorText)
+          }
         } catch (whatsappError) {
           console.error("Error sending WhatsApp message:", whatsappError)
         }
