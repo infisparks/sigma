@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useEffect, useState, useCallback } from "react"
 
-import { useForm, type SubmitHandler, type Path } from "react-hook-form"
+import { useForm, type SubmitHandler, type Path, type UseFormSetValue } from "react-hook-form"
 
 import { useParams, useRouter } from "next/navigation"
 
@@ -19,18 +19,21 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea" // Import Textarea
+import { Textarea } from "@/components/ui/textarea"
 
-import { cn } from "@/lib/utils" // Utility to conditionally join class names
+import { cn } from "@/lib/utils"
 
 import { Badge } from "@/components/ui/badge"
 
 import { Separator } from "@/components/ui/separator"
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog" // Import Dialog components
-import { generateReportPdf } from "@/app/pathology/download-report/[registrationId]/pdf-generator" // Import PDF generator
-import type { PatientData, CombinedTestGroup, HistoricalTestEntry, ComparisonTestSelection } from "@/app/pathology/download-report/[registrationId]/types/report" // Import types
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { generateReportPdf } from "@/app/pathology/download-report/[registrationId]/pdf-generator"
+import type { PatientData, CombinedTestGroup, HistoricalTestEntry, ComparisonTestSelection } from "@/app/pathology/download-report/[registrationId]/types/report"
+
+// Import for the new PrimeReact AutoComplete component
+import { AutoComplete, type AutoCompleteCompleteEvent } from "primereact/autocomplete"
 
 /* ─────────────────── Types ─────────────────── */
 
@@ -140,102 +143,88 @@ const parseRangeKey = (key: string): { lower: number; upper: number } => {
   return { lower: lowerDays, upper: upperDays }
 }
 
-/* ---- Helper to format numbers with up to 3 decimals, dropping trailing zeros ---- */
-
 const fmt3 = (n: number) => n.toFixed(3).replace(/\.?0+$/, "")
 
-/* ---------- dropdown position helper ---------- */
-
-interface SuggestPos {
-  t: number
-  p: number
-  x: number
-  y: number
-  width: number
-}
-
 // Helper to extract parameter names from a formula string
-
 const getFormulaDependencies = (formula: string): string[] => {
   const matches = formula.match(/[a-zA-Z_][a-zA-Z0-9_]*/g)
-  // Filter out common mathematical functions or keywords if necessary
   const keywords = new Set(["Math", "abs", "round", "floor", "ceil", "min", "max", "log", "pow", "sqrt"])
   return Array.from(new Set(matches?.filter((m) => !keywords.has(m)) || []))
 }
 
-/* ------------------------------------------------------------------ */
-
+/* ─────────────────── PDF Preview Helper ─────────────────── */
 const getFormDataForPreview = (
   currentTests: TestValueEntry[],
-  patientDetails: PatientData, // Changed type here
+  patientDetails: PatientData,
   fullPatientData: PatientData | null,
 ): PatientData | null => {
-  if (!patientDetails || !fullPatientData) return null;
+  if (!patientDetails || !fullPatientData) return null
 
-  const bloodtestDetail: Record<string, any> = {};
+  const bloodtestDetail: Record<string, any> = {}
   for (const t of currentTests) {
     const key = t.testName
       .toLowerCase()
       .replace(/\s+/g, "_")
-      .replace(/[.#$[\]]/g, "");
+      .replace(/[.#$[\]]/g, "")
 
     const params = t.parameters
       .map((p) => {
-        const subs = p.subparameters?.filter((sp) => sp.value !== "") ?? [];
+        const subs = p.subparameters?.filter((sp) => sp.value !== "") ?? []
         if (p.value !== "" || subs.length) {
-          const obj: any = { ...p, subparameters: subs };
-          const strValue = String(p.value);
+          const obj: any = { ...p, subparameters: subs }
+          const strValue = String(p.value)
           if (/^[<>]/.test(strValue)) {
-            obj.value = strValue;
+            obj.value = strValue
           } else if (p.valueType === "number" && strValue !== "") {
-            const numValue = Number(strValue);
-            // Explicitly handle '-' and '.' as strings for number type fields
+            const numValue = Number(strValue)
             if (strValue === "-" || strValue === ".") {
-              obj.value = strValue;
+              obj.value = strValue
             } else {
-              obj.value = isNaN(numValue) ? strValue : (strValue.includes(".") && strValue.endsWith("0") ? strValue : numValue);
+              obj.value =
+                isNaN(numValue) ? strValue : strValue.includes(".") && strValue.endsWith("0") ? strValue : numValue
             }
           }
           subs.forEach((sp) => {
-            const spStr = String(sp.value);
+            const spStr = String(sp.value)
             if (/^[<>]/.test(spStr)) {
-              sp.value = spStr;
+              sp.value = spStr
             } else if (sp.valueType === "number" && spStr !== "") {
-              const spNum = Number(spStr);
-              // Explicitly handle '-' and '.' as strings for subparameter number type fields
+              const spNum = Number(spStr)
               if (spStr === "-" || spStr === ".") {
-                sp.value = spStr;
+                sp.value = spStr
               } else {
-                sp.value = isNaN(spNum) ? spStr : (spStr.includes(".") && spStr.endsWith("0") ? spStr : spNum);
+                sp.value =
+                  isNaN(spNum) ? spStr : spStr.includes(".") && spStr.endsWith("0") ? spStr : spNum
               }
             }
-          });
-          return obj;
+          })
+          return obj
         }
-        return null;
+        return null
       })
-      .filter(Boolean) as TestParameterValue[];
+      .filter(Boolean) as TestParameterValue[]
 
     if (params.length > 0) {
       bloodtestDetail[key] = {
         parameters: params,
         testId: t.testId,
-        testName: t.testName, // Ensure testName is included
+        testName: t.testName,
         subheadings: t.subheadings || [],
         createdAt: fullPatientData.bloodtest?.[key]?.createdAt || new Date().toISOString(),
         reportedOn: fullPatientData.bloodtest?.[key]?.reportedOn || new Date().toISOString(),
         enteredBy: fullPatientData.bloodtest?.[key]?.enteredBy || "unknown",
-        interpretation: fullPatientData.bloodtest?.[key]?.interpretation || "", // Preserve interpretation
-      };
+        interpretation: fullPatientData.bloodtest?.[key]?.interpretation || "",
+      }
     }
   }
 
   return {
     ...fullPatientData,
     bloodtest: bloodtestDetail,
-  };
-};
+  }
+}
 
+/* ─────────────────── Main Form Component ─────────────────── */
 const BloodValuesForm: React.FC = () => {
   const router = useRouter()
   const params = useParams()
@@ -243,13 +232,11 @@ const BloodValuesForm: React.FC = () => {
 
   const [loading, setLoading] = useState(true)
   const [dbText, setDbText] = useState<string[]>([])
-  const [suggest, setSuggest] = useState<string[]>([])
-  const [showSug, setShowSug] = useState<SuggestPos | null>(null)
   const [warn100, setWarn100] = useState<Record<string, boolean>>({})
   const [patientDetails, setPatientDetails] = useState<PatientData | null>(null)
-  const [showPreviewModal, setShowPreviewModal] = useState(false) // State for preview modal
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null) // State for PDF blob URL
-  const [fullPatientData, setFullPatientData] = useState<PatientData | null>(null) // Store full patient data for report generation
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [fullPatientData, setFullPatientData] = useState<PatientData | null>(null)
 
   const {
     handleSubmit,
@@ -280,7 +267,7 @@ const BloodValuesForm: React.FC = () => {
     ;(async () => {
       try {
         const { data: registrationData, error: registrationError } = await supabase
-          .from("zregistration") // <--- Database table name updated
+          .from("zregistration")
           .select(
             `
           *,
@@ -297,12 +284,10 @@ const BloodValuesForm: React.FC = () => {
           return
         }
 
-        // Use patient_detail table structure
         const patient = registrationData.patient_detail as any
         const bookedTests = registrationData.bloodtest_data || []
         const storedBloodtestDetail = registrationData.bloodtest_detail || {}
 
-        // Calculate age in days based on age_unit
         let ageDays = patient.age
         switch (patient.age_unit?.toLowerCase()) {
           case "year":
@@ -311,49 +296,36 @@ const BloodValuesForm: React.FC = () => {
           case "month":
             ageDays *= 30
             break
-          case "day":
-            // Already in days, no conversion needed
-            break
-          default:
-            console.warn(
-              `Unknown patient age_unit: ${patient.age_unit}. Assuming years.`,
-            )
-            ageDays *= 365
-            break
         }
         const genderKey = patient.gender?.toLowerCase() === "male" ? "male" : "female"
-        
-        // Debug logging for age calculation
         console.log(`Patient age: ${patient.age} ${patient.age_unit}, calculated age in days: ${ageDays}`)
 
-        // Fetch interpretation data from blood_test table based on test_name
-        const originalTestNames = (bookedTests || []).map((t: any) => t.testName);
+        const originalTestNames = (bookedTests || []).map((t: any) => t.testName)
         const { data: bloodTests, error: bloodTestError } = await supabase
-          .from("zblood_test") // <--- Database table name updated
+          .from("zblood_test")
           .select(`id, test_name, interpretation`)
-          .in('test_name', originalTestNames);
+          .in("test_name", originalTestNames)
 
-        if (bloodTestError) {
-          console.error("Blood test interpretation fetch error:", bloodTestError);
-          throw new Error(`Failed to fetch blood tests: ${bloodTestError.message}`);
-        }
+        if (bloodTestError) throw new Error(`Failed to fetch blood tests: ${bloodTestError.message}`)
 
-        const testInterpretations: Record<string, string> = {};
+        const testInterpretations: Record<string, string> = {}
         bloodTests.forEach((test: any) => {
-          const slug = test.test_name.toLowerCase().replace(/\s+/g, "_").replace(/[.#$[\]()]/g, "");
-          testInterpretations[slug] = test.interpretation || "";
-        });
+          const slug = test.test_name
+            .toLowerCase()
+            .replace(/\s+/g, "_")
+            .replace(/[.#$[\]()]/g, "")
+          testInterpretations[slug] = test.interpretation || ""
+        })
 
-        // Define mappedPatientData here, before it's used
         const mappedPatientData: PatientData = {
-          id: patient.patient_id, // Internal ID
+          id: patient.patient_id,
           name: patient.name,
           age: patient.age,
           gender: patient.gender,
-          patientId: patient.uhid, // Use UHID
+          patientId: patient.uhid,
           contact: patient.number,
           total_day: patient.total_day,
-          day_type: patient.age_unit, // Use age_unit
+          day_type: patient.age_unit,
           title: patient.title,
           hospitalName: registrationData.hospital_name,
           registration_id: registrationData.id,
@@ -362,12 +334,12 @@ const BloodValuesForm: React.FC = () => {
           bloodtest_data: bookedTests,
           bloodtest_detail: storedBloodtestDetail,
           doctorName: registrationData.doctor_name,
-        };
+        }
 
         const tests: TestValueEntry[] = await Promise.all(
           bookedTests.map(async (bt: any) => {
             const { data: testDefData, error: testDefError } = await supabase
-              .from("zblood_test") // <--- Database table name updated
+              .from("zblood_test")
               .select("parameter, sub_heading")
               .eq("test_name", bt.testName)
               .single()
@@ -396,10 +368,8 @@ const BloodValuesForm: React.FC = () => {
               let normal = ""
               for (const r of ranges) {
                 const { lower, upper } = parseRangeKey(r.rangeKey)
-                // console.log(`Checking range ${r.rangeKey}: ${lower}-${upper} days, patient age: ${ageDays} days`)
                 if (ageDays >= lower && ageDays <= upper) {
                   normal = r.rangeValue
-                  // console.log(`Selected range: ${r.rangeKey} with value: ${r.rangeValue}`)
                   break
                 }
               }
@@ -409,7 +379,6 @@ const BloodValuesForm: React.FC = () => {
                 .toLowerCase()
                 .replace(/\s+/g, "_")
                 .replace(/[.#$[\]]/g, "")
-
               const saved = storedBloodtestDetail?.[testKey]?.parameters?.find((q: any) => q.name === p.name)
 
               let subps
@@ -419,10 +388,8 @@ const BloodValuesForm: React.FC = () => {
                   let sNorm = ""
                   for (const x of sr) {
                     const { lower, upper } = parseRangeKey(x.rangeKey)
-                    // console.log(`Checking subparameter range ${x.rangeKey}: ${lower}-${upper} days, patient age: ${ageDays} days`)
                     if (ageDays >= lower && ageDays <= upper) {
                       sNorm = x.rangeValue
-                      // console.log(`Selected subparameter range: ${x.rangeKey} with value: ${x.rangeValue}`)
                       break
                     }
                   }
@@ -463,12 +430,12 @@ const BloodValuesForm: React.FC = () => {
           }),
         )
 
-        const mappedBloodtestDetail: Record<string, any> = {};
+        const mappedBloodtestDetail: Record<string, any> = {}
         for (const t of tests) {
           const key = t.testName
             .toLowerCase()
             .replace(/\s+/g, "_")
-            .replace(/[.#$[\]]/g, "");
+            .replace(/[.#$[\]]/g, "")
           mappedBloodtestDetail[key] = {
             parameters: t.parameters,
             subheadings: t.subheadings || [],
@@ -476,14 +443,14 @@ const BloodValuesForm: React.FC = () => {
             enteredBy: storedBloodtestDetail[key]?.enteredBy || "",
             testId: t.testId,
             testName: t.testName,
-            interpretation: testInterpretations[key] || "", // Add interpretation
-          };
+            interpretation: testInterpretations[key] || "",
+          }
         }
 
-        setPatientDetails(mappedPatientData); // Update patientDetails with full PatientData
+        setPatientDetails(mappedPatientData)
         setFullPatientData({
           ...mappedPatientData,
-          bloodtest: mappedBloodtestDetail, // Use the updated mappedBloodtestDetail
+          bloodtest: mappedBloodtestDetail,
         })
 
         reset({ registrationId, tests })
@@ -536,7 +503,6 @@ const BloodValuesForm: React.FC = () => {
       try {
         const r = Function('"use strict";return (' + expr + ");")()
         if (!isNaN(r)) {
-          // Format to exactly 2 decimal places
           const formatted = Number(r).toFixed(2)
           setValue(`tests.${tIdx}.parameters.${pIdx}.value`, formatted, { shouldValidate: false })
         }
@@ -564,64 +530,24 @@ const BloodValuesForm: React.FC = () => {
     })
   }, [testsWatch, calcFormulaOnce])
 
-  /* ══════════════ Numeric Change: allow up to 3 decimal places or “<” / “>” prefixes ══════════════ */
+  /* ══════════════ Numeric Change Handler ══════════════ */
   const numericChange = (v: string, t: number, p: number, sp?: number) => {
-    if (v === "") {
-      // Allow empty string
-    } else {
-      // Check for valid number format (up to 3 decimals, optional < or > prefix)
-      const numericRegex = /^[<>]?-?\d*(\.\d{0,3})?$/;
-      if (numericRegex.test(v)) {
-        // It's a valid numeric-like string, proceed
-      } else {
-        // It's not a number or numeric-like string, so treat as generic text
-        const path = sp == null ? `tests.${t}.parameters.${p}.value` : `tests.${t}.parameters.${p}.subparameters.${sp}.value`;
-        setValue(path as Path<BloodValuesFormInputs>, v, { shouldValidate: false });
-        return;
-      }
-    }
+    const numericRegex = /^[<>]?-?\d*(\.\d{0,3})?$/
     const path =
-      sp == null ? `tests.${t}.parameters.${p}.value` : `tests.${t}.parameters.${p}.subparameters.${sp}.value`;
-    setValue(path as Path<BloodValuesFormInputs>, v, { shouldValidate: false });
-  };
+      sp == null ? `tests.${t}.parameters.${p}.value` : `tests.${t}.parameters.${p}.subparameters.${sp}.value`
+    if (v === "" || numericRegex.test(v)) {
+      setValue(path as Path<BloodValuesFormInputs>, v, { shouldValidate: false })
+    }
+  }
 
   /* ══════════════ Build suggestions for text inputs ══════════════ */
   const buildMatches = (param: TestParameterValue, q: string): string[] => {
+    const query = q.toLowerCase()
     if (Array.isArray(param.suggestions) && param.suggestions.length > 0) {
       const pool = param.suggestions.map((s) => s.description)
-      return q ? pool.filter((d) => d.toLowerCase().includes(q.toLowerCase())) : pool
+      return query ? pool.filter((d) => d.toLowerCase().includes(query)) : pool
     }
-    return q ? dbText.filter((s) => s.toLowerCase().includes(q.toLowerCase())) : dbText
-  }
-
-  const showDropdown = (t: number, p: number, rect: DOMRect, q: string) => {
-    const currentParam = watch("tests")[t].parameters[p]
-    const matches = buildMatches(currentParam, q)
-    setSuggest(matches)
-    if (matches.length) {
-      setShowSug({
-        t,
-        p,
-        x: rect.left + window.scrollX,
-        y: rect.bottom + window.scrollY,
-        width: rect.width,
-      })
-    } else {
-      setShowSug(null)
-    }
-  }
-
-  const textChange = (txt: string, t: number, p: number, rect: DOMRect) => {
-    setValue(`tests.${t}.parameters.${p}.value` as Path<BloodValuesFormInputs>, txt, {
-      shouldValidate: false,
-    })
-    showDropdown(t, p, rect, txt.trim()) // Use txt.trim() to search, not txt.trim().toLowerCase()
-  }
-
-  const pickSug = (val: string, t: number, p: number) => {
-    setValue(`tests.${t}.parameters.${p}.value` as Path<BloodValuesFormInputs>, val)
-    setSuggest([])
-    setShowSug(null)
+    return query ? dbText.filter((s) => s.toLowerCase().includes(query)) : dbText
   }
 
   /* ══════════════ Handle “fill remaining” for subheadings that sum to 100 ══════════════ */
@@ -647,7 +573,7 @@ const BloodValuesForm: React.FC = () => {
       const enteredBy = fullEmail.split("@")[0] || "unknown"
 
       const { data: existingRegData, error: fetchError } = await supabase
-        .from("zregistration") // <--- Database table name updated
+        .from("zregistration")
         .select("bloodtest_detail")
         .eq("id", data.registrationId)
         .single()
@@ -672,11 +598,11 @@ const BloodValuesForm: React.FC = () => {
                 obj.value = strValue
               } else if (p.valueType === "number" && strValue !== "") {
                 const numValue = Number(strValue)
-                // Explicitly handle '-' and '.' as strings for number type fields
                 if (strValue === "-" || strValue === ".") {
-                  obj.value = strValue;
+                  obj.value = strValue
                 } else {
-                  obj.value = isNaN(numValue) ? strValue : (strValue.includes(".") && strValue.endsWith("0") ? strValue : numValue)
+                  obj.value =
+                    isNaN(numValue) ? strValue : strValue.includes(".") && strValue.endsWith("0") ? strValue : numValue
                 }
               }
               subs.forEach((sp) => {
@@ -684,12 +610,12 @@ const BloodValuesForm: React.FC = () => {
                 if (/^[<>]/.test(spStr)) {
                   sp.value = spStr
                 } else if (sp.valueType === "number" && spStr !== "") {
-                  const spNum = Number(spStr);
-                  // Explicitly handle '-' and '.' as strings for subparameter number type fields
+                  const spNum = Number(spStr)
                   if (spStr === "-" || spStr === ".") {
-                    sp.value = spStr;
+                    sp.value = spStr
                   } else {
-                    sp.value = isNaN(spNum) ? spStr : (spStr.includes(".") && spStr.endsWith("0") ? spStr : spNum);
+                    sp.value =
+                      isNaN(spNum) ? spStr : spStr.includes(".") && spStr.endsWith("0") ? spStr : spNum
                   }
                 }
               })
@@ -699,23 +625,15 @@ const BloodValuesForm: React.FC = () => {
           })
           .filter(Boolean) as TestParameterValue[]
 
-        // Only save test data if there are actual parameters with values
         if (params.length > 0) {
           const existingReportedOn = existingBloodtestDetail[key]?.reportedOn
           const newReportedOn = existingReportedOn || now
-          
-          console.log(`Test ${key}:`, {
-            existingReportedOn: existingReportedOn ? new Date(existingReportedOn).toLocaleString() : 'None',
-            newReportedOn: new Date(newReportedOn).toLocaleString(),
-            isNew: !existingReportedOn
-          })
-          
           bloodtestDetail[key] = {
             parameters: params,
             testId: t.testId,
             subheadings: t.subheadings || [],
             createdAt: existingBloodtestDetail[key]?.createdAt || now,
-            reportedOn: newReportedOn, // Only set if not already present
+            reportedOn: newReportedOn,
             enteredBy,
           }
         }
@@ -727,7 +645,7 @@ const BloodValuesForm: React.FC = () => {
       }
 
       const { error } = await supabase
-        .from("zregistration") // <--- Database table name updated
+        .from("zregistration")
         .update({ bloodtest_detail: mergedBloodtestDetail })
         .eq("id", data.registrationId)
       if (error) throw error
@@ -748,24 +666,24 @@ const BloodValuesForm: React.FC = () => {
     }
 
     try {
-      const formDataForPreview = getFormDataForPreview(tests, patientDetails as PatientData, fullPatientData);
+      const formDataForPreview = getFormDataForPreview(tests, patientDetails as PatientData, fullPatientData)
 
       if (!formDataForPreview) {
-        alert("Could not prepare data for preview.");
-        return;
+        alert("Could not prepare data for preview.")
+        return
       }
 
       const blob = await generateReportPdf(
         formDataForPreview,
-        Object.keys(formDataForPreview.bloodtest || {}), // Include all tests for preview
-        [], // No combined groups for a simple preview
-        {}, // No historical data for a simple preview
-        {}, // No comparison selections for a simple preview
-        "normal", // Always normal report for this preview
-        true, // Always include letterhead for this preview
-        true, // Always skip cover for preview
-        undefined, // No AI suggestions for preview
-        false, // Do not include AI suggestions page
+        Object.keys(formDataForPreview.bloodtest || {}),
+        [],
+        {},
+        {},
+        "normal",
+        true,
+        true,
+        undefined,
+        false,
       )
       const url = URL.createObjectURL(blob)
       setPdfUrl(url)
@@ -880,14 +798,12 @@ const BloodValuesForm: React.FC = () => {
                                   tIdx={tIdx}
                                   pIdx={p.originalIndex}
                                   param={p}
-                                  tests={tests}
+                                  value={tests[tIdx].parameters[p.originalIndex].value}
+                                  setValue={setValue}
                                   errors={errors}
                                   numericChange={numericChange}
-                                  textChange={textChange}
-                                  pickSug={pickSug}
                                   calcOne={calcFormulaOnce}
-                                  setSuggest={setSuggest}
-                                  setShowSug={setShowSug}
+                                  buildMatches={buildMatches}
                                 />
                               ))}
                             </div>
@@ -923,16 +839,14 @@ const BloodValuesForm: React.FC = () => {
                                           tIdx={tIdx}
                                           pIdx={p.originalIndex}
                                           param={{ ...p, originalIndex: p.originalIndex }}
-                                          tests={tests}
+                                          value={tests[tIdx].parameters[p.originalIndex].value}
+                                          setValue={setValue}
                                           errors={errors}
-                                          pickSug={pickSug}
                                           numericChange={numericChange}
-                                          textChange={textChange}
                                           calcOne={calcFormulaOnce}
                                           isLastOf100={isLast}
                                           fillRemaining={() => fillRemaining(tIdx, s, p.originalIndex)}
-                                          setSuggest={setSuggest}
-                                          setShowSug={setShowSug}
+                                          buildMatches={buildMatches}
                                         />
                                       )
                                     })}
@@ -946,14 +860,12 @@ const BloodValuesForm: React.FC = () => {
                                 tIdx={tIdx}
                                 pIdx={pIdx}
                                 param={{ ...p, originalIndex: pIdx }}
-                                tests={tests}
+                                value={tests[tIdx].parameters[pIdx].value}
+                                setValue={setValue}
                                 errors={errors}
                                 numericChange={numericChange}
-                                textChange={textChange}
-                                pickSug={pickSug}
                                 calcOne={calcFormulaOnce}
-                                setSuggest={setSuggest}
-                                setShowSug={setShowSug}
+                                buildMatches={buildMatches}
                               />
                             ))}
                       </CardContent>
@@ -975,7 +887,11 @@ const BloodValuesForm: React.FC = () => {
                     </>
                   )}
                 </Button>
-                <Button type="button" onClick={handlePreview} className="flex-1 py-1.5 text-base bg-gray-600 hover:bg-gray-700">
+                <Button
+                  type="button"
+                  onClick={handlePreview}
+                  className="flex-1 py-1.5 text-base bg-gray-600 hover:bg-gray-700"
+                >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-4 w-4 mr-1.5"
@@ -1001,32 +917,6 @@ const BloodValuesForm: React.FC = () => {
               </div>
             </form>
           </CardContent>
-          {showSug && suggest.length > 0 && (
-            <Card
-              className="fixed z-50 max-h-32 overflow-auto p-0.5 shadow-lg"
-              style={{
-                top: showSug.y,
-                left: showSug.x,
-                width: `${showSug.width}px`,
-                transform: "translateY(0)",
-              }}
-            >
-              <CardContent className="p-0">
-                {suggest.map((s, i) => (
-                  <div
-                    key={i}
-                    className="cursor-pointer px-2 py-0.5 text-xs hover:bg-accent hover:text-accent-foreground"
-                    onMouseDown={(e) => { // Use onMouseDown to ensure it fires before onBlur completes
-                      e.preventDefault()
-                      pickSug(s, showSug.t, showSug.p)
-                    }}
-                  >
-                    {s}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
         </Card>
       </div>
       {showPreviewModal && pdfUrl && (
@@ -1039,12 +929,18 @@ const BloodValuesForm: React.FC = () => {
               <iframe src={pdfUrl} className="w-full h-full" />
             </div>
             <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setShowPreviewModal(false)}>Close</Button>
-              <Button onClick={() => {
-                URL.revokeObjectURL(pdfUrl);
-                setPdfUrl(null);
-                setShowPreviewModal(false);
-              }}>Close and Clear</Button>
+              <Button variant="outline" onClick={() => setShowPreviewModal(false)}>
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                  URL.revokeObjectURL(pdfUrl)
+                  setPdfUrl(null)
+                  setShowPreviewModal(false)
+                }}
+              >
+                Close and Clear
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -1055,43 +951,39 @@ const BloodValuesForm: React.FC = () => {
 
 /* ─────────────────── ParamRow Component ─────────────────── */
 
-type InputElement = HTMLInputElement | HTMLTextAreaElement;
+type InputElement = HTMLInputElement | HTMLTextAreaElement
 
 interface RowProps {
   tIdx: number
   pIdx: number
   param: IndexedParam
-  tests: TestValueEntry[]
+  value: string | number
+  setValue: UseFormSetValue<BloodValuesFormInputs>
   errors: any
   numericChange: (v: string, t: number, p: number, sp?: number) => void
-  textChange: (txt: string, t: number, p: number, rect: DOMRect) => void
   calcOne: (t: number, p: number) => void
+  buildMatches: (param: TestParameterValue, q: string) => string[]
   isLastOf100?: boolean
   fillRemaining?: () => void
-  setSuggest: (s: string[]) => void
-  setShowSug: (p: SuggestPos | null) => void
-  pickSug: (val: string, t: number, p: number) => void
 }
 
 const ParamRow: React.FC<RowProps> = ({
   tIdx,
   pIdx,
   param,
-  tests,
+  value,
+  setValue,
   errors,
   numericChange,
-  textChange,
   calcOne,
+  buildMatches,
   isLastOf100,
   fillRemaining,
-  setSuggest,
-  setShowSug,
-  pickSug,
 }) => {
-  const currentParam = tests[tIdx].parameters[pIdx]
-  const value = currentParam.value
+  const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([])
+
   const numValue = Number.parseFloat(value as string)
-  const parsedRange = parseRange(currentParam.range)
+  const parsedRange = parseRange(param.range)
   let isOutOfRange = false
   if (!isNaN(numValue)) {
     const { min, max } = parsedRange
@@ -1104,37 +996,27 @@ const ParamRow: React.FC<RowProps> = ({
     }
   }
 
-  // Adjusted handlers to accept a wider range of elements to support both Input and Textarea
-  const handleFocus = useCallback((e: React.FocusEvent<InputElement>) => {
-    const rect = e.target.getBoundingClientRect()
-    textChange(e.target.value, tIdx, pIdx, rect) 
-  }, [tIdx, pIdx, textChange])
-
-  const handleChange = useCallback((e: React.ChangeEvent<InputElement>) => {
-    const rect = e.target.getBoundingClientRect()
-    textChange(e.target.value, tIdx, pIdx, rect)
-  }, [tIdx, pIdx, textChange])
-
-  const handleBlur = useCallback(() => {
-    // Crucial fix: Add a small delay to allow the 'onMouseDown' event on the suggestion item to fire before the dropdown is hidden.
-    setTimeout(() => {
-      setSuggest([])
-      setShowSug(null)
-    }, 100)
-  }, [setSuggest, setShowSug])
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !e.nativeEvent.isComposing) {
       e.preventDefault()
       const form = e.currentTarget.form
       if (!form) return
-      // Find all focusable elements (input, textarea, button) in the form
-      const focusable = Array.from(form.querySelectorAll('input:not([type="hidden"]), textarea, button:not([disabled])')) as (HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement)[]
-      const inputs = focusable.filter(el => el.tagName === "INPUT" || el.tagName === "TEXTAREA");
-      const idx = inputs.indexOf(e.currentTarget)
-      const next = inputs[idx + 1]
-      if (next) next.focus()
+      const focusable = Array.from(
+        form.querySelectorAll('input:not([type="hidden"]), textarea, button:not([disabled])'),
+      ) as (HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement)[]
+      
+      const idx = focusable.indexOf(e.currentTarget as any)
+      if (idx > -1) {
+        const next = focusable[idx + 1]
+        if (next) next.focus()
+      }
     }
+  }
+
+  // Search method for PrimeReact AutoComplete
+  const searchSuggestions = (event: AutoCompleteCompleteEvent) => {
+    const suggestions = buildMatches(param, event.query)
+    setFilteredSuggestions(suggestions)
   }
 
   return (
@@ -1180,7 +1062,7 @@ const ParamRow: React.FC<RowProps> = ({
           <Input
             id={`param-${tIdx}-${pIdx}`}
             type="text"
-            value={String(currentParam.value ?? "")}
+            value={String(value ?? "")}
             onChange={(e) => numericChange(e.target.value, tIdx, pIdx)}
             onKeyDown={handleKeyDown}
             placeholder={"Value or >10 / <10"}
@@ -1192,31 +1074,35 @@ const ParamRow: React.FC<RowProps> = ({
                 <AlertCircle className="absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-red-500" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>Value is outside normal range: {currentParam.range}</p>
+                <p>Value is outside normal range: {param.range}</p>
               </TooltipContent>
             </Tooltip>
           )}
         </div>
       ) : (
-        <div className="relative ml-1.5 w-48"> {/* Input for single-line text suggestions */}
-          <Input 
+        <div className="relative ml-1.5 w-48">
+          <AutoComplete
             id={`param-${tIdx}-${pIdx}`}
-            type="text"
-            value={String(currentParam.value ?? "")}
-            onFocus={handleFocus}
-            onChange={handleChange}
-            onBlur={handleBlur}
+            value={String(value ?? "")}
+            suggestions={filteredSuggestions}
+            completeMethod={searchSuggestions}
+            onChange={(e) =>
+              setValue(`tests.${tIdx}.parameters.${pIdx}.value` as Path<BloodValuesFormInputs>, e.value, {
+                shouldValidate: false,
+              })
+            }
             onKeyDown={handleKeyDown}
-            placeholder={"Text (suggestions available)"}
-            className="h-6 w-full text-xs" 
+            placeholder="Text (suggestions available)"
+            inputClassName="w-full h-6 text-xs p-2 border-input"
+            className="w-full"
+            panelClassName="text-xs"
+            dropdown
           />
         </div>
       )}
       <div className="ml-1.5 flex-1 text-right text-muted-foreground text-2xs">
         Normal Range:{" "}
-        <span className={cn("font-medium", isOutOfRange ? "text-red-600" : "text-green-600")}>
-          {currentParam.range}
-        </span>
+        <span className={cn("font-medium", isOutOfRange ? "text-red-600" : "text-green-600")}>{param.range}</span>
       </div>
     </div>
   )

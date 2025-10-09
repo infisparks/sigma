@@ -4,6 +4,8 @@
 import type React from "react"
 import Layout from "@/components/global/Layout" // Assuming your global layout is here
 import { FlaskConical, Beaker, FileText, Microscope, Cog } from "lucide-react"
+import "primereact/resources/themes/lara-light-indigo/theme.css"; // or any other theme
+import "primereact/resources/primereact.min.css";
 
 // Define the navigation items specific to the pathology section
 const pathologyNavItems = [
