@@ -78,8 +78,8 @@ function RestrictedLayout({
         onToggleCollapse={toggleSidebarCollapse} 
       />
       <div className={cn("transition-all duration-200", sidebarWidthClass)}>
-        <main className="p-6">
-          <div className="max-w-7xl mx-auto">
+        <main className="p-1">
+          <div className="max-w-full mx-auto">
             {children}
           </div>
         </main>
