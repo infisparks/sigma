@@ -280,7 +280,7 @@ const BloodValuesForm: React.FC = () => {
     ;(async () => {
       try {
         const { data: registrationData, error: registrationError } = await supabase
-          .from("zregistration")
+          .from("zregistration") // <--- Database table name updated
           .select(
             `
           *,
@@ -297,14 +297,14 @@ const BloodValuesForm: React.FC = () => {
           return
         }
 
-        // *** FIX APPLIED: Use patient_detail table structure ***
+        // Use patient_detail table structure
         const patient = registrationData.patient_detail as any
         const bookedTests = registrationData.bloodtest_data || []
         const storedBloodtestDetail = registrationData.bloodtest_detail || {}
 
         // Calculate age in days based on age_unit
         let ageDays = patient.age
-        switch (patient.age_unit?.toLowerCase()) { // <--- FIXED: Use age_unit
+        switch (patient.age_unit?.toLowerCase()) {
           case "year":
             ageDays *= 365
             break
@@ -321,7 +321,7 @@ const BloodValuesForm: React.FC = () => {
             ageDays *= 365
             break
         }
-        const genderKey = patient.gender?.toLowerCase() === "male" ? "male" : "female" // <--- FIXED: Use patient
+        const genderKey = patient.gender?.toLowerCase() === "male" ? "male" : "female"
         
         // Debug logging for age calculation
         console.log(`Patient age: ${patient.age} ${patient.age_unit}, calculated age in days: ${ageDays}`)
@@ -329,7 +329,7 @@ const BloodValuesForm: React.FC = () => {
         // Fetch interpretation data from blood_test table based on test_name
         const originalTestNames = (bookedTests || []).map((t: any) => t.testName);
         const { data: bloodTests, error: bloodTestError } = await supabase
-          .from("zblood_test")
+          .from("zblood_test") // <--- Database table name updated
           .select(`id, test_name, interpretation`)
           .in('test_name', originalTestNames);
 
@@ -350,10 +350,10 @@ const BloodValuesForm: React.FC = () => {
           name: patient.name,
           age: patient.age,
           gender: patient.gender,
-          patientId: patient.uhid, // <--- FIXED: Use UHID
+          patientId: patient.uhid, // Use UHID
           contact: patient.number,
           total_day: patient.total_day,
-          day_type: patient.age_unit, // <--- FIXED: Use age_unit
+          day_type: patient.age_unit, // Use age_unit
           title: patient.title,
           hospitalName: registrationData.hospital_name,
           registration_id: registrationData.id,
@@ -367,7 +367,7 @@ const BloodValuesForm: React.FC = () => {
         const tests: TestValueEntry[] = await Promise.all(
           bookedTests.map(async (bt: any) => {
             const { data: testDefData, error: testDefError } = await supabase
-              .from("zblood_test")
+              .from("zblood_test") // <--- Database table name updated
               .select("parameter, sub_heading")
               .eq("test_name", bt.testName)
               .single()
@@ -396,10 +396,10 @@ const BloodValuesForm: React.FC = () => {
               let normal = ""
               for (const r of ranges) {
                 const { lower, upper } = parseRangeKey(r.rangeKey)
-                console.log(`Checking range ${r.rangeKey}: ${lower}-${upper} days, patient age: ${ageDays} days`)
+                // console.log(`Checking range ${r.rangeKey}: ${lower}-${upper} days, patient age: ${ageDays} days`)
                 if (ageDays >= lower && ageDays <= upper) {
                   normal = r.rangeValue
-                  console.log(`Selected range: ${r.rangeKey} with value: ${r.rangeValue}`)
+                  // console.log(`Selected range: ${r.rangeKey} with value: ${r.rangeValue}`)
                   break
                 }
               }
@@ -419,10 +419,10 @@ const BloodValuesForm: React.FC = () => {
                   let sNorm = ""
                   for (const x of sr) {
                     const { lower, upper } = parseRangeKey(x.rangeKey)
-                    console.log(`Checking subparameter range ${x.rangeKey}: ${lower}-${upper} days, patient age: ${ageDays} days`)
+                    // console.log(`Checking subparameter range ${x.rangeKey}: ${lower}-${upper} days, patient age: ${ageDays} days`)
                     if (ageDays >= lower && ageDays <= upper) {
                       sNorm = x.rangeValue
-                      console.log(`Selected subparameter range: ${x.rangeKey} with value: ${x.rangeValue}`)
+                      // console.log(`Selected subparameter range: ${x.rangeKey} with value: ${x.rangeValue}`)
                       break
                     }
                   }
@@ -589,9 +589,9 @@ const BloodValuesForm: React.FC = () => {
   const buildMatches = (param: TestParameterValue, q: string): string[] => {
     if (Array.isArray(param.suggestions) && param.suggestions.length > 0) {
       const pool = param.suggestions.map((s) => s.description)
-      return q ? pool.filter((d) => d.toLowerCase().includes(q)) : pool
+      return q ? pool.filter((d) => d.toLowerCase().includes(q.toLowerCase())) : pool
     }
-    return q ? dbText.filter((s) => s.toLowerCase().includes(q)) : dbText
+    return q ? dbText.filter((s) => s.toLowerCase().includes(q.toLowerCase())) : dbText
   }
 
   const showDropdown = (t: number, p: number, rect: DOMRect, q: string) => {
@@ -615,7 +615,7 @@ const BloodValuesForm: React.FC = () => {
     setValue(`tests.${t}.parameters.${p}.value` as Path<BloodValuesFormInputs>, txt, {
       shouldValidate: false,
     })
-    showDropdown(t, p, rect, txt.trim().toLowerCase())
+    showDropdown(t, p, rect, txt.trim()) // Use txt.trim() to search, not txt.trim().toLowerCase()
   }
 
   const pickSug = (val: string, t: number, p: number) => {
@@ -647,7 +647,7 @@ const BloodValuesForm: React.FC = () => {
       const enteredBy = fullEmail.split("@")[0] || "unknown"
 
       const { data: existingRegData, error: fetchError } = await supabase
-        .from("zregistration")
+        .from("zregistration") // <--- Database table name updated
         .select("bloodtest_detail")
         .eq("id", data.registrationId)
         .single()
@@ -727,7 +727,7 @@ const BloodValuesForm: React.FC = () => {
       }
 
       const { error } = await supabase
-        .from("zregistration")
+        .from("zregistration") // <--- Database table name updated
         .update({ bloodtest_detail: mergedBloodtestDetail })
         .eq("id", data.registrationId)
       if (error) throw error
@@ -1016,7 +1016,7 @@ const BloodValuesForm: React.FC = () => {
                   <div
                     key={i}
                     className="cursor-pointer px-2 py-0.5 text-xs hover:bg-accent hover:text-accent-foreground"
-                    onMouseDown={(e) => {
+                    onMouseDown={(e) => { // Use onMouseDown to ensure it fires before onBlur completes
                       e.preventDefault()
                       pickSug(s, showSug.t, showSug.p)
                     }}
@@ -1054,6 +1054,8 @@ const BloodValuesForm: React.FC = () => {
 }
 
 /* ─────────────────── ParamRow Component ─────────────────── */
+
+type InputElement = HTMLInputElement | HTMLTextAreaElement;
 
 interface RowProps {
   tIdx: number
@@ -1102,29 +1104,33 @@ const ParamRow: React.FC<RowProps> = ({
     }
   }
 
-  const handleFocus = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+  // Adjusted handlers to accept a wider range of elements to support both Input and Textarea
+  const handleFocus = useCallback((e: React.FocusEvent<InputElement>) => {
+    const rect = e.target.getBoundingClientRect()
+    textChange(e.target.value, tIdx, pIdx, rect) 
+  }, [tIdx, pIdx, textChange])
+
+  const handleChange = useCallback((e: React.ChangeEvent<InputElement>) => {
     const rect = e.target.getBoundingClientRect()
     textChange(e.target.value, tIdx, pIdx, rect)
-  }
+  }, [tIdx, pIdx, textChange])
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const rect = e.target.getBoundingClientRect()
-    textChange(e.target.value, tIdx, pIdx, rect)
-  }
-
-  const handleBlur = () => {
+  const handleBlur = useCallback(() => {
+    // Crucial fix: Add a small delay to allow the 'onMouseDown' event on the suggestion item to fire before the dropdown is hidden.
     setTimeout(() => {
       setSuggest([])
       setShowSug(null)
-    }, 50)
-  }
+    }, 100)
+  }, [setSuggest, setShowSug])
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.key === "Enter") {
       e.preventDefault()
       const form = e.currentTarget.form
       if (!form) return
-      const inputs = Array.from(form.elements).filter((el): el is HTMLInputElement => el.tagName === "INPUT")
+      // Find all focusable elements (input, textarea, button) in the form
+      const focusable = Array.from(form.querySelectorAll('input:not([type="hidden"]), textarea, button:not([disabled])')) as (HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement)[]
+      const inputs = focusable.filter(el => el.tagName === "INPUT" || el.tagName === "TEXTAREA");
       const idx = inputs.indexOf(e.currentTarget)
       const next = inputs[idx + 1]
       if (next) next.focus()
@@ -1192,15 +1198,17 @@ const ParamRow: React.FC<RowProps> = ({
           )}
         </div>
       ) : (
-        <div className="relative ml-1.5 w-32">
-          <Textarea
+        <div className="relative ml-1.5 w-48"> {/* Input for single-line text suggestions */}
+          <Input 
             id={`param-${tIdx}-${pIdx}`}
+            type="text"
             value={String(currentParam.value ?? "")}
             onFocus={handleFocus}
             onChange={handleChange}
             onBlur={handleBlur}
-            placeholder={"Text (multi-line)"}
-            className="h-20 w-48 text-xs min-h-[unset]" // Increased height and width for text inputs
+            onKeyDown={handleKeyDown}
+            placeholder={"Text (suggestions available)"}
+            className="h-6 w-full text-xs" 
           />
         </div>
       )}

@@ -1,23 +1,55 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
-import { UserPlus, FlaskConical, Stethoscope, Trash2, X, Plus, Search, CalendarDays } from "lucide-react"
+import { UserPlus, FlaskConical, Stethoscope, Trash2, X, Plus, Search, CalendarDays, UserCircle, Phone } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { xrayData } from "./index"
-import { xrayPriceList as gautamiXrayPriceList, procedureList as gautamiProcedureList } from "./indexGautami"
+import { xrayData } from "./index" // Assuming this file exists
+import { xrayPriceList as gautamiXrayPriceList, procedureList as gautamiProcedureList } from "./indexGautami" // Assuming this file exists
 import { format } from "date-fns"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
+/**
+ * -----------------------------
+ * Helpers and Constants
+ * -----------------------------
+ */
+
+const TABLE = {
+  PATIENT: "patient_detail",
+  XRAY: "x-raydetail",
+} as const
+
+function throwIfError(error: any) {
+  if (error) throw error
+}
+
+// Helper to calculate DOB based on age and age unit (from PatientEntry)
+function calculateDOB(age: number, unit: 'year' | 'month' | 'day'): string {
+    const today = new Date();
+    const dob = new Date(today);
+    dob.setHours(0, 0, 0, 0); 
+
+    if (unit === 'year') {
+        dob.setFullYear(dob.getFullYear() - age);
+    } else if (unit === 'month') {
+        dob.setMonth(dob.getMonth() - age);
+    } else if (unit === 'day') {
+        dob.setDate(dob.getDate() - age);
+    }
+
+    return dob.toISOString().split('T')[0];
+}
+
 // Helper function for exponential backoff retry logic
-const withRetry = async <T,>(fn: () => Promise<any>, retries = 3, delay = 1000): Promise<any> => {
+const withRetry = async <T,>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> => {
   try {
     return await fn()
   } catch (error) {
@@ -29,7 +61,7 @@ const withRetry = async <T,>(fn: () => Promise<any>, retries = 3, delay = 1000):
   }
 }
 
-// Default hospital data maps
+// Default hospital data maps (assuming these are defined in the original environment)
 const examinationPriceMap = xrayData.xray_price_list.reduce<Record<string, any>>((acc, item) => {
   acc[item.examination] = item
   return acc
@@ -40,7 +72,7 @@ const procedurePriceMap = xrayData.procedure.reduce<Record<string, any>>((acc, i
   return acc
 }, {})
 
-// Gautami hospital data maps
+// Gautami hospital data maps (assuming these are defined in the original environment)
 const gautamiExaminationPriceMap = gautamiXrayPriceList.reduce<Record<string, any>>((acc, item) => {
   acc[item.Examination] = item
   return acc
@@ -57,32 +89,99 @@ const procedureExaminations = xrayData.procedure.map((item) => item.name)
 const gautamiRegularExaminations = gautamiXrayPriceList.map((item) => item.Examination)
 const gautamiProcedureExaminations = gautamiProcedureList.map((item) => item.Procedure)
 
-// Main X-ray page component
-export default function XrayPage() {
-  const [formData, setFormData] = useState({
+/**
+ * -----------------------------
+ * Types
+ * -----------------------------
+ */
+
+interface XrayTest {
+  examination: string
+  amount: number
+  xrayVia: string // "price" | "ward" | "icu" | "OPD_Amt" | "Portable" | "N/A"
+}
+
+interface PaymentEntry {
+  amount: number
+  paymentMode: string // "Cash" | "Online"
+}
+
+interface PatientSuggestion {
+  id: number
+  name: string
+  number: number
+  uhid: string
+  title: string | null | undefined
+  age: number
+  age_unit: "year" | "month" | "day" // Must match DB enum
+  gender: string
+  address?: string
+}
+
+interface IFormState {
+  name: string
+  phoneNumber: string
+  gender: string
+  age: number
+  ageUnit: "year" | "month" | "day" // Match DB enum for consistency
+  title: string
+  address: string
+  uhid: string // New field to hold the patient's UHID
+  hospitalName: string
+  billNumber: string
+  doctorName: string
+  visitType: "OPD" | "IPD" | "Direct"
+  tpa: "Yes" | "No"
+  remark: string
+  xrayTests: XrayTest[]
+  totalAmount: number
+  discount: number
+  payments: PaymentEntry[]
+  dateOfAppointment: Date
+}
+
+// Default form state function
+const getDefaultFormState = (): IFormState => ({
     name: "",
     phoneNumber: "",
-    gender: "", // New gender state
-    age: "",
-    ageUnit: "Years",
+    gender: "",
+    age: 0,
+    ageUnit: "year", // Set default to match DB enum
+    title: "",
+    address: "",
+    uhid: "", // Default to empty
     hospitalName: "MEDFORD HOSPITAL",
     billNumber: "",
-    doctorName: "", // New field for Doctor Name
-    visitType: "OPD", // New field for Visit Type with default OPD
-    tpa: "No", // New field for TPA with default No
-    remark: "", // New field for Remark
-    xrayTests: [{ examination: "", amount: 0, xrayVia: "price" }], // Default to "price"
+    doctorName: "",
+    visitType: "OPD",
+    tpa: "No",
+    remark: "",
+    xrayTests: [{ examination: "", amount: 0, xrayVia: "price" }],
     totalAmount: 0,
     discount: 0,
-    payments: [] as { amount: number; paymentMode: string }[],
-    dateOfAppointment: new Date(), // New field for date of appointment
-  })
+    payments: [],
+    dateOfAppointment: new Date(),
+});
 
+
+/**
+ * -----------------------------
+ * Component
+ * -----------------------------
+ */
+export default function XrayPage() {
+  const [formData, setFormData] = useState<IFormState>(getDefaultFormState())
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState("")
   const [messageType, setMessageType] = useState("")
   const [searchTerms, setSearchTerms] = useState<Record<number, string>>({})
+  const [patientHints, setPatientHints] = useState<PatientSuggestion[]>([])
+  const [showPatientHints, setShowPatientHints] = useState(false)
+
   const searchInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+  const patientHintsRef = useRef<HTMLDivElement | null>(null)
+
+  const isExistingPatient = useMemo(() => Boolean(formData.uhid), [formData.uhid])
 
   const isGautamiHospital = () => {
     return formData.hospitalName === "Gautami Medford NX Hospital"
@@ -125,17 +224,131 @@ export default function XrayPage() {
     setFormData((prev) => ({ ...prev, totalAmount: total }))
   }, [formData.xrayTests])
 
+  // Reset xrayTests to default via when hospital changes
   useEffect(() => {
     setFormData((prev) => ({
       ...prev,
       xrayTests: [{ examination: "", amount: 0, xrayVia: isGautamiHospital() ? "OPD_Amt" : "price" }],
     }))
   }, [formData.hospitalName])
+  
+  // Click outside handlers
+  useEffect(() => {
+      function handleClickOutside(event: MouseEvent) {
+        const target = event.target as Node
+        if (patientHintsRef.current && !patientHintsRef.current.contains(target)) {
+          setShowPatientHints(false)
+        }
+      }
+      document.addEventListener("mousedown", handleClickOutside)
+      return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  // Patient Search/Hints logic
+  useEffect(() => {
+    const searchName = formData.name.trim()
+    const searchContact = formData.phoneNumber.trim()
+    const searchString = (searchName || searchContact)
+    
+    if (isExistingPatient || !searchString || searchString.length < 2) {
+      setPatientHints([])
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      let query = supabase
+        .from(TABLE.PATIENT)
+        .select("id:patient_id, name, number, uhid, title, age, age_unit, gender, address")
+        .limit(10)
+
+      if (searchName.length >= 2) {
+        query = query.ilike("name", `${searchName}%`)
+      } else if (searchContact.length >= 2) {
+        query = query.like("number", `${searchContact}%`)
+      } else {
+        setPatientHints([])
+        return
+      }
+
+      const { data, error } = await query
+
+      const suggestions: PatientSuggestion[] = (data || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        number: p.number,
+        uhid: p.uhid,
+        title: p.title,
+        age: p.age,
+        age_unit: p.age_unit,
+        gender: p.gender,
+        address: p.address,
+      }))
+
+      throwIfError(error)
+      setPatientHints(suggestions)
+      setShowPatientHints(true)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [formData.name, formData.phoneNumber, isExistingPatient])
+
 
   // Handle form input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
+
+    // Auto-clear UHID if user starts typing in name or number again
+    setFormData((prev) => {
+        // If user is editing name or phoneNumber and UHID is set, clear patient-specific fields
+        if ((name === "name" || name === "phoneNumber") && prev.uhid) {
+            return { ...prev, uhid: "", title: "", address: "", age: 0, gender: "" }
+        }
+        return { ...prev, [name]: value }
+    });
+
+    // Auto-set title based on gender, if gender is changed manually
+    if (name === 'gender') {
+        setFormData((prev) => {
+            if (prev.title === '') {
+                const newTitle = value === 'male' ? 'MR' : value === 'female' ? 'MS' : '';
+                return { ...prev, title: newTitle };
+            }
+            return prev;
+        });
+    }
+  }
+
+  const handleSelectChange = (name: keyof IFormState, value: string | number) => {
+    setFormData((prev) => ({ 
+        ...prev, 
+        [name]: name === 'age' || name === 'discount' ? Number(value) : value 
+    }))
+  }
+  
+  const handlePatientSelect = async (p: PatientSuggestion) => {
+      // Set all patient-related fields
+      setFormData((prev) => ({
+        ...prev,
+        name: p.name,
+        phoneNumber: p.number.toString(),
+        age: p.age,
+        ageUnit: p.age_unit,
+        gender: p.gender,
+        title: p.title || "",
+        address: p.address || "",
+        uhid: p.uhid, // Crucially set the UHID
+      }))
+
+      setShowPatientHints(false)
+  }
+
+  const handleNewPatient = () => {
+    setFormData((prev) => ({
+        ...getDefaultFormState(),
+        // Keep non-patient specific data
+        hospitalName: prev.hospitalName,
+        dateOfAppointment: prev.dateOfAppointment,
+    }))
   }
 
   const isProcedureExamination = (examination: string) => {
@@ -168,56 +381,49 @@ export default function XrayPage() {
   }
 
   const handleTestSelectChange = (index: number, name: string, value: string) => {
-    const newTests = [...formData.xrayTests]
-    const { examinationMap, procedureMap } = getCurrentDataMaps()
+    setFormData((prev) => {
+      const newTests = [...prev.xrayTests]
+      const { examinationMap, procedureMap } = getCurrentDataMaps()
 
-    if (name === "examination") {
-      // Find the price data based on the selected examination
-      const xrayItem = examinationMap[value]
-      const procedureItem = procedureMap[value]
-      let amount = 0
+      if (name === "examination") {
+        const xrayItem = examinationMap[value]
+        const procedureItem = procedureMap[value]
+        let amount = 0
+        
+        const isProcedure = isProcedureExamination(value)
+        let xrayVia = isProcedure ? "N/A" : newTests[index].xrayVia;
 
-      // Automatically set the default xrayVia and amount
-      const isProcedure = isProcedureExamination(value)
-      let xrayVia = isProcedure ? "N/A" : newTests[index].xrayVia; // Keep current via for regular, or set N/A for procedure
-
-      // Specific logic for Medford Hospital's default "Price"
-      if (!isGautamiHospital() && !isProcedure) {
-        xrayVia = "price";
-      } else if (isGautamiHospital() && !isProcedure) {
-        xrayVia = "OPD_Amt";
-      }
-
-      if (xrayItem) {
-        // Use the new xrayVia to determine the price
-        amount = xrayItem[xrayVia] || 0
-      } else if (procedureItem) {
-        if (isGautamiHospital()) {
-          amount = procedureItem.Amount || 0
-        } else {
-          amount = procedureItem.price || 0
+        if (!isGautamiHospital() && !isProcedure) {
+          xrayVia = "price";
+        } else if (isGautamiHospital() && !isProcedure) {
+          xrayVia = "OPD_Amt";
         }
-      }
 
-      newTests[index] = {
-        ...newTests[index],
-        examination: value,
-        amount: amount,
-        xrayVia: xrayVia
+        if (xrayItem) {
+          amount = xrayItem[xrayVia] || 0
+        } else if (procedureItem) {
+          amount = isGautamiHospital() ? procedureItem.Amount || 0 : procedureItem.price || 0
+        }
+
+        newTests[index] = {
+          ...newTests[index],
+          examination: value,
+          amount: amount,
+          xrayVia: xrayVia
+        }
+        setSearchTerms((prev) => ({ ...prev, [index]: "" }))
+      } else if (name === "xrayVia") {
+        const currentExam = newTests[index].examination
+        const { examinationMap } = getCurrentDataMaps()
+        const xrayItem = examinationMap[currentExam]
+        let amount = 0
+        if (xrayItem) {
+          amount = xrayItem[value] || 0
+        }
+        newTests[index] = { ...newTests[index], xrayVia: value, amount: amount }
       }
-      setSearchTerms((prev) => ({ ...prev, [index]: "" }))
-    } else if (name === "xrayVia") {
-      // When X-ray Via changes, update the amount based on the current examination
-      const currentExam = newTests[index].examination
-      const { examinationMap } = getCurrentDataMaps()
-      const xrayItem = examinationMap[currentExam]
-      let amount = 0
-      if (xrayItem) {
-        amount = xrayItem[value] || 0
-      }
-      newTests[index] = { ...newTests[index], xrayVia: value, amount: amount }
-    }
-    setFormData((prev) => ({ ...prev, xrayTests: newTests }))
+      return { ...prev, xrayTests: newTests }
+    })
   }
 
   // Add a new X-ray test section
@@ -255,13 +461,20 @@ export default function XrayPage() {
   }
 
   const handlePaymentChange = (index: number, field: string, value: string | number) => {
-    const newPayments = [...formData.payments]
-    newPayments[index] = { ...newPayments[index], [field]: field === "amount" ? Number(value) : value }
-    setFormData((prev) => ({ ...prev, payments: newPayments }))
+    setFormData((prev) => {
+        const newPayments = [...prev.payments]
+        newPayments[index] = { 
+            ...newPayments[index], 
+            [field]: field === "amount" ? Number(value) : value 
+        }
+        return { ...prev, payments: newPayments }
+    })
   }
 
   const totalPaid = formData.payments.reduce((sum, payment) => sum + (payment.amount || 0), 0)
   const remainingAmount = Math.max(0, formData.totalAmount - formData.discount - totalPaid)
+  const totalDay = formData.age * (formData.ageUnit === "year" ? 360 : formData.ageUnit === "month" ? 30 : 1);
+
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -270,6 +483,13 @@ export default function XrayPage() {
     setMessage("")
     setMessageType("")
 
+    if (formData.name.trim() === "" || formData.doctorName.trim() === "" || formData.age === 0) {
+        setIsSubmitting(false);
+        setMessage("Please fill in the patient's Name, Age, and Doctor Name.");
+        setMessageType("error");
+        return;
+    }
+    
     // Validation Check: Ensure xrayVia is selected for non-procedure tests
     const isXrayViaValid = formData.xrayTests.every(test => {
       return isProcedureExamination(test.examination) || (test.examination && test.xrayVia);
@@ -283,6 +503,57 @@ export default function XrayPage() {
     }
 
     try {
+        let finalUHID: string = formData.uhid;
+        const dob = calculateDOB(formData.age, formData.ageUnit);
+
+        // 1. Handle Patient Detail (Insert New or Update Existing)
+        if (isExistingPatient) {
+            // Update existing patient record
+            const { error: updateErr } = await withRetry(async () => 
+                supabase
+                    .from(TABLE.PATIENT)
+                    .update({
+                        name: formData.name.toUpperCase(),
+                        number: Number(formData.phoneNumber) || null,
+                        age: formData.age,
+                        age_unit: formData.ageUnit,
+                        total_day: totalDay,
+                        gender: formData.gender,
+                        address: formData.address || "",
+                        title: formData.title || null,
+                        dob: dob, 
+                    })
+                    .eq("uhid", finalUHID)
+            );
+            throwIfError(updateErr);
+        } else {
+            // Insert new patient and get the auto-generated UHID
+            const { data: patientRow, error: patientErr } = await withRetry(async () => 
+                supabase
+                    .from(TABLE.PATIENT)
+                    .insert({
+                        name: formData.name.toUpperCase(),
+                        number: Number(formData.phoneNumber) || null,
+                        address: formData.address || "",
+                        age: formData.age,
+                        age_unit: formData.ageUnit,
+                        gender: formData.gender,
+                        total_day: totalDay,
+                        title: formData.title || null,
+                        dob: dob,
+                    })
+                    .select("uhid")
+                    .single()
+            );
+            throwIfError(patientErr);
+            if (!patientRow) {
+                throw new Error("Failed to create new patient: patientRow is null");
+            }
+            finalUHID = patientRow.uhid;
+        }
+
+
+      // 2. Prepare X-ray and Payment Details for x-raydetail table
       const amountDetail = {
         totalAmount: formData.totalAmount,
         discount: formData.discount,
@@ -301,58 +572,36 @@ export default function XrayPage() {
           Amount: test.amount,
         }
       })
-
+      
+      // FIX: Removed 'name', 'number', and 'amount_paid' to match the existing schema
       const dataToInsert = {
-        name: formData.name,
-        number: formData.phoneNumber,
-        gender: formData.gender || null, // Storing gender data
-        age: formData.age,
-        age_unit: formData.ageUnit,
-        Hospital_name: formData.hospitalName,
+        patient_uhid: finalUHID, 
+        created_at: formData.dateOfAppointment.toISOString(),
+        "Hospital_name": formData.hospitalName,
         bill_number: formData.billNumber || null,
-        Refer_doctorname: formData.doctorName || null,
-        Visit_type: formData.visitType,
-        Tpa: formData.tpa,
-        Remark: formData.remark || null,
-        amount_detail: amountDetail,
+        "Refer_doctorname": formData.doctorName || null,
+        "Visit_type": formData.visitType,
+        "Tpa": formData.tpa,
+        "Remark": formData.remark || null,
         "x-ray_detail": xrayDetail,
-        created_at: formData.dateOfAppointment.toISOString(), // Update created_at with the selected date
+        amount_detail: amountDetail,
       }
 
-      // Insert data into Supabase
-      const result = await withRetry(async () => await supabase.from("x-raydetail").insert(dataToInsert))
+      const result = await withRetry(async () => await supabase.from(TABLE.XRAY).insert(dataToInsert))
 
       if (result.error) {
         console.error("Submission error:", result.error)
         setMessage(`Failed to submit the form: ${result.error.message || "Unknown error"}`)
         setMessageType("error")
       } else {
-        setMessage("Form submitted successfully!")
+        setMessage(`X-ray registration successful for UHID: ${finalUHID}`)
         setMessageType("success")
-        // Reset form
-        setFormData({
-          name: "",
-          phoneNumber: "",
-          gender: "",
-          age: "",
-          ageUnit: "Years",
-          hospitalName: "MEDFORD HOSPITAL",
-          billNumber: "",
-          doctorName: "",
-          visitType: "OPD",
-          tpa: "No",
-          remark: "",
-          xrayTests: [{ examination: "", amount: 0, xrayVia: "price" }],
-          totalAmount: 0,
-          discount: 0,
-          payments: [],
-          dateOfAppointment: new Date(), // Reset date of appointment
-        })
+        setFormData(getDefaultFormState())
         setSearchTerms({})
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Unexpected error:", err)
-      setMessage("An unexpected error occurred.")
+      setMessage(err.message ?? "An unexpected error occurred.")
       setMessageType("error")
     } finally {
       setIsSubmitting(false)
@@ -367,75 +616,129 @@ export default function XrayPage() {
       </h1>
       <Card className="bg-white p-1 rounded-xl shadow-lg border border-gray-200">
         <form onSubmit={handleSubmit}>
-          {/* Personal Information Section */}
+          {/* Patient Information Section */}
           <div className="mb-2 p-1 bg-blue-50 rounded-lg border border-blue-200">
-            <h2 className="text-lg font-bold text-blue-800 mb-1 flex items-center">
-              <UserPlus className="mr-1 w-4 h-4 text-blue-600" />
-              Patient Information
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1">
-              <div className="flex flex-col">
+            <div className="flex justify-between items-center mb-1">
+                <h2 className="text-lg font-bold text-blue-800 flex items-center">
+                <UserPlus className="mr-1 w-4 h-4 text-blue-600" />
+                Patient Information
+                </h2>
+                {isExistingPatient && (
+                    <div className="flex items-center gap-2">
+                    <span className="text-sm text-blue-600 font-medium">UHID: {formData.uhid}</span>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleNewPatient}
+                        className="h-7 px-2 py-0 text-xs"
+                    >
+                        Clear & Add New
+                    </Button>
+                    </div>
+                )}
+            </div>
+            {/* Reordered fields: Title, Name, Phone Number */}
+            <div className="grid grid-cols-12 gap-1">
+              {/* Title - Reduced width (col-span-3) */}
+              <div className="col-span-3 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="title">
+                  Title
+                </Label>
+                <Select
+                    value={formData.title}
+                    onValueChange={(value) => handleSelectChange("title", value)}
+                    disabled={isExistingPatient}
+                >
+                    <SelectTrigger className={cn("p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500", isExistingPatient && "bg-blue-100")}>
+                        <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {[".", "MR", "MRS", "MAST", "BABA", "MISS", "MS", "BABY", "SMT", "BABY OF", "DR"].map((t) => (
+                            <SelectItem key={t} value={t}>
+                            {t === "." ? "NoTitle" : t}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Name and UHID Hint Logic - Increased width (col-span-5) */}
+              <div className="col-span-5 flex flex-col relative" ref={patientHintsRef}>
                 <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="name">
                   Patient Name
                 </Label>
-                <Input
-                  type="text"
-                  name="name"
-                  id="name"
-                  placeholder="Enter full name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="p-1 border border-gray-300 rounded-md focus-visible:ring-blue-500"
-                  required
-                />
+                <div className="relative">
+                    <Input
+                        type="text"
+                        name="name"
+                        id="name"
+                        placeholder="Type name (2+ chars) to search"
+                        value={formData.name}
+                        onChange={(e) => {
+                            handleChange(e);
+                            setFormData((prev) => ({ ...prev, name: e.target.value.toUpperCase() }));
+                            if (!isExistingPatient) setShowPatientHints(true);
+                        }}
+                        onFocus={() => {
+                            if (!isExistingPatient) setShowPatientHints(true)
+                        }}
+                        className={cn("p-1 border border-gray-300 rounded-md focus-visible:ring-blue-500 pl-8", isExistingPatient && "bg-blue-100")}
+                        required
+                        readOnly={isExistingPatient}
+                    />
+                    <UserCircle className="h-4 w-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                </div>
+                {showPatientHints && patientHints.length > 0 && (
+                    <ul className="absolute z-10 w-full bg-white border border-gray-300 mt-10 rounded-md max-h-40 overflow-y-auto text-sm shadow-lg">
+                        {patientHints.map((p) => (
+                            <li
+                            key={p.id}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                            onClick={() => handlePatientSelect(p)}
+                            >
+                            <div className="font-medium text-gray-900">
+                                <span className="text-blue-600 font-bold mr-2">UHID: {p.uhid}</span>
+                                {p.title && p.title !== "." ? `${p.title} ` : ""}{p.name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                                {p.number} • {p.age} {p.age_unit} • {p.gender}
+                            </div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
               </div>
-              <div className="flex flex-col">
+              {/* Phone Number - Increased width (col-span-4) */}
+              <div className="col-span-4 flex flex-col">
                 <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="phoneNumber">
                   Phone Number
                 </Label>
-                <Input
-                  type="tel"
-                  name="phoneNumber"
-                  id="phoneNumber"
-                  placeholder="Enter phone number"
-                  value={formData.phoneNumber}
-                  onChange={handleChange}
-                  className="p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500"
-                />
+                <div className="relative">
+                    <Input
+                        type="tel"
+                        name="phoneNumber"
+                        id="phoneNumber"
+                        placeholder="Enter 10-digit number"
+                        value={formData.phoneNumber}
+                        onChange={(e) => {
+                            handleChange(e);
+                            if (!isExistingPatient) setShowPatientHints(true);
+                        }}
+                        onFocus={() => {
+                            if (!isExistingPatient) setShowPatientHints(true)
+                        }}
+                        className={cn("p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500 pl-8", isExistingPatient && "bg-blue-100")}
+                        readOnly={isExistingPatient}
+                    />
+                    <Phone className="h-4 w-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                </div>
               </div>
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="gender">
-                  Gender
-                </Label>
-                <Select
-                  value={formData.gender}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, gender: value }))}
-                >
-                  <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
-                    <SelectValue placeholder="Select Gender" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="billNumber">
-                  Bill Number
-                </Label>
-                <Input
-                  type="text"
-                  name="billNumber"
-                  id="billNumber"
-                  placeholder="Enter bill number"
-                  value={formData.billNumber}
-                  onChange={handleChange}
-                  className="p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500"
-                />
-              </div>
-              <div className="flex flex-col">
+              
+              {/* Second row fields: Age, Age Unit, Gender, Address, Bill Number, Hospital Name, Doctor Name, Visit Type, TPA, Date of Appointment */}
+              
+              {/* Age (col-span-2) */}
+              <div className="col-span-2 flex flex-col">
                 <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="age">
                   Age
                 </Label>
@@ -443,37 +746,94 @@ export default function XrayPage() {
                   type="number"
                   name="age"
                   id="age"
-                  placeholder="Enter age"
+                  placeholder="Age"
                   value={formData.age}
+                  onChange={handleChange}
+                  className={cn("p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500", isExistingPatient && "bg-blue-100")}
+                  required
+                  readOnly={isExistingPatient}
+                />
+              </div>
+              {/* Age Unit (col-span-2) */}
+              <div className="col-span-2 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="ageUnit">
+                  Unit
+                </Label>
+                <Select
+                  value={formData.ageUnit}
+                  onValueChange={(value) => handleSelectChange("ageUnit", value as "year" | "month" | "day")}
+                  disabled={isExistingPatient}
+                >
+                  <SelectTrigger className={cn("p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500", isExistingPatient && "bg-blue-100")}>
+                    <SelectValue placeholder="Unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="year">Year</SelectItem>
+                    <SelectItem value="month">Month</SelectItem>
+                    <SelectItem value="day">Day</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Gender (col-span-2) */}
+              <div className="col-span-2 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="gender">
+                  Gender
+                </Label>
+                <Select
+                  value={formData.gender}
+                  onValueChange={(value) => handleSelectChange("gender", value)}
+                  disabled={isExistingPatient}
+                >
+                  <SelectTrigger className={cn("p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500", isExistingPatient && "bg-blue-100")}>
+                    <SelectValue placeholder="Gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Address (col-span-6) */}
+              <div className="col-span-6 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="address">
+                  Address
+                </Label>
+                <Input
+                    type="text"
+                    name="address"
+                    id="address"
+                    placeholder="Enter patient address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    className={cn("p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500", isExistingPatient && "bg-blue-100")}
+                    readOnly={isExistingPatient}
+                />
+              </div>
+              
+              {/* Bill Number (col-span-3) */}
+              <div className="col-span-3 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="billNumber">
+                  Bill No.
+                </Label>
+                <Input
+                  type="text"
+                  name="billNumber"
+                  id="billNumber"
+                  placeholder="Bill number"
+                  value={formData.billNumber}
                   onChange={handleChange}
                   className="p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500"
                 />
               </div>
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="ageUnit">
-                  Age Unit
-                </Label>
-                <Select
-                  value={formData.ageUnit}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, ageUnit: value }))}
-                >
-                  <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
-                    <SelectValue placeholder="Select age unit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Years">Years</SelectItem>
-                    <SelectItem value="Month">Month</SelectItem>
-                    <SelectItem value="Day">Day</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col">
+              {/* Hospital Name (col-span-3) */}
+              <div className="col-span-3 flex flex-col">
                 <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="hospitalName">
-                  Hospital Name
+                  Hospital
                 </Label>
                 <Select
                   value={formData.hospitalName}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, hospitalName: value }))}
+                  onValueChange={(value) => handleSelectChange("hospitalName", value)}
                 >
                   <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
                     <SelectValue placeholder="Select hospital" />
@@ -486,7 +846,8 @@ export default function XrayPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col">
+              {/* Doctor Name (col-span-3) */}
+              <div className="col-span-3 flex flex-col">
                 <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="doctorName">
                   Doctor Name
                 </Label>
@@ -498,35 +859,39 @@ export default function XrayPage() {
                   value={formData.doctorName}
                   onChange={handleChange}
                   className="p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500"
+                  required
                 />
               </div>
-              <div className="flex flex-col">
+              {/* Visit Type (col-span-1) */}
+              <div className="col-span-1 flex flex-col">
                 <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="visitType">
-                  Visit Type
+                  Visit
                 </Label>
                 <Select
                   value={formData.visitType}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, visitType: value }))}
+                  onValueChange={(value) => handleSelectChange("visitType", value)}
                 >
                   <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
-                    <SelectValue placeholder="Select visit type" />
+                    <SelectValue placeholder="Type" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="Direct">Direct</SelectItem>
                     <SelectItem value="OPD">OPD</SelectItem>
                     <SelectItem value="IPD">IPD</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col">
+              {/* TPA (col-span-1) */}
+              <div className="col-span-1 flex flex-col">
                 <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="tpa">
                   TPA
                 </Label>
                 <Select
                   value={formData.tpa}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, tpa: value }))}
+                  onValueChange={(value) => handleSelectChange("tpa", value)}
                 >
                   <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
-                    <SelectValue placeholder="Select TPA" />
+                    <SelectValue placeholder="Yes/No" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Yes">Yes</SelectItem>
@@ -534,24 +899,25 @@ export default function XrayPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col">
+              {/* Date of Appointment (col-span-1) */}
+              <div className="col-span-1 flex flex-col">
                 <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="dateOfAppointment">
-                  Date of Appointment
+                  Date
                 </Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
                       className={cn(
-                        "w-full justify-start text-left font-normal",
+                        "w-full justify-start text-left font-normal h-auto py-2 px-1 text-xs",
                         !formData.dateOfAppointment && "text-muted-foreground",
                       )}
                     >
-                      <CalendarDays className="mr-2 h-4 w-4" />
+                      <CalendarDays className="mr-1 h-3 w-3" />
                       {formData.dateOfAppointment ? (
-                        <span>{format(formData.dateOfAppointment, "PPP")}</span>
+                        <span className="truncate">{format(formData.dateOfAppointment, "PPP")}</span>
                       ) : (
-                        <span>Pick a date</span>
+                        <span>Pick date</span>
                       )}
                     </Button>
                   </PopoverTrigger>
@@ -570,6 +936,8 @@ export default function XrayPage() {
             </div>
           </div>
 
+          <hr className="my-2 border-gray-200" />
+
           {/* X-ray Test Section */}
           <div className="mb-2 p-1 bg-green-50 rounded-lg border border-green-200">
             <div className="flex justify-between items-center mb-1">
@@ -580,9 +948,9 @@ export default function XrayPage() {
               <Button
                 type="button"
                 onClick={handleAddTest}
-                className="bg-green-600 hover:bg-green-700 text-white rounded-md px-2 py-1 text-xs font-semibold shadow-sm transition-colors duration-200"
+                className="bg-green-600 hover:bg-green-700 text-white rounded-md px-2 py-1 text-xs font-semibold shadow-sm transition-colors duration-200 h-7"
               >
-                <UserPlus className="mr-1 h-3 w-3" /> Add Test
+                <Plus className="mr-1 h-3 w-3" /> Add Test
               </Button>
             </div>
 
@@ -605,7 +973,7 @@ export default function XrayPage() {
               return (
                 <div
                   key={index}
-                  className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 p-1 bg-white rounded-md shadow-sm border border-gray-200 mt-1"
+                  className="relative grid grid-cols-1 md:grid-cols-3 gap-1 p-1 bg-white rounded-md shadow-sm border border-gray-200 mt-1"
                 >
                   {formData.xrayTests.length > 1 && (
                     <Button
@@ -615,7 +983,7 @@ export default function XrayPage() {
                       variant="ghost"
                       title="Remove Test"
                     >
-                      <Trash2 className="w-2 h-2" />
+                      <X className="w-2 h-2" />
                     </Button>
                   )}
                   {/* Examination Dropdown */}
@@ -631,7 +999,7 @@ export default function XrayPage() {
                         <SelectValue placeholder="Select Examination" />
                       </SelectTrigger>
                       <SelectContent className="max-h-[300px] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
-                        <div className="sticky top-0 bg-white border-b border-gray-200 p-2">
+                        <div className="sticky top-0 bg-white border-b border-gray-200 p-2 z-20">
                           <div className="relative">
                             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <Input
@@ -703,7 +1071,7 @@ export default function XrayPage() {
                     </Select>
                   </div>
                   <div className="flex flex-col">
-                    <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor={`xrayVia-${index}`}>
+                    <Label className="text-xs font-semibold text-gray-700 mb-1" htmlFor={`xrayVia-${index}`}>
                       X-ray Via
                     </Label>
                     {isProcedureExamination(test.examination) ? (
@@ -717,6 +1085,7 @@ export default function XrayPage() {
                       <Select
                         value={test.xrayVia}
                         onValueChange={(value) => handleTestSelectChange(index, "xrayVia", value)}
+                        disabled={!test.examination} // Disable until an examination is selected
                       >
                         <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
                           <SelectValue placeholder="Select via" />
@@ -733,7 +1102,7 @@ export default function XrayPage() {
                   </div>
                   {/* Amount */}
                   <div className="flex flex-col">
-                    <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor={`amount-${index}`}>
+                    <Label className="text-xs font-semibold text-gray-700 mb-1" htmlFor={`amount-${index}`}>
                       Amount
                     </Label>
                     <Input
@@ -750,6 +1119,8 @@ export default function XrayPage() {
             })}
           </div>
 
+          <hr className="my-2 border-gray-200" />
+
           <div className="mb-2 p-1 bg-indigo-50 rounded-lg border border-indigo-200">
             <h2 className="text-lg font-bold text-indigo-800 mb-1 flex items-center">
               <FlaskConical className="mr-1 w-4 h-4 text-indigo-600" />
@@ -764,7 +1135,7 @@ export default function XrayPage() {
                   <Button
                     type="button"
                     onClick={handleAddPayment}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-md px-2 py-1 text-xs font-semibold shadow-sm transition-colors duration-200"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-md px-2 py-1 text-xs font-semibold shadow-sm transition-colors duration-200 h-7"
                   >
                     <Plus className="mr-1 h-3 w-3" /> Add Payment
                   </Button>
@@ -790,7 +1161,7 @@ export default function XrayPage() {
                 {formData.payments.map((payment, index) => (
                   <div
                     key={index}
-                    className="relative grid grid-cols-1 md:grid-cols-2 gap-1 p-1 bg-gray-50 rounded-md border border-gray-200 mb-1"
+                    className="relative grid grid-cols-2 gap-1 p-1 bg-gray-50 rounded-md border border-gray-200 mb-1"
                   >
                     <Button
                       type="button"
@@ -839,23 +1210,23 @@ export default function XrayPage() {
                 <div className="space-y-1">
                   <div className="flex justify-between items-center py-1 border-b border-gray-200">
                     <span className="text-xs font-medium text-gray-600">Total Amount:</span>
-                    <span className="text-xs font-semibold text-gray-900">₹{formData.totalAmount}</span>
+                    <span className="text-xs font-semibold text-gray-900">₹{formData.totalAmount.toFixed(2)}</span>
                   </div>
 
                   <div className="flex justify-between items-center py-1 border-b border-gray-200">
                     <span className="text-xs font-medium text-gray-600">Discount:</span>
-                    <span className="text-xs font-semibold text-gray-900">₹{formData.discount}</span>
+                    <span className="text-xs font-semibold text-gray-900">₹{formData.discount.toFixed(2)}</span>
                   </div>
 
                   <div className="flex justify-between items-center py-1 border-b border-gray-200">
                     <span className="text-xs font-medium text-gray-600">Total Paid:</span>
-                    <span className="text-xs font-semibold text-gray-900">₹{totalPaid}</span>
+                    <span className="text-xs font-semibold text-gray-900">₹{totalPaid.toFixed(2)}</span>
                   </div>
 
                   <div className="flex justify-between items-center py-1 border-b-2 border-gray-300">
                     <span className="text-xs font-medium text-gray-600">Remaining Amount:</span>
                     <span className={`text-xs font-bold ${remainingAmount > 0 ? "text-red-600" : "text-green-600"}`}>
-                      ₹{remainingAmount}
+                      ₹{remainingAmount.toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -881,7 +1252,7 @@ export default function XrayPage() {
               disabled={isSubmitting}
               className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-6 rounded-full shadow-md transition-transform duration-200 hover:scale-105 disabled:bg-gray-400"
             >
-              {isSubmitting ? "Submitting..." : "Submit Entry"}
+              {isSubmitting ? "Submitting..." : isExistingPatient ? "Save New X-ray Entry" : "Save Patient & X-ray Entry"}
             </Button>
           </div>
         </form>

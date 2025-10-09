@@ -1,23 +1,52 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
-import { UserPlus, FlaskConical, Stethoscope, Trash2, X, Plus, Search } from "lucide-react"
+import { UserPlus, FlaskConical, Stethoscope, Trash2, X, Plus, Search, CalendarDays, UserCircle, Phone } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { xrayData } from "@/app/pathology/x-ray/index"
-import { xrayPriceList as gautamiXrayData } from "@/app/pathology/x-ray/indexGautami"
+// Assuming these file paths are correct in your environment
+import { xrayData } from "../index" 
+import { xrayPriceList as gautamiXrayData } from "../indexGautami" 
+import { format } from "date-fns"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar" // Assuming Calendar is imported from ui/calendar
 
-// This component will be a dynamic page that receives params
-interface XrayDetailPageProps {
-  params: {
-    registrationid: string
-  }
+/**
+ * -----------------------------
+ * Helpers and Constants
+ * -----------------------------
+ */
+
+const TABLE = {
+  PATIENT: "patient_detail",
+  XRAY: "x-raydetail",
+} as const
+
+function throwIfError(error: any) {
+  if (error) throw error
+}
+
+// Helper to calculate DOB based on age and age unit (for patient table update)
+function calculateDOB(age: number, unit: 'year' | 'month' | 'day'): string {
+    const today = new Date();
+    const dob = new Date(today);
+    dob.setHours(0, 0, 0, 0); 
+
+    if (unit === 'year') {
+        dob.setFullYear(dob.getFullYear() - age);
+    } else if (unit === 'month') {
+        dob.setMonth(dob.getMonth() - age);
+    } else if (unit === 'day') {
+        dob.setDate(dob.getDate() - age);
+    }
+
+    return dob.toISOString().split('T')[0];
 }
 
 // Helper function for exponential backoff retry logic
@@ -33,64 +62,121 @@ const withRetry = async <T,>(fn: () => Promise<any>, retries = 3, delay = 1000):
   }
 }
 
-// Prepare a map for easy lookup of examination prices (default data)
+// Data maps (used for calculating prices)
 const examinationPriceMap = xrayData.xray_price_list.reduce<Record<string, any>>((acc, item) => {
   acc[item.examination] = item
   return acc
 }, {})
-
-// Prepare a map for easy lookup of procedure prices (default data)
 const procedurePriceMap = xrayData.procedure.reduce<Record<string, any>>((acc, item) => {
   acc[item.name] = item
   return acc
 }, {})
-
-// Prepare a map for Gautami hospital data
 const gautamiExaminationPriceMap = gautamiXrayData.reduce<Record<string, any>>((acc, item) => {
   acc[item.Examination] = item
   return acc
 }, {})
 
-// Separate examinations and procedures for better organization (default data)
 const regularExaminations = xrayData.xray_price_list.map((item) => item.examination)
 const procedureExaminations = xrayData.procedure.map((item) => item.name)
-
-// Gautami hospital examinations
 const gautamiExaminations = gautamiXrayData.map((item) => item.Examination)
 
-// Initial form state
-const initialFormData = {
+/**
+ * -----------------------------
+ * Types
+ * -----------------------------
+ */
+
+interface XrayTest {
+  examination: string
+  amount: number
+  xrayVia: string 
+}
+
+interface PaymentEntry {
+  amount: number
+  paymentMode: string 
+}
+
+interface IFormState {
+  // Patient fields (editable)
+  uhid: string // Stored from fetched X-ray record
+  title: string
+  name: string
+  phoneNumber: string
+  gender: string
+  age: number
+  ageUnit: 'year' | 'month' | 'day' // Must match DB enum
+  address: string
+
+  // X-ray fields (editable)
+  hospitalName: string
+  billNumber: string
+  doctorName: string
+  visitType: "OPD" | "IPD" | "Direct"
+  tpa: "Yes" | "No"
+  remark: string
+  xrayTests: XrayTest[]
+  totalAmount: number
+  discount: number
+  payments: PaymentEntry[]
+}
+
+// Initial form state (match IFormState structure)
+const initialFormData: IFormState = {
+  uhid: "",
+  title: "",
   name: "",
   phoneNumber: "",
   gender: "",
-  age: "",
-  ageUnit: "Years",
+  age: 0,
+  ageUnit: "year", 
+  address: "",
+
   hospitalName: "MEDFORD HOSPITAL",
   billNumber: "",
-  doctorName: "", // New field for Doctor Name
-  visitType: "OPD", // New field for Visit Type with default OPD
-  tpa: "No", // New field for TPA with default No
-  remark: "", // New field for Remark
+  doctorName: "", 
+  visitType: "OPD", 
+  tpa: "No", 
+  remark: "", 
   xrayTests: [{ examination: "", amount: 0, xrayVia: "Price" }],
   totalAmount: 0,
   discount: 0,
-  payments: [] as { amount: number; paymentMode: string }[],
+  payments: [],
 }
 
+interface XrayDetailPageProps {
+  params: {
+    registrationid: string
+  }
+}
+
+/**
+ * -----------------------------
+ * Component
+ * -----------------------------
+ */
 export default function XrayDetailPage({ params }: XrayDetailPageProps) {
-  const [formData, setFormData] = useState(initialFormData)
+  const [formData, setFormData] = useState<IFormState>(initialFormData)
   const [loading, setLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState("")
   const [messageType, setMessageType] = useState("")
   const [searchTerms, setSearchTerms] = useState<Record<number, string>>({})
   const searchInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
-  const [dataLoaded, setDataLoaded] = useState(false)
   const [initialHospitalName, setInitialHospitalName] = useState("")
+  
+  const registrationId = params.registrationid
 
   const isGautamiHospital = (hospitalName: string) => {
     return hospitalName === "Gautami Medford NX Hospital"
+  }
+  
+  // Helper to ensure values are cast to correct types for the form state
+  const handleSelectChange = (name: keyof IFormState, value: string | number) => {
+    setFormData((prev) => ({ 
+        ...prev, 
+        [name]: ['age', 'discount', 'totalAmount'].includes(name as string) ? Number(value) : value 
+    }))
   }
 
   const getXrayViaOptions = (hospitalName: string) => {
@@ -107,38 +193,50 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
     ]
   }
 
+  const isProcedureExamination = (examination: string) => {
+    // This is hardcoded logic derived from the XrayEntry page - kept for consistency
+    return ["HSG", "IVP", "BMFT", "BM SWALLOW"].includes(examination) || procedureExaminations.includes(examination)
+  }
+
   const getExaminationList = (hospitalName: string) => {
     if (isGautamiHospital(hospitalName)) {
       return { regular: gautamiExaminations, procedures: [] }
     }
     return { regular: regularExaminations, procedures: procedureExaminations }
   }
-
+  
+  // Function to calculate amount based on all factors
   const calculateAmount = (examination: string, xrayVia: string, hospitalName: string) => {
-    if (isGautamiHospital(hospitalName)) {
+    const isGautami = isGautamiHospital(hospitalName)
+    // Convert to lowercase for lookup in the price map which uses lowercase keys like 'price', 'ward', 'icu'
+    const viaKey = xrayVia.toLowerCase()
+    
+    if (isGautami) {
       const gautamiItem = gautamiExaminationPriceMap[examination]
-      if (gautamiItem) {
-        return gautamiItem[xrayVia] || 0
-      }
-    } else {
-      const xrayItem = examinationPriceMap[examination]
-      const procedureItem = procedurePriceMap[examination]
-
-      if (xrayItem) {
-        const viaKey = xrayVia.toLowerCase()
-        return xrayItem[viaKey] || 0
-      } else if (procedureItem) {
-        return procedureItem.price || 0
-      }
+      // Gautami uses 'OPD_Amt' or 'Portable' keys (case-sensitive)
+      return gautamiItem ? (gautamiItem[xrayVia] || 0) : 0
     }
+    
+    // Check procedures first for default hospital
+    const procedureItem = procedurePriceMap[examination]
+    if (procedureItem) {
+      return procedureItem.price || 0
+    }
+
+    // Check regular examinations (uses lowercase keys: 'price', 'ward', 'icu')
+    const xrayItem = examinationPriceMap[examination]
+    if (xrayItem) {
+      return xrayItem[viaKey] || 0
+    }
+    
     return 0
   }
 
   // Fetch data on initial load
   useEffect(() => {
-    const fetchPatientData = async () => {
+    const fetchAllData = async () => {
       setLoading(true)
-      const registrationId = params.registrationid
+      
       if (!registrationId) {
         setMessage("No registration ID provided.")
         setMessageType("error")
@@ -146,68 +244,112 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
         return
       }
 
-      const { data, error } = await withRetry(async () =>
-        supabase.from("x-raydetail").select("*").eq("id", registrationId).single(),
+      // 1. Fetch X-ray Detail
+      const { data: xrayData, error: xrayError } = await withRetry(async () =>
+        supabase.from(TABLE.XRAY).select("*").eq("id", registrationId).single(),
       )
 
-      if (error || !data) {
-        console.error("Fetch error:", error)
-        setMessage(`Failed to fetch patient data: ${error?.message || "Patient not found."}`)
-        setMessageType("error")
+      if (xrayError || !xrayData) {
+        console.error("Fetch X-ray error:", xrayError)
+        setMessage(`Failed to fetch X-ray data: ${xrayError?.message || "Record not found."}`)
         setLoading(false)
         return
       }
+      
+      const patientUhid = xrayData.patient_uhid;
+      if (!patientUhid) {
+          setMessage("X-ray record is missing a patient UHID. Cannot fetch patient details.");
+          setLoading(false);
+          return;
+      }
 
-      const hospitalName = data.Hospital_name || "MEDFORD HOSPITAL"
+      // 2. Fetch Patient Detail using UHID
+      const { data: patientData, error: patientError } = await withRetry(async () => 
+          supabase.from(TABLE.PATIENT).select("*").eq("uhid", patientUhid).single()
+      );
+
+      if (patientError || !patientData) {
+          console.error("Fetch Patient error:", patientError);
+          setMessage(`Failed to fetch patient details: ${patientError?.message || "Patient not found."}`);
+          setLoading(false);
+          return;
+      }
+
+
+      const hospitalName = xrayData.Hospital_name || "MEDFORD HOSPITAL"
       const isGautami = isGautamiHospital(hospitalName)
 
       setInitialHospitalName(hospitalName)
 
-      // Format fetched data to fit the form state
-      const formattedData = {
-        name: data.name,
-        phoneNumber: data.number,
-        gender: data.gender || "",
-        age: data.age || "",
-        ageUnit: data.age_unit || "Years",
+      // Normalize Xray_Via from stored lowercase/N/A values to UI case (Price, Ward, ICU, OPD_Amt, Portable)
+      const normalizeXrayVia = (storedVia: string, isGautami: boolean) => {
+        if (storedVia === "N/A" || isProcedureExamination(storedVia)) return "N/A";
+        
+        const upperVia = storedVia.toUpperCase();
+
+        if (isGautami) {
+            if (upperVia.includes('OPD')) return "OPD_Amt";
+            if (upperVia.includes('PORTABLE')) return "Portable";
+            return "OPD_Amt"; // Default for Gautami
+        }
+        
+        // Default Hospital
+        if (upperVia.includes('PRICE') || upperVia.includes('DIRECT')) return "Price";
+        if (upperVia.includes('WARD')) return "Ward";
+        if (upperVia.includes('ICU')) return "ICU";
+        return "Price"; // Default for Medford
+      };
+
+
+      // Format fetched data to fit the IFormState
+      const formattedData: IFormState = {
+        // Patient Details
+        uhid: patientData.uhid,
+        title: patientData.title || "",
+        name: patientData.name || "",
+        phoneNumber: patientData.number ? String(patientData.number) : "",
+        gender: patientData.gender || "",
+        age: patientData.age || 0,
+        ageUnit: patientData.age_unit as 'year' | 'month' | 'day' || "year",
+        address: patientData.address || "",
+        
+        // X-ray Details
         hospitalName: hospitalName,
-        billNumber: data.bill_number || "",
-        doctorName: data.Refer_doctorname || "",
-        visitType: data.Visit_type || "OPD",
-        tpa: data.Tpa || "No",
-        remark: data.Remark || "",
+        billNumber: xrayData.bill_number || "",
+        doctorName: xrayData.Refer_doctorname || "",
+        visitType: xrayData.Visit_type as "OPD" | "IPD" | "Direct" || "OPD",
+        tpa: xrayData.Tpa as "Yes" | "No" || "No",
+        remark: xrayData.Remark || "",
+        
         xrayTests:
-          (data["x-ray_detail"] || []).length > 0
-            ? (data["x-ray_detail"] || []).map((test: any) => {
-                // Handle different X-ray Via formats based on hospital
-                let xrayVia = test.Xray_Via
-                if (xrayVia === "N/A") {
-                  xrayVia = isGautami ? "OPD_Amt" : "Price"
-                }
+          (xrayData["x-ray_detail"] || []).length > 0
+            ? (xrayData["x-ray_detail"] || []).map((test: any) => {
+                const normalizedVia = normalizeXrayVia(test.Xray_Via, isGautami)
 
                 return {
                   examination: test.Examination,
                   amount: test.Amount,
-                  xrayVia: xrayVia,
+                  xrayVia: normalizedVia,
                 }
               })
             : [{ examination: "", amount: 0, xrayVia: isGautami ? "OPD_Amt" : "Price" }],
-        totalAmount: data.amount_detail?.totalAmount || 0,
-        discount: data.amount_detail?.discount || 0,
-        payments: (data.amount_detail?.paymentHistory || []).map((payment: any) => ({
+            
+        totalAmount: xrayData.amount_detail?.totalAmount || 0,
+        discount: xrayData.amount_detail?.discount || 0,
+        payments: (xrayData.amount_detail?.paymentHistory || []).map((payment: any) => ({
           amount: payment.amount,
-          paymentMode: payment.paymentMode,
+          // Payments stored in lowercase in DB, normalize to 'Cash'/'Online' for UI Select
+          paymentMode: payment.paymentMode === 'cash' ? 'Cash' : 'Online',
         })),
       }
 
       setFormData(formattedData)
-      setDataLoaded(true)
-      setIsInitialLoad(false)
       setLoading(false)
     }
 
-    fetchPatientData()
-  }, [params.registrationid])
+    fetchAllData()
+  }, [registrationId])
+
 
   // Calculate total amount whenever x-ray tests change
   useEffect(() => {
@@ -215,8 +357,9 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
     setFormData((prev) => ({ ...prev, totalAmount: total }))
   }, [formData.xrayTests])
 
+  // Reset xrayTests if hospital changes
   useEffect(() => {
-    if (dataLoaded && !isInitialLoad && formData.hospitalName !== initialHospitalName) {
+    if (formData.hospitalName !== initialHospitalName) {
       setFormData((prev) => ({
         ...prev,
         xrayTests: [
@@ -226,18 +369,15 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
       setSearchTerms({})
       setInitialHospitalName(formData.hospitalName)
     }
-  }, [formData.hospitalName, dataLoaded, isInitialLoad, initialHospitalName])
+  }, [formData.hospitalName, initialHospitalName])
 
-  // Handle form input changes
+
+  // Handle basic form input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  // Check if examination is a procedure
-  const isProcedureExamination = (examination: string) => {
-    return ["HSG", "IVP", "BMFT", "BM SWALLOW"].includes(examination)
-  }
 
   const handleSearchChange = (index: number, searchTerm: string) => {
     setSearchTerms((prev) => ({ ...prev, [index]: searchTerm }))
@@ -266,23 +406,40 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
   }
 
   const handleTestSelectChange = (index: number, name: string, value: string) => {
-    const newTests = [...formData.xrayTests]
-    if (name === "examination") {
-      const amount = calculateAmount(value, newTests[index].xrayVia, formData.hospitalName)
-
-      newTests[index] = {
-        ...newTests[index],
-        examination: value,
-        amount: amount,
-      }
-      setSearchTerms((prev) => ({ ...prev, [index]: "" }))
-    } else if (name === "xrayVia") {
-      const currentExam = newTests[index].examination
-      const amount = calculateAmount(currentExam, value, formData.hospitalName)
-
-      newTests[index] = { ...newTests[index], xrayVia: value, amount: amount }
-    }
-    setFormData((prev) => ({ ...prev, xrayTests: newTests }))
+    setFormData((prev) => {
+        const newTests = [...prev.xrayTests]
+        
+        if (name === "examination") {
+          const isGautami = isGautamiHospital(prev.hospitalName);
+          const isProc = isProcedureExamination(value);
+          
+          let xrayVia = newTests[index].xrayVia;
+          
+          if (isProc && !isGautami) {
+            xrayVia = 'N/A'; // Procedures for Medford always N/A
+          } else if (isGautami) {
+             xrayVia = xrayVia === 'N/A' || xrayVia === '' ? "OPD_Amt" : xrayVia; // Gautami default to OPD_Amt
+          } else {
+             xrayVia = xrayVia === 'N/A' || xrayVia === '' ? "Price" : xrayVia; // Medford default to Price
+          }
+          
+          const amount = calculateAmount(value, xrayVia, prev.hospitalName)
+    
+          newTests[index] = {
+            ...newTests[index],
+            examination: value,
+            amount: amount,
+            xrayVia: xrayVia,
+          }
+          setSearchTerms((prev) => ({ ...prev, [index]: "" }))
+        } else if (name === "xrayVia") {
+          const currentExam = newTests[index].examination
+          const amount = calculateAmount(currentExam, value, prev.hospitalName)
+    
+          newTests[index] = { ...newTests[index], xrayVia: value, amount: amount }
+        }
+        return { ...prev, xrayTests: newTests }
+    })
   }
 
   const handleAddTest = () => {
@@ -326,6 +483,8 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
 
   const totalPaid = formData.payments.reduce((sum, payment) => sum + (payment.amount || 0), 0)
   const remainingAmount = Math.max(0, formData.totalAmount - formData.discount - totalPaid)
+  const totalDay = formData.age * (formData.ageUnit === "year" ? 360 : formData.ageUnit === "month" ? 30 : 1);
+
 
   // Handle form update
   const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -333,15 +492,24 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
     setIsSubmitting(true)
     setMessage("")
     setMessageType("")
-
+    
+    if (!formData.uhid) {
+        setMessage("Error: Patient UHID is missing. Cannot update.");
+        setMessageType("error");
+        setIsSubmitting(false);
+        return;
+    }
+    
     try {
+      // 1. Prepare data for X-ray table update
       const amountDetail = {
         totalAmount: formData.totalAmount,
         discount: formData.discount,
         paymentHistory: formData.payments.map((payment) => ({
           amount: payment.amount,
+          // Store payment mode back in lowercase for consistency with original schema
           paymentMode: payment.paymentMode.toLowerCase(),
-          time: new Date().toISOString(),
+          time: new Date().toISOString(), // Use current time for update timestamp
         })),
       }
 
@@ -349,17 +517,13 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
         const isProcedure = isProcedureExamination(test.examination)
         return {
           Examination: test.examination,
+          // Store 'N/A' for procedures, otherwise store the value.
           Xray_Via: isProcedure ? "N/A" : test.xrayVia,
           Amount: test.amount,
         }
       })
 
-      const dataToUpdate = {
-        name: formData.name,
-        number: formData.phoneNumber,
-        gender: formData.gender || null,
-        age: formData.age,
-        age_unit: formData.ageUnit,
+      const xrayDataToUpdate = {
         Hospital_name: formData.hospitalName,
         bill_number: formData.billNumber || null,
         Refer_doctorname: formData.doctorName || null,
@@ -370,21 +534,38 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
         "x-ray_detail": xrayDetail,
       }
 
-      const result = await withRetry(async () =>
-        supabase.from("x-raydetail").update(dataToUpdate).eq("id", params.registrationid),
-      )
+      // 2. Prepare data for Patient table update
+      const patientDataToUpdate = {
+          name: formData.name.toUpperCase(),
+          number: Number(formData.phoneNumber) || null,
+          age: formData.age,
+          age_unit: formData.ageUnit,
+          total_day: totalDay,
+          gender: formData.gender,
+          address: formData.address || "",
+          title: formData.title || null,
+          dob: calculateDOB(formData.age, formData.ageUnit),
+      };
+      
+      // Execute Patient Detail update
+      const { error: patientUpdateError } = await withRetry(async () =>
+          supabase.from(TABLE.PATIENT).update(patientDataToUpdate).eq("uhid", formData.uhid)
+      );
+      throwIfError(patientUpdateError);
 
-      if (result.error) {
-        console.error("Update error:", result.error)
-        setMessage(`Failed to update the form: ${result.error.message || "Unknown error"}`)
-        setMessageType("error")
-      } else {
-        setMessage("Form updated successfully!")
-        setMessageType("success")
-      }
-    } catch (err) {
+      // Execute X-ray Detail update
+      const { error: xrayUpdateError } = await withRetry(async () =>
+        supabase.from(TABLE.XRAY).update(xrayDataToUpdate).eq("id", registrationId),
+      )
+      throwIfError(xrayUpdateError);
+
+
+      setMessage("Registration and Patient details updated successfully! ✅")
+      setMessageType("success")
+
+    } catch (err: any) {
       console.error("Unexpected error:", err)
-      setMessage("An unexpected error occurred.")
+      setMessage(`An unexpected error occurred: ${err.message || "Check console."}`)
       setMessageType("error")
     } finally {
       setIsSubmitting(false)
@@ -394,126 +575,172 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-100">
-        <p className="text-xl text-gray-700">Loading patient data...</p>
+        <p className="text-xl text-gray-700">Loading patient data for Registration ID: {registrationId}...</p>
       </div>
     )
   }
+
+  // Helper to ensure 'gender' and 'ageUnit' are treated as strings for select components
+  const formStateAsString = formData as unknown as Record<keyof IFormState, string>;
+  const patientUhidDisplay = formData.uhid || "N/A";
 
   return (
     <div className="flex-1 p-1 bg-gray-100 min-h-screen font-sans">
       <h1 className="text-2xl font-extrabold text-gray-900 mb-1 flex items-center">
         <Stethoscope className="mr-2 w-6 h-6 text-blue-600" />
-        X-ray Update Portal
+        X-ray Update Portal 
       </h1>
+      <p className="text-sm text-gray-600 mb-2">Editing Registration ID: <span className="font-bold text-blue-600">{registrationId}</span> (UHID: {patientUhidDisplay})</p>
+      
       <Card className="bg-white p-1 rounded-xl shadow-lg border border-gray-200">
         <form onSubmit={handleUpdate}>
-          {/* Personal Information Section */}
+          {/* Patient Information Section */}
           <div className="mb-2 p-1 bg-blue-50 rounded-lg border border-blue-200">
             <h2 className="text-lg font-bold text-blue-800 mb-1 flex items-center">
               <UserPlus className="mr-1 w-4 h-4 text-blue-600" />
-              Patient Information
+              Patient & Visit Information
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1">
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="name">
-                  Patient Name
-                </Label>
+            
+            {/* Patient Name, Title, and Phone Number row */}
+            <div className="grid grid-cols-12 gap-1 mb-1">
+              {/* Title (col-span-2) */}
+              <div className="col-span-2 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="title">Title</Label>
+                <Select
+                    value={formStateAsString.title}
+                    onValueChange={(value) => handleSelectChange("title", value)}
+                >
+                    <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
+                        <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {[".", "MR", "MRS", "MAST", "BABA", "MISS", "MS", "BABY", "SMT", "BABY OF", "DR"].map((t) => (
+                            <SelectItem key={t} value={t}>{t === "." ? "NoTitle" : t}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Name (col-span-5) */}
+              <div className="col-span-5 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="name">Patient Name</Label>
+                <div className="relative">
+                    <Input
+                        type="text"
+                        name="name"
+                        id="name"
+                        placeholder="Enter full name"
+                        value={formData.name}
+                        onChange={(e) => handleChange(e)}
+                        className="p-1 border border-gray-300 rounded-md focus-visible:ring-blue-500 pl-8"
+                        required
+                    />
+                    <UserCircle className="h-4 w-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                </div>
+              </div>
+              
+              {/* Phone Number (col-span-5) */}
+              <div className="col-span-5 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="phoneNumber">Phone Number</Label>
+                <div className="relative">
+                    <Input
+                        type="tel"
+                        name="phoneNumber"
+                        id="phoneNumber"
+                        placeholder="Enter 10-digit number"
+                        value={formData.phoneNumber}
+                        onChange={(e) => handleChange(e)}
+                        className="p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500 pl-8"
+                    />
+                    <Phone className="h-4 w-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                </div>
+              </div>
+            </div>
+            
+            {/* Age, Unit, Gender, Address row */}
+            <div className="grid grid-cols-12 gap-1">
+              {/* Age (col-span-2) */}
+              <div className="col-span-2 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="age">Age</Label>
                 <Input
-                  type="text"
-                  name="name"
-                  id="name"
-                  placeholder="Enter full name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="p-1 border border-gray-300 rounded-md focus-visible:ring-blue-500"
+                  type="number"
+                  name="age"
+                  id="age"
+                  placeholder="Age"
+                  value={formData.age}
+                  onChange={(e) => handleSelectChange('age', e.target.value)}
+                  className="p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500"
                   required
                 />
               </div>
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="phoneNumber">
-                  Phone Number
-                </Label>
-                <Input
-                  type="tel"
-                  name="phoneNumber"
-                  id="phoneNumber"
-                  placeholder="Enter phone number"
-                  value={formData.phoneNumber}
-                  onChange={handleChange}
-                  className="p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500"
-                />
-              </div>
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="gender">
-                  Gender
-                </Label>
+              {/* Age Unit (col-span-2) */}
+              <div className="col-span-2 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="ageUnit">Unit</Label>
                 <Select
-                  value={formData.gender}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, gender: value }))}
+                  value={formStateAsString.ageUnit}
+                  onValueChange={(value) => handleSelectChange("ageUnit", value)}
                 >
                   <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
-                    <SelectValue placeholder="Select Gender" />
+                    <SelectValue placeholder="Unit" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    <SelectItem value="year">Year</SelectItem>
+                    <SelectItem value="month">Month</SelectItem>
+                    <SelectItem value="day">Day</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="billNumber">
-                  Bill Number
-                </Label>
+              {/* Gender (col-span-2) */}
+              <div className="col-span-2 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="gender">Gender</Label>
+                <Select
+                  value={formStateAsString.gender}
+                  onValueChange={(value) => handleSelectChange("gender", value)}
+                >
+                  <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
+                    <SelectValue placeholder="Gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Address (col-span-6) */}
+              <div className="col-span-6 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="address">Address</Label>
+                <Input
+                    type="text"
+                    name="address"
+                    id="address"
+                    placeholder="Enter patient address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    className="p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500"
+                />
+              </div>
+              
+              {/* Visit Details Row */}
+              {/* Bill Number (col-span-2) - Reduced width */}
+              <div className="col-span-2 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="billNumber">Bill No.</Label>
                 <Input
                   type="text"
                   name="billNumber"
                   id="billNumber"
-                  placeholder="Enter bill number"
+                  placeholder="Bill number"
                   value={formData.billNumber}
                   onChange={handleChange}
                   className="p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500"
                 />
               </div>
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="age">
-                  Age
-                </Label>
-                <Input
-                  type="number"
-                  name="age"
-                  id="age"
-                  placeholder="Enter age"
-                  value={formData.age}
-                  onChange={handleChange}
-                  className="p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500"
-                />
-              </div>
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="ageUnit">
-                  Age Unit
-                </Label>
-                <Select
-                  value={formData.ageUnit}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, ageUnit: value }))}
-                >
-                  <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
-                    <SelectValue placeholder="Select age unit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Years">Years</SelectItem>
-                    <SelectItem value="Month">Month</SelectItem>
-                    <SelectItem value="Day">Day</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="hospitalName">
-                  Hospital Name
-                </Label>
+              {/* Hospital Name (col-span-3) */}
+              <div className="col-span-3 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="hospitalName">Hospital</Label>
                 <Select
                   value={formData.hospitalName}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, hospitalName: value }))}
+                  onValueChange={(value) => handleSelectChange("hospitalName", value)}
                 >
                   <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
                     <SelectValue placeholder="Select hospital" />
@@ -527,10 +754,9 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
                 </Select>
               </div>
 
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="doctorName">
-                  Doctor Name
-                </Label>
+              {/* Doctor Name (col-span-4) */}
+              <div className="col-span-4 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="doctorName">Doctor Name</Label>
                 <Input
                   type="text"
                   name="doctorName"
@@ -541,33 +767,33 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
                   className="p-2 border border-gray-300 rounded-lg focus-visible:ring-blue-500"
                 />
               </div>
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="visitType">
-                  Visit Type
-                </Label>
+              
+              {/* Visit Type (col-span-1) */}
+              <div className="col-span-1 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="visitType">Visit</Label>
                 <Select
                   value={formData.visitType}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, visitType: value }))}
+                  onValueChange={(value) => handleSelectChange("visitType", value)}
                 >
                   <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
-                    <SelectValue placeholder="Select visit type" />
+                    <SelectValue placeholder="Type" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="Direct">Direct</SelectItem>
                     <SelectItem value="OPD">OPD</SelectItem>
                     <SelectItem value="IPD">IPD</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col">
-                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="tpa">
-                  TPA
-                </Label>
+              {/* TPA (col-span-2) */}
+              <div className="col-span-2 flex flex-col">
+                <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor="tpa">TPA</Label>
                 <Select
                   value={formData.tpa}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, tpa: value }))}
+                  onValueChange={(value) => handleSelectChange("tpa", value)}
                 >
                   <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
-                    <SelectValue placeholder="Select TPA" />
+                    <SelectValue placeholder="Yes/No" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Yes">Yes</SelectItem>
@@ -575,8 +801,11 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
                   </SelectContent>
                 </Select>
               </div>
+              
             </div>
           </div>
+
+          <hr className="my-2 border-gray-200" />
 
           {/* X-ray Test Section */}
           <div className="mb-2 p-1 bg-green-50 rounded-lg border border-green-200">
@@ -588,7 +817,7 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
               <Button
                 type="button"
                 onClick={handleAddTest}
-                className="bg-green-600 hover:bg-green-700 text-white rounded-md px-2 py-1 text-xs font-semibold shadow-sm transition-transform duration-200 hover:scale-105"
+                className="bg-green-600 hover:bg-green-700 text-white rounded-md px-2 py-1 text-xs font-semibold shadow-sm transition-transform duration-200 hover:scale-105 h-7"
               >
                 <Plus className="mr-1 h-3 w-3" /> Add Test
               </Button>
@@ -610,10 +839,12 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
             {formData.xrayTests.map((test, index) => {
               const filteredExams = getFilteredExaminations(index)
               const xrayViaOptions = getXrayViaOptions(formData.hospitalName)
+              const isProc = isProcedureExamination(test.examination)
+              
               return (
                 <div
                   key={index}
-                  className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 p-1 bg-white rounded-md shadow-sm border border-gray-200 mt-1"
+                  className="relative grid grid-cols-1 md:grid-cols-3 gap-1 p-1 bg-white rounded-md shadow-sm border border-gray-200 mt-1"
                 >
                   {formData.xrayTests.length > 1 && (
                     <Button
@@ -639,7 +870,7 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
                         <SelectValue placeholder="Select Examination" />
                       </SelectTrigger>
                       <SelectContent className="max-h-[300px] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
-                        <div className="sticky top-0 bg-white border-b border-gray-200 p-2">
+                        <div className="sticky top-0 bg-white border-b border-gray-200 p-2 z-20">
                           <div className="relative">
                             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <Input
@@ -662,9 +893,7 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
                         {filteredExams.regular.length > 0 && (
                           <div className="px-2 py-1">
                             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-2 py-1 bg-gray-50 rounded-md mb-1">
-                              {isGautamiHospital(formData.hospitalName)
-                                ? "Gautami Examinations"
-                                : "Regular Examinations"}{" "}
+                              {isGautamiHospital(formData.hospitalName) ? "Gautami Exams" : "Regular Exams"}
                               ({filteredExams.regular.length})
                             </div>
                             {filteredExams.regular.map((exam) => (
@@ -717,7 +946,7 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
                     <Label className="text-sm font-semibold text-gray-700 mb-1" htmlFor={`xrayVia-${index}`}>
                       X-ray Via
                     </Label>
-                    {isProcedureExamination(test.examination) && !isGautamiHospital(formData.hospitalName) ? (
+                    {isProc && !isGautamiHospital(formData.hospitalName) ? (
                       <Input
                         type="text"
                         value="N/A"
@@ -728,6 +957,7 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
                       <Select
                         value={test.xrayVia}
                         onValueChange={(value) => handleTestSelectChange(index, "xrayVia", value)}
+                        disabled={isProc}
                       >
                         <SelectTrigger className="p-2 h-auto border border-gray-300 rounded-lg focus-visible:ring-blue-500">
                           <SelectValue placeholder="Select via" />
@@ -761,6 +991,8 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
             })}
           </div>
 
+          <hr className="my-2 border-gray-200" />
+
           <div className="mb-2 p-1 bg-indigo-50 rounded-lg border border-indigo-200">
             <h2 className="text-lg font-bold text-indigo-800 mb-1 flex items-center">
               <FlaskConical className="mr-1 w-4 h-4 text-indigo-600" />
@@ -775,7 +1007,7 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
                   <Button
                     type="button"
                     onClick={handleAddPayment}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-md px-2 py-1 text-xs font-semibold shadow-sm transition-transform duration-200 hover:scale-105"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-md px-2 py-1 text-xs font-semibold shadow-sm transition-transform duration-200 hover:scale-105 h-7"
                   >
                     <Plus className="mr-1 h-3 w-3" /> Add Payment
                   </Button>
@@ -791,7 +1023,7 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
                     name="discount"
                     id="discount"
                     value={formData.discount}
-                    onChange={handleChange}
+                    onChange={(e) => handleSelectChange('discount', e.target.value)}
                     className="p-1 border border-gray-300 rounded-md focus-visible:ring-blue-500"
                     placeholder="Enter discount amount"
                   />
@@ -850,23 +1082,23 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
                 <div className="space-y-1">
                   <div className="flex justify-between items-center py-1 border-b border-gray-200">
                     <span className="text-xs font-medium text-gray-600">Total Amount:</span>
-                    <span className="text-xs font-semibold text-gray-900">₹{formData.totalAmount}</span>
+                    <span className="text-xs font-semibold text-gray-900">₹{formData.totalAmount.toFixed(2)}</span>
                   </div>
 
                   <div className="flex justify-between items-center py-1 border-b border-gray-200">
                     <span className="text-xs font-medium text-gray-600">Discount:</span>
-                    <span className="text-xs font-semibold text-gray-900">₹{formData.discount}</span>
+                    <span className="text-xs font-semibold text-gray-900">₹{formData.discount.toFixed(2)}</span>
                   </div>
 
-                  <div className="flex justify-between items-center py-1 border-b-2 border-gray-300">
+                  <div className="flex justify-between items-center py-1 border-b border-gray-200">
                     <span className="text-xs font-medium text-gray-600">Total Paid:</span>
-                    <span className="text-xs font-semibold text-gray-900">₹{totalPaid}</span>
+                    <span className="text-xs font-semibold text-gray-900">₹{totalPaid.toFixed(2)}</span>
                   </div>
 
                   <div className="flex justify-between items-center py-1 border-b-2 border-gray-300">
                     <span className="text-xs font-medium text-gray-600">Remaining Amount:</span>
                     <span className={`text-xs font-bold ${remainingAmount > 0 ? "text-red-600" : "text-green-600"}`}>
-                      ₹{remainingAmount}
+                      ₹{remainingAmount.toFixed(2)}
                     </span>
                   </div>
                 </div>
