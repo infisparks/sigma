@@ -98,54 +98,93 @@ export default function IPDSignaturePDF({
    *   Load Hindi font (Noto Sans Devanagari)
    *   ---------------------------------------- */
   const loadHindiFont = async (doc: jsPDF): Promise<boolean> => {
-    try {
-      const res = await fetch("/font/NotoSansDevanagari_Condensed-Medium.ttf")
-      if (!res.ok) {
-        throw new Error(`Failed to fetch font: ${res.statusText} (${res.status})`)
-      }
-      const blob = await res.blob()
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve((reader.result as string).split(",")[1])
-        reader.onerror = (e) => reject(new Error("Failed to read font file."))
-        reader.readAsDataURL(blob)
-      })
+    // Try multiple paths to handle basePath, assetPrefix, or routing nuances
+    const candidatePaths = [
+      "/font/NotoSansDevanagari_Condensed-Medium.ttf",
+      (typeof window !== "undefined" ? `${window.location.origin}/font/NotoSansDevanagari_Condensed-Medium.ttf` : undefined),
+      (typeof document !== "undefined" ? new URL("/font/NotoSansDevanagari_Condensed-Medium.ttf", document.baseURI).toString() : undefined),
+    ].filter(Boolean) as string[]
 
-      doc.addFileToVFS("NotoSansDevanagari_Condensed-Medium.ttf", base64)
-      doc.addFont("NotoSansDevanagari_Condensed-Medium.ttf", "NotoSansDev", "normal")
-      console.log("Hindi font loaded successfully.")
+    for (const path of candidatePaths) {
+      try {
+        const res = await fetch(path)
+        if (!res.ok) continue
+        const blob = await res.blob()
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve((reader.result as string).split(",")[1])
+          reader.onerror = () => reject(new Error("Failed to read font file."))
+          reader.readAsDataURL(blob)
+        })
 
-      const fontList = (doc.internal as any).getFontList()
-      if (fontList["NotoSansDev"] && fontList["NotoSansDev"].includes("normal")) {
-        console.log("Hindi font verified in jsPDF's internal list.")
-        return true
-      } else {
-        console.error("Hindi font not found in jsPDF's internal list after adding.")
-        return false
+        doc.addFileToVFS("NotoSansDevanagari_Condensed-Medium.ttf", base64)
+        doc.addFont("NotoSansDevanagari_Condensed-Medium.ttf", "NotoSansDev", "normal")
+
+        const fontList = (doc.internal as any).getFontList()
+        if (fontList["NotoSansDev"] && fontList["NotoSansDev"].includes("normal")) {
+          return true
+        }
+      } catch (_) {
+        // try next path
       }
-    } catch (error) {
-      console.error("Error loading Hindi font:", error)
-      return false
     }
+    console.error("Failed to load NotoSansDev font from all candidate paths.")
+    return false
   }
 
   /* ----------------------------------------
    *   Helpers shared by both generators
    *   ---------------------------------------- */
-  const initializeDoc = () => {
-    const doc = new jsPDF({ orientation: "p", unit: "pt", format: "A4" })
+  let cachedLetterheadDataUrl: string | null = null
+
+  const loadAndAddLetterhead = async (doc: jsPDF) => {
     const pageWidth = doc.internal.pageSize.getWidth()
     const pageHeight = doc.internal.pageSize.getHeight()
-    doc.addImage(letterhead.src, "PNG", 0, 0, pageWidth, pageHeight)
+
+    if (!cachedLetterheadDataUrl) {
+      try {
+        const img = new Image()
+        img.crossOrigin = "anonymous"
+        img.src = letterhead.src
+        await new Promise((res, rej) => {
+          img.onload = () => res(null)
+          img.onerror = () => rej(new Error("Failed to load letterhead"))
+        })
+
+        // Downscale to page size and convert to JPEG for better compression
+        const canvas = document.createElement("canvas")
+        // Render at 2x for sharper output
+        canvas.width = Math.floor(pageWidth * 2)
+        canvas.height = Math.floor(pageHeight * 2)
+        const ctx = canvas.getContext("2d")!
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        cachedLetterheadDataUrl = canvas.toDataURL("image/jpeg", 0.95)
+      } catch (_) {
+        // Fallback to original asset if transform fails
+        cachedLetterheadDataUrl = letterhead.src
+      }
+    }
+
+    const format = cachedLetterheadDataUrl.startsWith("data:image/jpeg") ? "JPEG" : "PNG"
+    // Prefer higher-quality rendering
+    doc.addImage(cachedLetterheadDataUrl, format as any, 0, 0, pageWidth, pageHeight, undefined, "SLOW")
+  }
+
+  const initializeDoc = async () => {
+    const doc = new jsPDF({ orientation: "p", unit: "pt", format: "A4", compress: true as any })
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    await loadAndAddLetterhead(doc)
     return { doc, pageWidth, pageHeight }
   }
 
   /* ================================================================
    *   ===============   ENGLISH‑LANGUAGE PDF   ==========================
    *   ================================================================ */
-  const generatePDF = () => {
-    const { doc, pageWidth, pageHeight } = initializeDoc()
-    let y = 120
+  const generatePDF = async () => {
+    const { doc, pageWidth, pageHeight } = await initializeDoc()
+    // Move content lower to avoid overlapping the letterhead top band
+    let y = 140
     const left = 50
     const right = pageWidth - 50
     const lh = 14
@@ -153,8 +192,10 @@ export default function IPDSignaturePDF({
     const newPageIfNeeded = () => {
       if (y > pageHeight - 50) {
         doc.addPage()
-        doc.addImage(letterhead.src, "PNG", 0, 0, pageWidth, pageHeight)
-        y = 120
+        // Reuse cached, already compressed letterhead
+        const format = (cachedLetterheadDataUrl && cachedLetterheadDataUrl.startsWith("data:image/jpeg")) ? "JPEG" : "PNG"
+        doc.addImage(cachedLetterheadDataUrl || letterhead.src, format as any, 0, 0, pageWidth, pageHeight, undefined, "SLOW")
+        y = 140
       }
     }
 
@@ -166,9 +207,16 @@ export default function IPDSignaturePDF({
       newPageIfNeeded()
     }
 
+    const useHindiFont = await loadHindiFont(doc)
+
     const addField = (label: string, value?: string | number | null) => {
-      doc.setFont("Helvetica", "bold").setFontSize(10).text(label, left, y)
-      doc.setFont("Helvetica", "normal").text(String(value ?? "N/A"), left + 120, y)
+      if (useHindiFont) {
+        doc.setFont("NotoSansDev", "normal").setFontSize(10).text(label, left, y)
+        doc.setFont("NotoSansDev", "normal").text(String(value ?? "N/A"), left + 120, y)
+      } else {
+        doc.setFont("Helvetica", "bold").setFontSize(10).text(label, left, y)
+        doc.setFont("Helvetica", "normal").text(String(value ?? "N/A"), left + 120, y)
+      }
       y += lh
       newPageIfNeeded()
     }
@@ -176,19 +224,27 @@ export default function IPDSignaturePDF({
     const addSection = (title: string) => {
       y += 20
       newPageIfNeeded()
-      doc.setFont("Helvetica", "bold").setFontSize(11).setTextColor(0, 0, 128).text(title, left, y)
-      y += 4
+      if (useHindiFont) {
+        doc.setFont("NotoSansDev", "normal").setFontSize(11).setTextColor(0, 0, 128).text(title, left, y)
+      } else {
+        doc.setFont("Helvetica", "bold").setFontSize(11).setTextColor(0, 0, 128).text(title, left, y)
+      }
+      y += 10
       sep()
-      doc.setFont("Helvetica", "normal").setFontSize(10).setTextColor(0)
+      if (useHindiFont) {
+        doc.setFont("NotoSansDev", "normal").setFontSize(10).setTextColor(0)
+      } else {
+        doc.setFont("Helvetica", "normal").setFontSize(10).setTextColor(0)
+      }
     }
 
     /* ---------- Title ---------- */
-    doc
-      .setFont("Helvetica", "bold")
-      .setFontSize(14)
-      .setTextColor(0, 0, 128)
-      .text("Patient's Admission Summary", pageWidth / 2, y, { align: "center" })
-    y += lh + 8
+    if (useHindiFont) {
+      doc.setFont("NotoSansDev", "normal").setFontSize(16).setTextColor(0, 0, 128).text("Patient's Admission Summary", pageWidth / 2, y, { align: "center" })
+    } else {
+      doc.setFont("Helvetica", "bold").setFontSize(16).setTextColor(0, 0, 128).text("Patient's Admission Summary", pageWidth / 2, y, { align: "center" })
+    }
+    y += lh + 14
     sep()
 
     /* ---------- Patient details ---------- */
@@ -209,7 +265,7 @@ export default function IPDSignaturePDF({
     }
 
     if (data.tpa !== undefined) {
-      addField("TPA (Third Party Administrator)", data.tpa ? "Yes" : "No");
+      addField("TPA ", data.tpa ? "Yes" : "No");
     }
 
     /* ---------- Admission ---------- */
@@ -245,7 +301,7 @@ export default function IPDSignaturePDF({
       "Patients are advised not to carry cash or wear/keep any jewelry during hospitalization. The hospital is not responsible for any kind of loss.",
       "Photography is prohibited on hospital premises.",
       "If the patient is required to be transferred to the ICU/Room/Ward, the room/bed they were occupying prior to transfer is to be vacated by the attendants.",
-      "For any further assistance, you may reach us on 9769000091 / 9769000092",
+      "For any further assistance, you may reach us on 9958399157 / 9958399157",
     ]
     instructions.forEach((txt) => {
       doc.setFont("Helvetica", "bold").setTextColor(0, 0, 128).text("•", left, y)
@@ -288,7 +344,7 @@ export default function IPDSignaturePDF({
    *   ===============   HINDI‑LANGUAGE PDF   ============================
    *   ================================================================ */
   const generatePDFHindi = async () => {
-    const { doc, pageWidth, pageHeight } = initializeDoc()
+    const { doc, pageWidth, pageHeight } = await initializeDoc()
     let y = 120
     const left = 50
     const right = pageWidth - 50
@@ -299,7 +355,8 @@ export default function IPDSignaturePDF({
     const newPageIfNeeded = () => {
       if (y > pageHeight - 50) {
         doc.addPage()
-        doc.addImage(letterhead.src, "PNG", 0, 0, pageWidth, pageHeight)
+        const format = (cachedLetterheadDataUrl && cachedLetterheadDataUrl.startsWith("data:image/jpeg")) ? "JPEG" : "PNG"
+        doc.addImage(cachedLetterheadDataUrl || letterhead.src, format as any, 0, 0, pageWidth, pageHeight, undefined, "FAST")
         y = 120
       }
     }
@@ -330,11 +387,13 @@ export default function IPDSignaturePDF({
 
     /* ---------- Field (English labels + values) ---------- */
     const addFieldEN = (label: string, value?: string | number | null) => {
-      doc
-        .setFont("Helvetica", "bold")
-        .text(label, left, y)
-        .setFont("Helvetica", "normal")
-        .text(String(value ?? "N/A"), left + 120, y)
+      // Labels remain in Helvetica; values switch to Hindi font if available
+      doc.setFont("Helvetica", "bold").text(label, left, y)
+      if (useHindiFont) {
+        doc.setFont("NotoSansDev", "normal").text(String(value ?? "N/A"), left + 120, y)
+      } else {
+        doc.setFont("Helvetica", "normal").text(String(value ?? "N/A"), left + 120, y)
+      }
       y += lh
       newPageIfNeeded()
     }
@@ -366,11 +425,12 @@ export default function IPDSignaturePDF({
         .setTextColor(0, 0, 128)
         .text("रोगी का प्रवेश सारांश", pageWidth / 2, y, { align: "center" })
     } else {
-      doc // Fallback
+      // Keep English title if Hindi font is unavailable to avoid garbled glyphs
+      doc
         .setFont("Helvetica", "bold")
         .setFontSize(14)
         .setTextColor(0, 0, 128)
-        .text("रोगी का प्रवेश सारांश (Hindi Font Failed)", pageWidth / 2, y, { align: "center" })
+        .text("Patient's Admission Summary", pageWidth / 2, y, { align: "center" })
     }
     y += lh + 8
     sep()
@@ -392,7 +452,7 @@ export default function IPDSignaturePDF({
     }
 
     if (data.tpa !== undefined) {
-      addFieldEN("TPA (Third Party Administrator)", data.tpa ? "Yes" : "No");
+      addFieldEN("TPA ", data.tpa ? "Yes" : "No");
     }
 
     /* ---------- Admission details ---------- */
@@ -437,7 +497,8 @@ export default function IPDSignaturePDF({
     if (useHindiFont) {
       doc.setFont("NotoSansDev", "normal").text("मैंने उपरोक्त सभी जानकारी पढ़ ली है एवं पुष्टि करता हूँ:", left, y)
     } else {
-      doc.setFont("Helvetica", "normal").text("मैंने उपरोक्त सभी जानकारी पढ़ ली है एवं पुष्टि करता हूँ:", left, y) // Fallback
+      // Use English fallback to avoid mojibake
+      doc.setFont("Helvetica", "normal").text("I have read the above information and confirm:", left, y)
     }
     y += lh * 2
     newPageIfNeeded()
@@ -446,22 +507,22 @@ export default function IPDSignaturePDF({
       doc.setFont("NotoSansDev", "normal").text("हस्ताक्षर: ______________", left, y)
       doc.text("बिलिंग कार्यकारी: ______________", right, y, { align: "right" })
     } else {
-      doc.setFont("Helvetica", "normal").text("हस्ताक्षर: ______________", left, y) // Fallback
-      doc.text("बिलिंग कार्यकारी: ______________", right, y, { align: "right" }) // Fallback
+      doc.setFont("Helvetica", "normal").text("Signature: ______________", left, y)
+      doc.text("Billing Executive: ______________", right, y, { align: "right" })
     }
     y += lh * 2
     newPageIfNeeded()
     if (useHindiFont) {
       doc.setFont("NotoSansDev", "normal").text("नाम: ______________", left, y)
     } else {
-      doc.setFont("Helvetica", "normal").text("नाम: ______________", left, y) // Fallback
+      doc.setFont("Helvetica", "normal").text("Name: ______________", left, y)
     }
     y += lh * 1.5
     newPageIfNeeded()
     if (useHindiFont) {
       doc.setFont("NotoSansDev", "normal").text("रोगी के साथ संबंध: ______________", left, y)
     } else {
-      doc.setFont("Helvetica", "normal").text("रोगी के साथ संबंध: ______________", left, y) // Fallback
+      doc.setFont("Helvetica", "normal").text("Relation with Patient: ______________", left, y)
     }
 
     doc.save(`IPD_Admission_Letter_${data.name || "Patient"}_HI.pdf`)
@@ -478,13 +539,6 @@ export default function IPDSignaturePDF({
         className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition duration-200"
       >
         Download Letter
-      </Button>
-      <Button
-        type="button"
-        onClick={generatePDFHindi}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200"
-      >
-        पत्र डाउनलोड करें
       </Button>
     </div>
   )

@@ -1202,7 +1202,7 @@ INFIPLUS Hospital`;
                 </div>
 
                 <div className="space-y-2">
-                  <Label>TPA (Third Party Administrator)</Label>
+                  <Label>TPA </Label>
                   <SearchableSelect
                     options={[
                       { value: "true", label: "Yes" },
@@ -1452,7 +1452,104 @@ INFIPLUS Hospital`;
 
         <Dialog open={showPreview} onOpenChange={setShowPreview}>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            {/* ... (Preview Dialog JSX) ... */}
+            <DialogHeader>
+              <DialogTitle>Admission Preview</DialogTitle>
+              <DialogDescription>Review the details before confirming admission.</DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <Card className="border-blue-200">
+                <CardHeader>
+                  <CardTitle className="text-blue-800">Patient Details</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div><span className="font-medium">Name:</span> {formData.name || "-"}</div>
+                  <div><span className="font-medium">UHID:</span> {selectedPatient?.uhid || formData.uhid || "-"}</div>
+                  <div><span className="font-medium">Age / Sex:</span> {`${formData.age || "-"} / ${genderOptions.find(g=>g.value===formData.gender)?.label || "-"}`}</div>
+                  <div><span className="font-medium">Phone:</span> {formData.phone || "-"}</div>
+                  <div className="md:col-span-2"><span className="font-medium">Address:</span> {formData.address || "-"}</div>
+                  {formData.mrd ? (<div><span className="font-medium">MRD:</span> {formData.mrd}</div>) : null}
+                  <div><span className="font-medium">TPA:</span> {formData.tpa ? "Yes" : "No"}</div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-purple-200">
+                <CardHeader>
+                  <CardTitle className="text-purple-800">Admission Details</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div><span className="font-medium">Admission Source:</span> {admissionSourceOptions.find(o=>o.value===formData.admissionSource)?.label || "-"}</div>
+                  <div><span className="font-medium">Admission Type:</span> {admissionTypeOptions.find(o=>o.value===formData.admissionType)?.label || "-"}</div>
+                  <div><span className="font-medium">Date:</span> {formData.date}</div>
+                  <div><span className="font-medium">Time:</span> {formData.time}</div>
+                  {formData.admissionSource === "referral" ? (
+                    <div className="md:col-span-2"><span className="font-medium">Referral Doctor:</span> {formData.referralDoctor || "-"}</div>
+                  ) : null}
+                  <div className="md:col-span-2"><span className="font-medium">Under Care Of:</span> {formData.underCareOfDoctor || "-"}</div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-orange-200">
+                <CardHeader>
+                  <CardTitle className="text-orange-800">Room & Bed</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div><span className="font-medium">Room Type:</span> {roomTypeOptions.find(o=>o.value===formData.roomType)?.label || "-"}</div>
+                  <div>
+                    <span className="font-medium">Bed:</span> {(() => {
+                      const b = beds.find(bed => bed.id === formData.bed)
+                      return b ? `Bed ${b.bed_number} - ${b.bed_type}` : "-"
+                    })()}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  You can also download the admission letter directly:
+                </div>
+                <IPDSignaturePDF
+                  data={{
+                    uhid: selectedPatient?.uhid || formData.uhid || "",
+                    name: formData.name || "",
+                    phone: String(formData.phone || ""),
+                    age: Number(formData.age || 0),
+                    ageUnit: formData.ageUnit,
+                    gender: String(formData.gender || ""),
+                    address: String(formData.address || ""),
+                    relativeName: formData.relativeName,
+                    relativePhone: formData.relativePhone || null,
+                    relativeAddress: formData.relativeAddress || null,
+                    admissionSource: formData.admissionSource,
+                    admissionType: formData.admissionType,
+                    referralDoctor: formData.referralDoctor || "",
+                    underCareOfDoctor: formData.underCareOfDoctor || "",
+                    depositAmount: formData.depositAmount,
+                    paymentMode: formData.paymentMode,
+                    bed: formData.bed || 0,
+                    roomType: formData.roomType,
+                    date: formData.date,
+                    time: formData.time,
+                    paymentDetails: null,
+                    serviceDetails: null,
+                    mrd: formData.mrd || null,
+                    tpa: formData.tpa || false,
+                  }}
+                  genderOptions={genderOptions}
+                  admissionSourceOptions={admissionSourceOptions}
+                  admissionTypeOptions={admissionTypeOptions}
+                  paymentModeOptions={paymentModeOptions}
+                  roomTypeOptions={roomTypeOptions}
+                  doctors={allDoctors}
+                  beds={beds}
+                />
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowPreview(false)}>Back</Button>
+                <Button type="button" onClick={handleConfirmSubmit} className="bg-blue-600 hover:bg-blue-700">Confirm & Submit</Button>
+              </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
