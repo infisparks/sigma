@@ -50,14 +50,14 @@ interface KPIData {
   totalDeaths: number
   totalCasualtyOPD: number
   totalConsultantOPD: number
-  totalOtherOPD: number // NEW
+  totalOtherOPD: number
   totalXray: number
   totalDialysis: number
   totalPathology: number
-  totalBirths: number // NEW
-  birthsInOT: number // NEW
-  birthsInLabourRoom: number // NEW
-  totalTpaIpd: number // New field for total TPA IPD
+  totalBirths: number
+  birthsInOT: number
+  birthsInLabourRoom: number
+  totalTpaIpd: number
 }
 
 interface BedManagement {
@@ -94,14 +94,14 @@ const DPRPage = () => {
     totalDeaths: 0,
     totalCasualtyOPD: 0,
     totalConsultantOPD: 0,
-    totalOtherOPD: 0, // NEW
+    totalOtherOPD: 0,
     totalXray: 0,
     totalDialysis: 0,
     totalPathology: 0,
-    totalBirths: 0, // NEW
-    birthsInOT: 0, // NEW
-    birthsInLabourRoom: 0, // NEW
-    totalTpaIpd: 0, // New field for total TPA IPD
+    totalBirths: 0,
+    birthsInOT: 0,
+    birthsInLabourRoom: 0,
+    totalTpaIpd: 0,
   })
 
   const [bedManagement, setBedManagement] = useState<BedManagement[]>([])
@@ -113,6 +113,8 @@ const DPRPage = () => {
       const { start, end } = getDayRangeForSupabase(selectedDate)
 
       // --- Fetching data from Supabase ---
+      
+      // 1. OPD Appointments
       const { data: opdAppointments, error: opdError } = await supabase
         .from("opd_registration")
         .select(`
@@ -130,7 +132,7 @@ const DPRPage = () => {
         throw opdError
       }
 
-      // Fetch IPD admissions that *began* on the selected date
+      // 2. IPD Admissions
       const { data: ipdAdmissions, error: ipdError } = await supabase
         .from("ipd_registration")
         .select(`
@@ -147,7 +149,7 @@ const DPRPage = () => {
         throw ipdError
       }
 
-      // Fetch total TPA IPD registrations
+      // 3. Total TPA IPD registrations
       const { data: tpaIpdData, error: tpaIpdError } = await supabase
         .from("ipd_registration")
         .select("ipd_id")
@@ -159,7 +161,7 @@ const DPRPage = () => {
         throw tpaIpdError
       }
 
-      // Fetch all IPD registrations that were active on the selected date for accurate bed management
+      // 4. Active IPD Registrations (for Bed Management)
       const { data: activeIpdRegistrations, error: activeIpdError } = await supabase.from("ipd_registration").select(`
           ipd_id,
           admission_date,
@@ -172,7 +174,8 @@ const DPRPage = () => {
         console.error("Supabase Active IPD fetch error:", activeIpdError)
         throw activeIpdError
       }
-
+      
+      // 5. OT Procedures
       const { data: otProcedures, error: otError } = await supabase
         .from("ot_details")
         .select(`
@@ -188,13 +191,14 @@ const DPRPage = () => {
         throw otError
       }
 
-      const { data: beds, error: bedError } = await supabase.from("bed_management").select("id, status, room_type") // Ensure 'id' is selected for bed matching
+      // 6. Bed Management
+      const { data: beds, error: bedError } = await supabase.from("bed_management").select("id, status, room_type")
       if (bedError) {
         console.error("Supabase Beds fetch error:", bedError)
         throw bedError
       }
 
-      // Fetch discharge summaries for discharges on the selected date, including discharge_type
+      // 7. Discharge Summaries
       const { data: dischargeSummaries, error: dischargeError } = await supabase
         .from("discharge_summaries")
         .select(`
@@ -210,7 +214,7 @@ const DPRPage = () => {
         throw dischargeError
       }
 
-      // NEW: Fetch OT/Labour Room data specifically for baby births
+      // 8. Baby Births
       const { data: babyBirthsData, error: babyBirthsError } = await supabase
         .from("ot_details")
         .select(`
@@ -227,6 +231,7 @@ const DPRPage = () => {
         throw babyBirthsError
       }
 
+      // 9. Pathology (zregistration)
       const { data: pathologyData, error: pathologyError } = await supabase
         .from("zregistration")
         .select("id")
@@ -237,15 +242,33 @@ const DPRPage = () => {
         console.error("Supabase Pathology fetch error:", pathologyError)
         throw pathologyError
       }
-
       const totalPathology = pathologyData?.length || 0
+      
+      // 10. X-ray (x - raydetail) - FIX APPLIED HERE
+      const { data: xrayData, error: xrayError } = await supabase
+        .from("x-raydetail") // Corrected table name based on schema
+        .select("id")
+        .gte("created_at", start)
+        .lte("created_at", end)
 
+      if (xrayError) {
+        console.error("Supabase X-ray fetch error:", xrayError)
+        // Set an alert for the error but don't stop the whole process
+        currentAlerts.push({
+            type: "warning",
+            message: `Failed to fetch X-ray data from Supabase. Error: ${xrayError.message}`,
+            icon: AlertTriangle,
+        })
+      }
+      const totalXray = xrayData?.length || 0
+      
+      
       // --- KPI Calculations ---
-      const totalOPD = opdAppointments?.length || 0
-
+      
+      // OPD Breakdown & Dialysis Count
       let totalCasualtyOPD = 0
       let totalConsultantOPD = 0
-      let totalOtherOPD = 0 // Initialize new counter
+      let totalOtherOPD = 0
       let totalDialysis = 0
 
       const countedOpdIds = new Set() // To track unique OPD appointments
@@ -264,17 +287,10 @@ const DPRPage = () => {
             if (serviceType === "casualty") {
               isCasualty = true
               if (service.service?.toLowerCase().includes("dialysis")) {
-                totalDialysis++
+                totalDialysis++ // Count Dialysis as a service
               }
             } else if (serviceType === "consultation") {
               isConsultation = true
-            }
-            // X-ray count can still be per service, as per original logic if not tied to unique appointments
-            if (serviceType === "xray") {
-              // We keep this as is, as X-ray count might be a service count, not an appointment count
-              // If X-ray also needs to be per unique appointment, its logic would need adjustment too.
-              // For now, it remains a service count if multiple X-rays can be in one appointment.
-              // totalXray++; // This was moved out of the loop and handled by API call
             }
           })
         }
@@ -317,44 +333,8 @@ const DPRPage = () => {
 
       const totalOT = majorOT + minorOT
 
-      // Fetch X-ray count from external API
-      let totalXray = 0
-      try {
-        const xrayApiDate = format(parseISO(selectedDate), "dd-MM-yyyy")
-        const hospitalName = process.env.NEXT_PUBLIC_LAB_HOSPITAL_NAME || "Gautami Medford NX Hospital"
-
-        if (!process.env.NEXT_PUBLIC_LAB_API_KEY) {
-          console.error("NEXT_PUBLIC_LAB_API_KEY is not set. Skipping X-ray count API call.")
-          return
-        }
-
-        const res = await fetch("https://labapi.infispark.in/rest/v1/rpc/get_registration_count_xray", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: process.env.NEXT_PUBLIC_LAB_API_KEY,
-            Authorization: `Bearer ${process.env.NEXT_PUBLIC_LAB_API_KEY}`,
-          },
-          body: JSON.stringify({ p_date: xrayApiDate, p_hospital: hospitalName }),
-        })
-
-        if (res.ok) {
-          const json = await res.json()
-          // Assuming the API returns an array with the count in the first element
-          if (typeof json === "number") {
-            totalXray = json
-          } else if (json && Array.isArray(json) && json.length > 0 && typeof json[0].count === "number") {
-            totalXray = json[0].count
-          } else {
-            console.warn("X-ray API response format unexpected:", json)
-          }
-        } else {
-          console.warn("Failed to fetch X-ray count from API:", res.status, res.statusText)
-        }
-      } catch (e) {
-        console.warn("Error while fetching X-ray count:", e)
-      }
-
+      
+      // --- Set KPI Data ---
       setKpiData({
         totalOPDAppointments: finalTotalOPDAppointments,
         totalIPDAdmissions: totalIPD,
@@ -366,13 +346,13 @@ const DPRPage = () => {
         totalCasualtyOPD: totalCasualtyOPD,
         totalConsultantOPD: totalConsultantOPD,
         totalOtherOPD: totalOtherOPD,
-        totalXray: totalXray,
+        totalXray: totalXray, // Now correctly fetched
         totalDialysis: totalDialysis,
-        totalPathology,
-        totalBirths: babyBirthsData?.length || 0, // Calculate total births
-        birthsInOT: babyBirthsData?.filter((b) => b.location_type === "OT").length || 0, // Calculate births in OT
-        birthsInLabourRoom: babyBirthsData?.filter((b) => b.location_type === "Labour Room").length || 0, // Calculate births in Labour Room
-        totalTpaIpd: tpaIpdData?.length || 0, // Calculate total TPA IPD
+        totalPathology: totalPathology, // Already correctly fetched
+        totalBirths: babyBirthsData?.length || 0,
+        birthsInOT: babyBirthsData?.filter((b) => b.location_type === "OT").length || 0,
+        birthsInLabourRoom: babyBirthsData?.filter((b) => b.location_type === "Labour Room").length || 0,
+        totalTpaIpd: tpaIpdData?.length || 0,
       })
 
       // --- Bed Management Tab Data Calculation for the selected date ---
@@ -829,6 +809,12 @@ const DPRPage = () => {
             <div className="val">{kpiData.totalPathology}</div>
             <div className="label">Pathology</div>
           </div>
+          
+          <div className="kpi">
+            <div className="val">{kpiData.totalTpaIpd}</div>
+            <div className="label">TPA IPD</div>
+          </div>
+          
         </div>
 
         {/* BEDS */}
@@ -936,17 +922,16 @@ const DPRPage = () => {
       const caption = `*Daily Performance Report - ${format(parseISO(selectedDate), "EEEE, MMMM dd, yyyy")}*
 
 📈 *Key Performance Indicators:*
-- Total OPD Appointments: *${kpiData.totalOPDAppointments}* 
-    Casualty: ${kpiData.totalCasualtyOPD}, 
+- Total OPD Appointments: *${kpiData.totalOPDAppointments}* Casualty: ${kpiData.totalCasualtyOPD}, 
     Consultant: ${kpiData.totalConsultantOPD}, 
     Other: ${kpiData.totalOtherOPD}
 
 - Total IPD Admissions: *${kpiData.totalIPDAdmissions}*
+- Total TPA IPD: *${kpiData.totalTpaIpd}*
 
 - Total Discharges: *${kpiData.totalDischarges}*
 
-- Total OT Procedures: *${kpiData.totalOTProcedures}* 
-    Major: ${kpiData.totalMajorOT},
+- Total OT Procedures: *${kpiData.totalOTProcedures}* Major: ${kpiData.totalMajorOT},
     Minor: ${kpiData.totalMinorOT}
 
 - Total Deaths: *${kpiData.totalDeaths}*
@@ -1216,7 +1201,7 @@ _Generated automatically from the Inficare Management System._`
             </CardContent>
           </Card>
 
-          {/* NEW: X-ray KPI Card */}
+          {/* X-ray KPI Card - FIXED */}
           <Card className="rounded-xl border bg-card text-card-foreground shadow-sm hover:shadow-md transition-shadow duration-300 ease-in-out">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-amber-800">Total X-ray</CardTitle>
@@ -1228,7 +1213,7 @@ _Generated automatically from the Inficare Management System._`
             </CardContent>
           </Card>
 
-          {/* NEW: Dialysis KPI Card */}
+          {/* Dialysis KPI Card */}
           <Card className="rounded-xl border bg-card text-card-foreground shadow-sm hover:shadow-md transition-shadow duration-300 ease-in-out">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-cyan-800">Total Dialysis</CardTitle>
@@ -1240,7 +1225,7 @@ _Generated automatically from the Inficare Management System._`
             </CardContent>
           </Card>
 
-          {/* NEW: Pathology KPI Card */}
+          {/* Pathology KPI Card */}
           <Card className="rounded-xl border bg-card text-card-foreground shadow-sm hover:shadow-md transition-shadow duration-300 ease-in-out">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-rose-800">Total Pathology</CardTitle>
@@ -1252,7 +1237,7 @@ _Generated automatically from the Inficare Management System._`
             </CardContent>
           </Card>
 
-          {/* NEW: Total Births KPI Card */}
+          {/* Total Births KPI Card */}
           <Card className="rounded-xl border bg-card text-card-foreground shadow-sm hover:shadow-md transition-shadow duration-300 ease-in-out">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-pink-800">Total Births</CardTitle>
@@ -1273,7 +1258,7 @@ _Generated automatically from the Inficare Management System._`
               </div>
             </CardContent>
           </Card>
-          {/* NEW: Total TPA IPD Card */}
+          {/* Total TPA IPD Card */}
           <Card className="rounded-xl border bg-card text-card-foreground shadow-sm hover:shadow-md transition-shadow duration-300 ease-in-out">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-purple-800">Total TPA IPD</CardTitle>
