@@ -2,8 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useForm, SubmitHandler } from "react-hook-form";
-// FIX 1: Import File as GeminiFile to avoid conflict with global DOM File type
+import { useForm, SubmitHandler, useFieldArray } from "react-hook-form"; 
 import { GoogleGenAI, File as GeminiFile } from "@google/genai"; 
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -23,6 +22,7 @@ import {
   Download,
   Send,
   Loader2,
+  Plus, 
 } from "lucide-react";
 import {
   Dialog,
@@ -33,14 +33,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, parse, isValid } from "date-fns"; 
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { v4 as uuidv4 } from "uuid";
 import Layout from "@/components/global/Layout";
 
-// 🔴 ⚠️ WARNING: API KEY EXPOSED FOR TESTING ONLY ⚠️ 🔴
-// Replace with your actual key if testing, but NEVER deploy this to production.
 const GEMINI_API_KEY = "AIzaSyAcw76IAvX5ZuJtrSGzXqy594TpU3BkCxA"; 
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
@@ -57,15 +55,21 @@ interface PatientDetail {
   uhid: string;
 }
 
+interface MedicineItem {
+  medicine_name: string;
+  dosage: string;
+  duration: string;
+}
+
 interface OPDPrescriptionRow {
   id: string;
   opd_id: number;
   uhid: string;
-  symptoms: string | null;
-  known_case_of: string | null;
-  treatment: string | null;
-  past_history: string | null;
-  follow_up: string | null;
+  problems: string | null;
+  medicines: MedicineItem[] | null; 
+  advice_given: string | null;
+  follow_up_date: string | null; 
+  
   created_at: string;
   created_by: string | null;
   updated_at: string | null;
@@ -73,62 +77,67 @@ interface OPDPrescriptionRow {
 }
 
 interface PrescriptionFormInputs {
-  symptoms: string;
-  known_case_of: string;
-  treatment: string;
-  past_history: string;
-  follow_up: string;
+  problems: string;
+  medicines: MedicineItem[];
+  advice_given: string;
+  follow_up_date: string;
 }
 // --- End Type Definitions ---
 
 // --- Core Gemini API Call Function (Client-Side) ---
 async function getPrescriptionFromAudio(audioBlob: Blob): Promise<PrescriptionFormInputs> {
-    
-    // 1. Convert Blob to File object for Gemini's SDK (using the aliased import)
     const audioFile = new File([audioBlob], `conversation-${uuidv4()}.webm`, { type: 'audio/webm' });
-
     let uploadedFile: GeminiFile | null = null;
 
     try {
-        // 2. Upload audio file to Gemini's Files API
         toast.loading("Uploading audio to Gemini...", { id: 'gemini-upload' });
-        // The File constructor here is the global DOM one, which works with the Gemini SDK.
         uploadedFile = await ai.files.upload({
             file: audioFile,
             config: { mimeType: 'audio/webm' }
         });
         toast.success("Audio uploaded successfully.", { id: 'gemini-upload' });
         
-        // 3. Define the structured prompt and JSON schema
+        // NEW PROMPT: Structured for the new format
         const prompt = `
             You are a medical scribe. Your task is to analyze the doctor-patient conversation in the provided audio file.
             Extract the following details and return them STRICTLY as a clean JSON object.
             
-            - symptoms: The main complaints and clinical signs mentioned.
-            - known_case_of: Relevant chronic conditions or known history.
-            - treatment: The prescribed plan, including medications, dosages, and any investigations.
-            - past_history: Any significant past medical or surgical history.
-            - follow-up: Instructions for the next visit or conditions for returning.
-            
+            - problems: The main complaints or diagnoses mentioned by the doctor.
+            - medicines: An array of prescribed medications. Each item in the array should have 'medicine_name', 'dosage', and 'duration'.
+            - advice_given: Specific lifestyle, dietary, or general health advice given. Each piece of advice should be a separate line, ideally prefixed with a hyphen for bullet points (e.g., "- Avoid oily and spicy food\n- Get plenty of rest").
+            - follow_up_date: The date for the next visit. If a specific date is mentioned, provide it in 'YYYY-MM-DD' format. If no date is given, return "N/A".
+
+            Ensure all fields are present in the JSON output, even if empty or "N/A".
             Format the output only as JSON.
         `;
 
+        // NEW SCHEMA: Structured for the new format
         const prescriptionSchema = {
             type: "object",
             properties: {
-                symptoms: { type: "string", description: "Clinical symptoms and complaints." },
-                known_case_of: { type: "string", description: "Known case of or relevant medical history." },
-                treatment: { type: "string", description: "Full treatment plan, including drugs, dosage, and investigations." },
-                past_history: { type: "string", description: "Relevant past medical history." },
-                follow_up: { type: "string", description: "Follow-up instructions or next visit details." },
+                problems: { type: "string", description: "Main complaints or diagnoses." },
+                medicines: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            medicine_name: { type: "string", description: "Name of the medicine (e.g., 'Tab. Demo Medicine 1')." },
+                            dosage: { type: "string", description: "Dosage instructions (e.g., '1 Morning, 1 Night (Before Food)')." },
+                            duration: { type: "string", description: "Duration of medication (e.g., '10 Days (Tot:20 Tab)')." },
+                        },
+                        required: ["medicine_name", "dosage", "duration"]
+                    },
+                    description: "Array of prescribed medicines with dosage and duration details."
+                },
+                advice_given: { type: "string", description: "Specific lifestyle, dietary, or general health advice, line-separated for bullet points." },
+                follow_up_date: { type: "string", description: "Date for follow-up (YYYY-MM-DD or 'N/A')." },
             },
-            required: ["symptoms", "known_case_of", "treatment", "past_history", "follow_up"]
+            required: ["problems", "medicines", "advice_given", "follow_up_date"]
         };
 
-        // 4. Call generateContent with the uploaded file and structured output config
         toast.loading("Analyzing conversation with AI...", { id: 'gemini-analysis' });
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash", // Good for multi-modal tasks
+            model: "gemini-2.5-flash", 
             contents: [
                 {
                     parts: [
@@ -137,34 +146,34 @@ async function getPrescriptionFromAudio(audioBlob: Blob): Promise<PrescriptionFo
                     ]
                 }
             ],
+            // FIX: Nest responseMimeType, responseSchema, and maxOutputTokens under 'config'
             config: {
                 responseMimeType: "application/json",
                 responseSchema: prescriptionSchema,
-                // Increase token limit for potentially long outputs (treatment fields)
                 maxOutputTokens: 2048, 
             },
         });
         toast.success("AI analysis complete!", { id: 'gemini-analysis' });
         
-        // FIX 2: Check for undefined response.text
         if (!response.text) {
              throw new Error("AI returned an empty response text (content likely blocked).");
         }
 
-        // 5. Parse and return the JSON response
         const jsonText = response.text.trim().replace(/^```json|```$/g, '').trim();
-        return JSON.parse(jsonText) as PrescriptionFormInputs;
+        // Ensure medicines is always an array
+        const parsedData = JSON.parse(jsonText) as PrescriptionFormInputs;
+        if (!Array.isArray(parsedData.medicines)) {
+            parsedData.medicines = [];
+        }
+        return parsedData;
 
     } catch (error) {
         console.error("Gemini API Error:", error);
         toast.error(`AI analysis failed: ${(error as Error).message}`, { id: 'gemini-analysis' });
         throw new Error("Failed to generate prescription from audio.");
     } finally {
-        // 6. Clean up the uploaded file from the Gemini Files API
-        // FIX 3: Ensure uploadedFile and uploadedFile.name exist before deleting
         if (uploadedFile && uploadedFile.name) {
             try {
-                // Deleting the file ensures we don't hold on to patient audio data unnecessarily.
                 await ai.files.delete({ name: uploadedFile.name });
                 console.log(`Cleaned up Gemini file: ${uploadedFile.name}`);
             } catch (cleanupError) {
@@ -189,7 +198,7 @@ export default function OPDPrescriptionPage() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyModalItems, setHistoryModalItems] = useState<OPDPrescriptionRow[]>([]);
 
-  // NEW: Audio Recording State
+  // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -198,35 +207,43 @@ export default function OPDPrescriptionPage() {
   // Refs
   const prescriptionContentRef = useRef<HTMLDivElement>(null);
 
-  const { register, handleSubmit, reset, setValue, getValues } = useForm<PrescriptionFormInputs>({
-    defaultValues: { symptoms: "", known_case_of: "", treatment: "", past_history: "", follow_up: "" },
+  // Form Management with React Hook Form
+  const { register, handleSubmit, reset, setValue, control } = useForm<PrescriptionFormInputs>({
+    defaultValues: {
+      problems: "",
+      medicines: [], // Initialize medicines as an empty array
+      advice_given: "",
+      follow_up_date: "",
+    },
+  });
+
+  // Use useFieldArray for dynamic medicine inputs
+  const { fields: medicineFields, append: appendMedicine, remove: removeMedicine } = useFieldArray({
+    control,
+    name: "medicines",
   });
 
   // --- Audio Recording Logic ---
   const startRecording = async () => {
     if (isRecording || isProcessingAudio) return;
     try {
-      // Check for MediaRecorder support
       if (!window.MediaRecorder || !navigator.mediaDevices) {
         toast.error("Recording is not supported by your browser.");
         return;
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Use 'audio/webm' as it is widely supported and efficient for MediaRecorder
       mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       audioChunksRef.current = [];
 
-      mediaRecorderRef.current.ondataavailable = (event) => {
+      mediaRecorderRef.current.ondataavailable = (event: BlobEvent) => { 
         if (event.data.size > 0) {
             audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorderRef.current.onstop = () => {
-        // Create the final audio blob
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        // Stop all tracks from the stream to release the mic
         stream.getTracks().forEach(track => track.stop()); 
         
         if (audioBlob.size > 0) {
@@ -261,15 +278,13 @@ export default function OPDPrescriptionPage() {
     }
 
     try {
-      // Call the AI service to process the audio
       const aiData = await getPrescriptionFromAudio(audioBlob);
 
       // Populate form with AI results
-      setValue("symptoms", aiData.symptoms);
-      setValue("known_case_of", aiData.known_case_of);
-      setValue("treatment", aiData.treatment);
-      setValue("past_history", aiData.past_history);
-      setValue("follow_up", aiData.follow_up);
+      setValue("problems", aiData.problems || "");
+      setValue("medicines", aiData.medicines || []); // Ensure it's an array
+      setValue("advice_given", aiData.advice_given || "");
+      setValue("follow_up_date", aiData.follow_up_date || "");
       
       toast.success("AI analysis complete! Prescription fields updated. Please review before saving.");
 
@@ -281,7 +296,7 @@ export default function OPDPrescriptionPage() {
   };
   // --- END Audio Recording Logic ---
   
-  // --- Form Submission Logic (Remains mostly the same) ---
+  // --- Form Submission Logic ---
   const onSubmit: SubmitHandler<PrescriptionFormInputs> = async (formData) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -296,23 +311,33 @@ export default function OPDPrescriptionPage() {
         return;
       }
 
-      const prescriptionPayload = {
+      // FIX: Use Partial<OPDPrescriptionRow> for a more flexible type, 
+      // ensuring we only include necessary fields for the DB operation
+      let prescriptionPayload: Partial<OPDPrescriptionRow> = {
         opd_id: opdNum,
         uhid: patientUHID,
-        symptoms: formData.symptoms,
-        known_case_of: formData.known_case_of,
-        treatment: formData.treatment,
-        past_history: formData.past_history,
-        follow_up: formData.follow_up,
+        problems: formData.problems,
+        medicines: formData.medicines, 
+        advice_given: formData.advice_given,
+        follow_up_date: formData.follow_up_date,
         updated_at: new Date().toISOString(),
         updated_by: currentUserEmail,
       };
 
-      const { error } = currentPrescription
-        ? await supabase.from("opd_prescriptions").update(prescriptionPayload).eq("opd_id", opdNum)
-        : await supabase.from("opd_prescriptions").insert({ ...prescriptionPayload, created_by: currentUserEmail });
-      
-      if (error) throw new Error(error.message);
+      if (currentPrescription) {
+        // Update: created_by and created_at remain unchanged
+        const { error } = await supabase.from("opd_prescriptions").update(prescriptionPayload).eq("opd_id", opdNum);
+        if (error) throw new Error(error.message);
+      } else {
+        // Insert: Add created_by and created_at
+        const insertPayload = {
+            ...prescriptionPayload,
+            created_by: currentUserEmail,
+            created_at: new Date().toISOString(), // Add created_at for new records
+        };
+        const { error } = await supabase.from("opd_prescriptions").insert(insertPayload);
+        if (error) throw new Error(error.message);
+      }
       
       toast.success("Prescription saved successfully!");
       await fetchPatientAndPrescriptionData();
@@ -334,18 +359,27 @@ export default function OPDPrescriptionPage() {
       setPatientData(opdData.patient_detail as unknown as PatientDetail);
       
       const { data: presData, error: presError } = await supabase.from("opd_prescriptions").select("*").eq("opd_id", opdNum).single();
-      if (presError && presError.code !== "PGRST116") { toast.error("Failed to load prescription."); }
+      if (presError && presError.code !== "PGRST116") { 
+        toast.info("No existing prescription found for this OPD ID. Starting new one.");
+        setCurrentPrescription(null); 
+        reset(); 
+      }
       else if (presData) {
         setCurrentPrescription(presData);
-        setValue("symptoms", presData.symptoms || "");
-        setValue("known_case_of", presData.known_case_of || "");
-        setValue("treatment", presData.treatment || "");
-        setValue("past_history", presData.past_history || "");
-        setValue("follow_up", presData.follow_up || "");
+        // Map fetched data to form fields
+        setValue("problems", presData.problems || "");
+        setValue("medicines", (presData.medicines || []) as MedicineItem[]); 
+        setValue("advice_given", presData.advice_given || "");
+        setValue("follow_up_date", presData.follow_up_date || "");
       } else {
-        setCurrentPrescription(null); reset();
+        setCurrentPrescription(null); 
+        reset(); 
       }
-    } catch (error) { toast.error("An unexpected error occurred."); router.push("/opd/list/opdlistprescripitono"); }
+    } catch (error) { 
+      console.error("Error fetching patient/prescription data:", error);
+      toast.error("An unexpected error occurred while fetching data."); 
+      router.push("/opd/list/opdlistprescripitono"); 
+    }
     finally { setIsLoading(false); }
   }, [opd_id, router, setValue, reset]);
 
@@ -360,11 +394,16 @@ export default function OPDPrescriptionPage() {
 
   // --- Helper Functions ---
   const clearPrescription = () => {
-    reset();
+    reset({
+      problems: "",
+      medicines: [],
+      advice_given: "",
+      follow_up_date: "",
+    });
     toast.info("Form cleared.");
   };
 
-  // --- PDF & WhatsApp Functions (Kept as is) ---
+  // --- PDF & WhatsApp Functions ---
   const generatePDFBlob = useCallback(async (prescriptionData: OPDPrescriptionRow | null) => {
       const dataToUse = prescriptionData || currentPrescription;
       if (!prescriptionContentRef.current || !patientData || !dataToUse) return null;
@@ -378,17 +417,80 @@ export default function OPDPrescriptionPage() {
       prescriptionContentRef.current.style.background = `url(${letterheadImage}) no-repeat center top / contain`;
       prescriptionContentRef.current.style.color = "#000";
       
-      // Temporarily set the inner HTML for PDF generation
-      prescriptionContentRef.current.innerHTML = `
+      // Patient Header Section (remains largely same)
+      const patientHeaderHtml = `
         <div style="display: flex; justify-content: space-between; margin-bottom: 8mm; border-bottom: 1px solid #ccc; padding-bottom: 2mm;">
-          <div><p><strong>Name:</strong> ${patientData.name}</p><p><strong>UHID:</strong> ${patientData.uhid}</p><p><strong>OPD ID:</strong> ${dataToUse.opd_id}</p></div>
-          <div style="text-align: right;"><p><strong>Date:</strong> ${format(parseISO(dataToUse.created_at), "MMM dd, yyyy")}</p><p><strong>Age:</strong> ${patientData.age} ${patientData.age_unit || ""}</p><p><strong>Gender:</strong> ${patientData.gender}</p></div>
+          <div><p style="font-size: 10pt;"><strong>Name:</strong> ${patientData.name}</p><p style="font-size: 10pt;"><strong>UHID:</strong> ${patientData.uhid}</p><p style="font-size: 10pt;"><strong>OPD ID:</strong> ${dataToUse.opd_id}</p></div>
+          <div style="text-align: right;"><p style="font-size: 10pt;"><strong>Date:</strong> ${format(parseISO(dataToUse.created_at), "MMM dd, yyyy")}</p><p style="font-size: 10pt;"><strong>Age:</strong> ${patientData.age} ${patientData.age_unit || ""}</p><p style="font-size: 10pt;"><strong>Gender:</strong> ${patientData.gender}</p></div>
         </div>
-        <div style="margin-bottom: 5mm;"><h3 style="font-size: 13pt; margin-bottom: 1mm; border-bottom: 1px dashed #ccc;">Clinical Symptoms</h3><p>${dataToUse.symptoms || "N/A"}</p></div>
-        <div style="margin-bottom: 5mm;"><h3 style="font-size: 13pt; margin-bottom: 1mm; border-bottom: 1px dashed #ccc;">Known Case of/History</h3><p>${dataToUse.known_case_of || "N/A"}</p></div>
-        <div style="margin-bottom: 5mm;"><h3 style="font-size: 13pt; margin-bottom: 1mm; border-bottom: 1px dashed #ccc;">Treatment</h3><p>${dataToUse.treatment || "N/A"}</p></div>
-        <div style="margin-bottom: 5mm;"><h3 style="font-size: 13pt; margin-bottom: 1mm; border-bottom: 1px dashed #ccc;">Past History</h3><p>${dataToUse.past_history || "N/A"}</p></div>
-        <div style="margin-bottom: 5mm;"><h3 style="font-size: 13pt; margin-bottom: 1mm; border-bottom: 1px dashed #ccc;">Follow-up</h3><p>${dataToUse.follow_up || "N/A"}</p></div>
+      `;
+
+      // Problems/Diagnosis Section
+      const problemsHtml = dataToUse.problems 
+        ? `<div style="margin-bottom: 5mm;"><h3 style="font-size: 13pt; margin-bottom: 1mm; border-bottom: 1px dashed #ccc;">Problems / Diagnosis</h3><p style="font-size: 10pt;">${dataToUse.problems}</p></div>` 
+        : '';
+
+      // Medicines Table Section
+      const medicinesHtml = dataToUse.medicines && dataToUse.medicines.length > 0
+        ? `
+          <div style="margin-bottom: 5mm;"><h3 style="font-size: 13pt; margin-bottom: 2mm; border-bottom: 1px dashed #ccc;">Medicines Prescribed</h3>
+            <table style="width:100%; border-collapse: collapse; margin-top: 2mm;">
+              <thead>
+                <tr style="background-color: #f2f2f2;">
+                  <th style="border: 1px solid #ddd; padding: 4px; text-align: left; font-size: 10pt; width: 40%;">Medicine Name</th>
+                  <th style="border: 1px solid #ddd; padding: 4px; text-align: left; font-size: 10pt; width: 35%;">Dosage</th>
+                  <th style="border: 1px solid #ddd; padding: 4px; text-align: left; font-size: 10pt; width: 25%;">Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${dataToUse.medicines.map((med, index) => `
+                  <tr>
+                    <td style="border: 1px solid #ddd; padding: 4px; font-size: 9pt;">${index + 1}) ${med.medicine_name}</td>
+                    <td style="border: 1px solid #ddd; padding: 4px; font-size: 9pt;">${med.dosage}</td>
+                    <td style="border: 1px solid #ddd; padding: 4px; font-size: 9pt;">${med.duration}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : '';
+
+      // Advice Given Section (formatted with bullet points)
+      const adviceGivenLines = dataToUse.advice_given ? dataToUse.advice_given.split('\n').filter(line => line.trim() !== '') : [];
+      const adviceGivenHtml = adviceGivenLines.length > 0 
+        ? `
+          <div style="margin-bottom: 5mm;"><h3 style="font-size: 13pt; margin-bottom: 1mm; border-bottom: 1px dashed #ccc;">Advice Given</h3>
+            <ul style="list-style-type: disc; padding-left: 20px; margin-top: 2mm; margin-left: 5px;">
+              ${adviceGivenLines.map(line => `
+                <li style="font-size: 10pt; margin-bottom: 3px;">${line.startsWith('-') ? line.substring(1).trim() : line.trim()}</li>
+              `).join('')}
+            </ul>
+          </div>
+        ` : '';
+
+      // Follow-up Date Section
+      let formattedFollowUpDate = "N/A";
+      if (dataToUse.follow_up_date && dataToUse.follow_up_date !== "N/A") {
+        let parsedDate = parse(dataToUse.follow_up_date, 'yyyy-MM-dd', new Date());
+        if (!isValid(parsedDate)) {
+            parsedDate = parseISO(dataToUse.follow_up_date);
+        }
+        if (isValid(parsedDate)) {
+            formattedFollowUpDate = format(parsedDate, "MMM dd, yyyy");
+        }
+      }
+
+      const followUpHtml = `
+        <div style="margin-bottom: 5mm;"><h3 style="font-size: 13pt; margin-bottom: 1mm; border-bottom: 1px dashed #ccc;">Follow Up Date</h3><p style="font-size: 10pt;">${formattedFollowUpDate}</p></div>
+      `;
+
+      // Combine all parts for the PDF
+      prescriptionContentRef.current.innerHTML = `
+        ${patientHeaderHtml}
+        ${problemsHtml}
+        ${medicinesHtml}
+        ${adviceGivenHtml}
+        ${followUpHtml}
       `;
       
       const canvas = await html2canvas(prescriptionContentRef.current, { scale: 2 });
@@ -468,7 +570,7 @@ export default function OPDPrescriptionPage() {
             <p className="text-sm text-gray-600">OPD ID: {opd_id}</p>
           </CardHeader>
           <CardContent>
-            {/* NEW: Voice Recording and AI Processing Control */}
+            {/* Voice Recording and AI Processing Control */}
             <Button
               type="button"
               onClick={isRecording ? stopRecording : startRecording}
@@ -491,48 +593,81 @@ export default function OPDPrescriptionPage() {
             )}
             
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {/* Clinical Symptoms Input */}
+              {/* Problems / Diagnosis Input */}
               <div>
-                <label htmlFor="symptoms" className="block text-sm font-medium">1. Clinical Symptoms</label>
+                <label htmlFor="problems" className="block text-sm font-medium">1. Problems / Diagnosis</label>
                 <div className="relative">
-                  <Textarea id="symptoms" {...register("symptoms")} placeholder="AI results for symptoms will appear here. Manual edits possible." className="pr-10 text-sm min-h-[100px]" />
-                  <Button variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("symptoms", "")}><Trash2 className="h-4 w-4" /></Button>
+                  <Textarea id="problems" {...register("problems")} placeholder="AI results for problems/diagnosis will appear here. Manual edits possible." className="pr-10 text-sm min-h-[80px]" />
+                  <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("problems", "")}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
 
-              {/* Known Case of/History Input */}
+              {/* Medicines Table Input */}
+              <div className="border rounded-lg p-3">
+                <h3 className="font-semibold text-lg mb-3">2. Medicines Prescribed</h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Medicine Name</TableHead>
+                      <TableHead>Dosage</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead className="w-[40px]"></TableHead> 
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {medicineFields.length === 0 && (
+                      <TableRow><TableCell colSpan={4} className="text-center text-gray-500">No medicines added yet.</TableCell></TableRow>
+                    )}
+                    {medicineFields.map((field, index) => (
+                      <TableRow key={field.id}>
+                        <TableCell>
+                          <input 
+                            {...register(`medicines.${index}.medicine_name`)} 
+                            placeholder="e.g., Tab. Demo Medicine 1" 
+                            className="w-full p-1 border rounded text-sm" 
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <input 
+                            {...register(`medicines.${index}.dosage`)} 
+                            placeholder="e.g., 1 Morning, 1 Night" 
+                            className="w-full p-1 border rounded text-sm" 
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <input 
+                            {...register(`medicines.${index}.duration`)} 
+                            placeholder="e.g., 10 Days (Tot:20 Tab)" 
+                            className="w-full p-1 border rounded text-sm" 
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => removeMedicine(index)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <Button type="button" onClick={() => appendMedicine({ medicine_name: "", dosage: "", duration: "" })} className="mt-3 w-full" variant="outline">
+                  <Plus className="h-4 w-4 mr-2" /> Add Medicine
+                </Button>
+              </div>
+
+              {/* Advice Given Input */}
               <div>
-                <label htmlFor="known_case_of" className="block text-sm font-medium">2. Known Case of/History</label>
+                <label htmlFor="advice_given" className="block text-sm font-medium">3. Advice Given (Each line will be a bullet point in PDF)</label>
                 <div className="relative">
-                  <Textarea id="known_case_of" {...register("known_case_of")} placeholder="AI results for known history will appear here. Manual edits possible." className="pr-10 text-sm min-h-[100px]" />
-                  <Button variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("known_case_of", "")}><Trash2 className="h-4 w-4" /></Button>
+                  <Textarea id="advice_given" {...register("advice_given")} placeholder="e.g., - Avoid oily and spicy food&#10;- Get plenty of rest&#10;- Drink lots of water" className="pr-10 text-sm min-h-[100px]" />
+                  <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("advice_given", "")}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
 
-              {/* Treatment Input */}
+              {/* Follow-up Date Input */}
               <div>
-                <label htmlFor="treatment" className="block text-sm font-medium">3. Treatment (Meds, Investigations, etc.)</label>
+                <label htmlFor="follow_up_date" className="block text-sm font-medium">4. Follow-up Date</label>
                 <div className="relative">
-                  <Textarea id="treatment" {...register("treatment")} placeholder="AI results for treatment will appear here. Manual edits possible." className="pr-10 text-sm min-h-[150px]" />
-                  <Button variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("treatment", "")}><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              </div>
-
-              {/* Past History Input */}
-              <div>
-                <label htmlFor="past_history" className="block text-sm font-medium">4. Past History</label>
-                <div className="relative">
-                  <Textarea id="past_history" {...register("past_history")} placeholder="AI results for past history will appear here. Manual edits possible." className="pr-10 text-sm min-h-[100px]" />
-                  <Button variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("past_history", "")}><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              
-              {/* Follow-up Input */}
-              <div>
-                <label htmlFor="follow_up" className="block text-sm font-medium">5. Follow-up / Next Visit</label>
-                <div className="relative">
-                  <Textarea id="follow_up" {...register("follow_up")} placeholder="AI results for follow-up will appear here. Manual edits possible." className="pr-10 text-sm min-h-[100px]" />
-                  <Button variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("follow_up", "")}><Trash2 className="h-4 w-4" /></Button>
+                  <input type="date" id="follow_up_date" {...register("follow_up_date")} className="w-full p-2 border rounded text-sm pr-10" />
+                  <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("follow_up_date", "")}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
 
@@ -558,11 +693,11 @@ export default function OPDPrescriptionPage() {
                     {historyModalItems.length > 0 ? (
                       <div className="overflow-auto max-h-[60vh]">
                         <Table>
-                          <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Symptoms</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
-                          <TableBody>{historyModalItems.map((item) => (
+                          <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Problems</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                          <TableBody>{historyModalItems.map((item: OPDPrescriptionRow) => ( 
                               <TableRow key={item.id}>
                                 <TableCell>{format(parseISO(item.created_at), "MMM dd, yyyy")}</TableCell>
-                                <TableCell className="whitespace-normal max-w-[200px] overflow-hidden text-ellipsis">{item.symptoms}</TableCell>
+                                <TableCell className="whitespace-normal max-w-[200px] overflow-hidden text-ellipsis">{item.problems || "N/A"}</TableCell>
                                 <TableCell><Button size="sm" onClick={() => viewHistoryPrescription(item)}><Eye className="h-4 w-4 mr-1" /> View PDF</Button></TableCell>
                               </TableRow>
                             ))}
@@ -588,7 +723,7 @@ export default function OPDPrescriptionPage() {
           </CardContent>
         </Card>
 
-        {/* Hidden Div for PDF Generation (Kept as is) */}
+        {/* Hidden Div for PDF Generation */}
         <div style={{ position: "absolute", left: "-9999px", top: "-9999px" }}>
           <div ref={prescriptionContentRef} style={{ width: "210mm", minHeight: "297mm", padding: "60mm 15mm 15mm 15mm", color: "#000", fontFamily: "Arial, sans-serif", background: 'white' }}></div>
         </div>
