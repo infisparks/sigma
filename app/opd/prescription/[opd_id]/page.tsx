@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useForm, SubmitHandler } from "react-hook-form";
+// FIX 1: Import File as GeminiFile to avoid conflict with global DOM File type
+import { GoogleGenAI, File as GeminiFile } from "@google/genai"; 
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +21,8 @@ import {
   ArrowLeft,
   Eye,
   Download,
+  Send,
+  Loader2,
 } from "lucide-react";
 import {
   Dialog,
@@ -34,7 +38,12 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { v4 as uuidv4 } from "uuid";
 import Layout from "@/components/global/Layout";
-import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+
+// 🔴 ⚠️ WARNING: API KEY EXPOSED FOR TESTING ONLY ⚠️ 🔴
+// Replace with your actual key if testing, but NEVER deploy this to production.
+const GEMINI_API_KEY = "AIzaSyAcw76IAvX5ZuJtrSGzXqy594TpU3BkCxA"; 
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
 
 // --- Type Definitions ---
 interface PatientDetail {
@@ -72,6 +81,101 @@ interface PrescriptionFormInputs {
 }
 // --- End Type Definitions ---
 
+// --- Core Gemini API Call Function (Client-Side) ---
+async function getPrescriptionFromAudio(audioBlob: Blob): Promise<PrescriptionFormInputs> {
+    
+    // 1. Convert Blob to File object for Gemini's SDK (using the aliased import)
+    const audioFile = new File([audioBlob], `conversation-${uuidv4()}.webm`, { type: 'audio/webm' });
+
+    let uploadedFile: GeminiFile | null = null;
+
+    try {
+        // 2. Upload audio file to Gemini's Files API
+        toast.loading("Uploading audio to Gemini...", { id: 'gemini-upload' });
+        // The File constructor here is the global DOM one, which works with the Gemini SDK.
+        uploadedFile = await ai.files.upload({
+            file: audioFile,
+            config: { mimeType: 'audio/webm' }
+        });
+        toast.success("Audio uploaded successfully.", { id: 'gemini-upload' });
+        
+        // 3. Define the structured prompt and JSON schema
+        const prompt = `
+            You are a medical scribe. Your task is to analyze the doctor-patient conversation in the provided audio file.
+            Extract the following details and return them STRICTLY as a clean JSON object.
+            
+            - symptoms: The main complaints and clinical signs mentioned.
+            - known_case_of: Relevant chronic conditions or known history.
+            - treatment: The prescribed plan, including medications, dosages, and any investigations.
+            - past_history: Any significant past medical or surgical history.
+            - follow-up: Instructions for the next visit or conditions for returning.
+            
+            Format the output only as JSON.
+        `;
+
+        const prescriptionSchema = {
+            type: "object",
+            properties: {
+                symptoms: { type: "string", description: "Clinical symptoms and complaints." },
+                known_case_of: { type: "string", description: "Known case of or relevant medical history." },
+                treatment: { type: "string", description: "Full treatment plan, including drugs, dosage, and investigations." },
+                past_history: { type: "string", description: "Relevant past medical history." },
+                follow_up: { type: "string", description: "Follow-up instructions or next visit details." },
+            },
+            required: ["symptoms", "known_case_of", "treatment", "past_history", "follow_up"]
+        };
+
+        // 4. Call generateContent with the uploaded file and structured output config
+        toast.loading("Analyzing conversation with AI...", { id: 'gemini-analysis' });
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash", // Good for multi-modal tasks
+            contents: [
+                {
+                    parts: [
+                        { fileData: { mimeType: uploadedFile.mimeType, fileUri: uploadedFile.uri } },
+                        { text: prompt }
+                    ]
+                }
+            ],
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: prescriptionSchema,
+                // Increase token limit for potentially long outputs (treatment fields)
+                maxOutputTokens: 2048, 
+            },
+        });
+        toast.success("AI analysis complete!", { id: 'gemini-analysis' });
+        
+        // FIX 2: Check for undefined response.text
+        if (!response.text) {
+             throw new Error("AI returned an empty response text (content likely blocked).");
+        }
+
+        // 5. Parse and return the JSON response
+        const jsonText = response.text.trim().replace(/^```json|```$/g, '').trim();
+        return JSON.parse(jsonText) as PrescriptionFormInputs;
+
+    } catch (error) {
+        console.error("Gemini API Error:", error);
+        toast.error(`AI analysis failed: ${(error as Error).message}`, { id: 'gemini-analysis' });
+        throw new Error("Failed to generate prescription from audio.");
+    } finally {
+        // 6. Clean up the uploaded file from the Gemini Files API
+        // FIX 3: Ensure uploadedFile and uploadedFile.name exist before deleting
+        if (uploadedFile && uploadedFile.name) {
+            try {
+                // Deleting the file ensures we don't hold on to patient audio data unnecessarily.
+                await ai.files.delete({ name: uploadedFile.name });
+                console.log(`Cleaned up Gemini file: ${uploadedFile.name}`);
+            } catch (cleanupError) {
+                console.error("Error cleaning up Gemini file:", cleanupError);
+            }
+        }
+    }
+}
+// --- End Core Gemini API Call Function ---
+
+
 export default function OPDPrescriptionPage() {
   const { opd_id } = useParams<{ opd_id: string }>();
   const router = useRouter();
@@ -85,6 +189,12 @@ export default function OPDPrescriptionPage() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyModalItems, setHistoryModalItems] = useState<OPDPrescriptionRow[]>([]);
 
+  // NEW: Audio Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
   // Refs
   const prescriptionContentRef = useRef<HTMLDivElement>(null);
 
@@ -92,9 +202,86 @@ export default function OPDPrescriptionPage() {
     defaultValues: { symptoms: "", known_case_of: "", treatment: "", past_history: "", follow_up: "" },
   });
 
-  const [activeField, setActiveField] = useState<keyof PrescriptionFormInputs | null>(null);
+  // --- Audio Recording Logic ---
+  const startRecording = async () => {
+    if (isRecording || isProcessingAudio) return;
+    try {
+      // Check for MediaRecorder support
+      if (!window.MediaRecorder || !navigator.mediaDevices) {
+        toast.error("Recording is not supported by your browser.");
+        return;
+      }
 
-  // --- Form Submission Logic ---
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Use 'audio/webm' as it is widely supported and efficient for MediaRecorder
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        // Create the final audio blob
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        // Stop all tracks from the stream to release the mic
+        stream.getTracks().forEach(track => track.stop()); 
+        
+        if (audioBlob.size > 0) {
+             processAudio(audioBlob);
+        } else {
+             toast.error("Recording failed or was too short.");
+        }
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+      toast.info("Conversation recording started... Click 'Stop Recording' when finished.");
+    } catch (err) {
+      toast.error("Failed to start recording. Check microphone permissions.");
+      console.error(err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (!isRecording || !mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
+    mediaRecorderRef.current.stop();
+    setIsRecording(false);
+  };
+  
+  const processAudio = async (audioBlob: Blob) => {
+    setIsProcessingAudio(true);
+    const opdNum = opd_id;
+    if (!opdNum) {
+      toast.error("Missing OPD ID.");
+      setIsProcessingAudio(false);
+      return;
+    }
+
+    try {
+      // Call the AI service to process the audio
+      const aiData = await getPrescriptionFromAudio(audioBlob);
+
+      // Populate form with AI results
+      setValue("symptoms", aiData.symptoms);
+      setValue("known_case_of", aiData.known_case_of);
+      setValue("treatment", aiData.treatment);
+      setValue("past_history", aiData.past_history);
+      setValue("follow_up", aiData.follow_up);
+      
+      toast.success("AI analysis complete! Prescription fields updated. Please review before saving.");
+
+    } catch (err: any) {
+      // Error handling is inside getPrescriptionFromAudio
+    } finally {
+      setIsProcessingAudio(false);
+    }
+  };
+  // --- END Audio Recording Logic ---
+  
+  // --- Form Submission Logic (Remains mostly the same) ---
   const onSubmit: SubmitHandler<PrescriptionFormInputs> = async (formData) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -136,83 +323,6 @@ export default function OPDPrescriptionPage() {
     }
   };
 
-  // --- Voice Command Definitions ---
-  const commands = [
-    {
-      command: ["clinical symptoms *", "symptoms *", "symptom *", "input 1 *", "input one *"],
-      callback: (content: string) => {
-        setActiveField("symptoms");
-        setValue("symptoms", `${getValues("symptoms") || ""} ${content}`.trim());
-        toast.info(`Clinical symptoms updated: ${content}`);
-      },
-    },
-    {
-      command: ["known case of *", "known history *", "input 2 *", "history *", "input two *","input to *"],
-      callback: (content: string) => {
-        setActiveField("known_case_of");
-        setValue("known_case_of", `${getValues("known_case_of") || ""} ${content}`.trim());
-        toast.info(`Known case of updated: ${content}`);
-      },
-    },
-    {
-      command: ["treatment *", "prescribe *", "input 3 *", "input three *"],
-      callback: (content: string) => {
-        setActiveField("treatment");
-        setValue("treatment", `${getValues("treatment") || ""} ${content}`.trim());
-        toast.info(`Treatment updated: ${content}`);
-      },
-    },
-    {
-      command: ["past history *", "previous history *", "input 4 *", "input four *","input for *",],
-      callback: (content: string) => {
-        setActiveField("past_history");
-        setValue("past_history", `${getValues("past_history") || ""} ${content}`.trim());
-        toast.info(`Past history updated: ${content}`);
-      },
-    },
-    {
-      command: ["follow up *", "next visit *", "revisit *", "input 5 *", "input five *"],
-      callback: (content: string) => {
-        setActiveField("follow_up");
-        setValue("follow_up", `${getValues("follow_up") || ""} ${content}`.trim());
-        toast.info(`Follow up updated: ${content}`);
-      },
-    },
-    {
-      command: ["clear form", "reset form"],
-      callback: () => clearPrescription(),
-    },
-    {
-      command: ["save prescription", "submit form"],
-      callback: () => handleSubmit(onSubmit)(),
-    },
-    {
-      command: ["clear input", "clear field"],
-      callback: () => {
-        if (activeField) {
-          setValue(activeField, "");
-          toast.info(`${activeField} cleared.`);
-        } else {
-          toast.info("No active field to clear.");
-        }
-      },
-    },
-  ];
-
-  const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } = useSpeechRecognition({ commands });
-  const toggleListening = () => {
-    if (listening) {
-      SpeechRecognition.stopListening();
-    } else {
-      if (!browserSupportsSpeechRecognition) {
-        toast.error("Speech recognition is not supported by your browser.");
-        return;
-      }
-      resetTranscript(); // Clear transcript when starting to listen
-      SpeechRecognition.startListening({ continuous: true, language: "en-IN" });
-    }
-  };
-  
   // --- Data Fetching & Component Logic ---
   const fetchPatientAndPrescriptionData = useCallback(async () => {
     if (!opd_id) { setIsLoading(false); return; }
@@ -251,11 +361,10 @@ export default function OPDPrescriptionPage() {
   // --- Helper Functions ---
   const clearPrescription = () => {
     reset();
-    resetTranscript();
     toast.info("Form cleared.");
   };
 
-  // --- PDF & WhatsApp Functions ---
+  // --- PDF & WhatsApp Functions (Kept as is) ---
   const generatePDFBlob = useCallback(async (prescriptionData: OPDPrescriptionRow | null) => {
       const dataToUse = prescriptionData || currentPrescription;
       if (!prescriptionContentRef.current || !patientData || !dataToUse) return null;
@@ -269,6 +378,7 @@ export default function OPDPrescriptionPage() {
       prescriptionContentRef.current.style.background = `url(${letterheadImage}) no-repeat center top / contain`;
       prescriptionContentRef.current.style.color = "#000";
       
+      // Temporarily set the inner HTML for PDF generation
       prescriptionContentRef.current.innerHTML = `
         <div style="display: flex; justify-content: space-between; margin-bottom: 8mm; border-bottom: 1px solid #ccc; padding-bottom: 2mm;">
           <div><p><strong>Name:</strong> ${patientData.name}</p><p><strong>UHID:</strong> ${patientData.uhid}</p><p><strong>OPD ID:</strong> ${dataToUse.opd_id}</p></div>
@@ -284,6 +394,7 @@ export default function OPDPrescriptionPage() {
       const canvas = await html2canvas(prescriptionContentRef.current, { scale: 2 });
       pdf.addImage(canvas.toDataURL("image/jpeg", 1.0), "JPEG", 0, 0, pdfWidth, canvas.height * pdfWidth / canvas.width);
       
+      // Restore original state
       if (prescriptionContentRef.current) { 
         prescriptionContentRef.current.style.cssText = originalRefStyle; 
         prescriptionContentRef.current.innerHTML = ''; 
@@ -357,19 +468,35 @@ export default function OPDPrescriptionPage() {
             <p className="text-sm text-gray-600">OPD ID: {opd_id}</p>
           </CardHeader>
           <CardContent>
-            {/* Voice Control UI */}
-            <Button type="button" onClick={toggleListening} className="w-full mb-2 bg-purple-600 hover:bg-purple-700">
-              {listening ? <><MicOff className="mr-2 animate-pulse" /> Stop Listening</> : <><Mic className="mr-2" /> Start Voice Commands</>}
+            {/* NEW: Voice Recording and AI Processing Control */}
+            <Button
+              type="button"
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isProcessingAudio}
+              className={`w-full mb-3 text-lg ${isRecording ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+            >
+              {isProcessingAudio ? (
+                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Analyzing Conversation...</>
+              ) : isRecording ? (
+                <><MicOff className="mr-2 animate-pulse h-5 w-5" /> Stop Recording</>
+              ) : (
+                <><Mic className="mr-2 h-5 w-5" /> Start Conversation Recording</>
+              )}
             </Button>
-            {listening && <div className="mb-3 p-2 bg-blue-50 border rounded-md text-sm italic">Listening: {transcript || "..."}</div>}
+            
+            {isProcessingAudio && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-center font-medium">
+                Please wait. AI is extracting prescription details from the audio. This may take up to a minute for long recordings.
+              </div>
+            )}
             
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               {/* Clinical Symptoms Input */}
               <div>
                 <label htmlFor="symptoms" className="block text-sm font-medium">1. Clinical Symptoms</label>
                 <div className="relative">
-                  <Textarea id="symptoms" {...register("symptoms")} placeholder="Enter symptoms or say 'clinical symptoms', 'symptoms', 'symptom', 'input 1', 'input one' followed by content" className="pr-10 text-sm" />
-                  <Button variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2" onClick={() => setValue("symptoms", "")}><Trash2 className="h-4 w-4" /></Button>
+                  <Textarea id="symptoms" {...register("symptoms")} placeholder="AI results for symptoms will appear here. Manual edits possible." className="pr-10 text-sm min-h-[100px]" />
+                  <Button variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("symptoms", "")}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
 
@@ -377,17 +504,17 @@ export default function OPDPrescriptionPage() {
               <div>
                 <label htmlFor="known_case_of" className="block text-sm font-medium">2. Known Case of/History</label>
                 <div className="relative">
-                  <Textarea id="known_case_of" {...register("known_case_of")} placeholder="Enter known cases or say 'known case of', 'known history', 'input 2', 'history', 'input two', 'input to' followed by content" className="pr-10 text-sm" />
-                  <Button variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2" onClick={() => setValue("known_case_of", "")}><Trash2 className="h-4 w-4" /></Button>
+                  <Textarea id="known_case_of" {...register("known_case_of")} placeholder="AI results for known history will appear here. Manual edits possible." className="pr-10 text-sm min-h-[100px]" />
+                  <Button variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("known_case_of", "")}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
 
               {/* Treatment Input */}
               <div>
-                <label htmlFor="treatment" className="block text-sm font-medium">3. Treatment</label>
+                <label htmlFor="treatment" className="block text-sm font-medium">3. Treatment (Meds, Investigations, etc.)</label>
                 <div className="relative">
-                  <Textarea id="treatment" {...register("treatment")} placeholder="Enter treatment or say 'treatment', 'prescribe', 'input 3', 'input three' followed by content" className="pr-10 text-sm" />
-                  <Button variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2" onClick={() => setValue("treatment", "")}><Trash2 className="h-4 w-4" /></Button>
+                  <Textarea id="treatment" {...register("treatment")} placeholder="AI results for treatment will appear here. Manual edits possible." className="pr-10 text-sm min-h-[150px]" />
+                  <Button variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("treatment", "")}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
 
@@ -395,38 +522,38 @@ export default function OPDPrescriptionPage() {
               <div>
                 <label htmlFor="past_history" className="block text-sm font-medium">4. Past History</label>
                 <div className="relative">
-                  <Textarea id="past_history" {...register("past_history")} placeholder="Enter past history or say 'past history', 'input for' 'previous history', 'input 4', 'input four' followed by content" className="pr-10 text-sm" />
-                  <Button variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2" onClick={() => setValue("past_history", "")}><Trash2 className="h-4 w-4" /></Button>
+                  <Textarea id="past_history" {...register("past_history")} placeholder="AI results for past history will appear here. Manual edits possible." className="pr-10 text-sm min-h-[100px]" />
+                  <Button variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("past_history", "")}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
               
               {/* Follow-up Input */}
               <div>
-                <label htmlFor="follow_up" className="block text-sm font-medium">5. Follow-up</label>
+                <label htmlFor="follow_up" className="block text-sm font-medium">5. Follow-up / Next Visit</label>
                 <div className="relative">
-                  <Textarea id="follow_up" {...register("follow_up")} placeholder="Enter follow-up details or say 'follow up', 'next visit', 'revisit', 'input 5', 'input five' followed by content" className="pr-10 text-sm" />
-                  <Button variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2" onClick={() => setValue("follow_up", "")}><Trash2 className="h-4 w-4" /></Button>
+                  <Textarea id="follow_up" {...register("follow_up")} placeholder="AI results for follow-up will appear here. Manual edits possible." className="pr-10 text-sm min-h-[100px]" />
+                  <Button variant="ghost" size="icon" className="absolute top-1 right-2" onClick={() => setValue("follow_up", "")}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button type="submit" disabled={isSubmitting} className="flex-1 bg-green-600 hover:bg-green-700">
-                  {isSubmitting ? <><RefreshCw className="mr-2 animate-spin"/>Saving...</> : <><UserCheck className="mr-2"/>Save</>}
+              <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t">
+                <Button type="submit" disabled={isSubmitting || isProcessingAudio} className="flex-1 bg-blue-600 hover:bg-blue-700">
+                  {isSubmitting ? <><RefreshCw className="mr-2 animate-spin"/>Saving...</> : <><UserCheck className="mr-2"/>Finalize & Save Prescription</>}
                 </Button>
-                <Button type="button" onClick={clearPrescription} variant="outline" className="flex-1 text-red-600 border-red-300 hover:bg-red-50">
-                  <Trash2 className="mr-2"/>Clear
+                <Button type="button" onClick={clearPrescription} variant="outline" className="flex-1 text-red-600 border-red-300 hover:bg-red-50" disabled={isProcessingAudio}>
+                  <Trash2 className="mr-2"/>Clear Form
                 </Button>
+                
+                {/* History Dialog */}
                 <Dialog open={showHistoryModal} onOpenChange={setShowHistoryModal}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="flex-1"><History className="mr-2" /> View History</Button>
+                    <Button variant="outline" className="flex-1" disabled={isProcessingAudio}><History className="mr-2" /> View History</Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[900px]">
                     <DialogHeader>
                       <DialogTitle>Previous Prescriptions for {patientData.name}</DialogTitle>
-                      <DialogDescription>
-                        This is a history of prescriptions for this patient.
-                      </DialogDescription>
+                      <DialogDescription>This is a history of prescriptions for this patient.</DialogDescription>
                     </DialogHeader>
                     {historyModalItems.length > 0 ? (
                       <div className="overflow-auto max-h-[60vh]">
@@ -450,16 +577,18 @@ export default function OPDPrescriptionPage() {
               </div>
 
               {currentPrescription && (
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                  <Button type="button" onClick={downloadPrescription} variant="secondary"><Download className="mr-2"/>View PDF</Button>
-                  <Button type="button" onClick={uploadPdfAndSendWhatsApp} disabled={isSendingWhatsApp || !patientData?.number} className="bg-green-500 hover:bg-green-600 text-white">{isSendingWhatsApp ? <><RefreshCw className="mr-2 animate-spin"/>Sending...</> : <>Send WhatsApp</>}</Button>
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <Button type="button" onClick={downloadPrescription} variant="secondary"><Download className="mr-2"/>View/Download PDF</Button>
+                  <Button type="button" onClick={uploadPdfAndSendWhatsApp} disabled={isSendingWhatsApp || !patientData?.number} className="bg-green-500 hover:bg-green-600 text-white">
+                    {isSendingWhatsApp ? <><RefreshCw className="mr-2 animate-spin"/>Sending...</> : <><Send className="mr-2"/>Send WhatsApp</>}
+                  </Button>
                 </div>
               )}
             </form>
           </CardContent>
         </Card>
 
-        {/* Hidden Div for PDF Generation */}
+        {/* Hidden Div for PDF Generation (Kept as is) */}
         <div style={{ position: "absolute", left: "-9999px", top: "-9999px" }}>
           <div ref={prescriptionContentRef} style={{ width: "210mm", minHeight: "297mm", padding: "60mm 15mm 15mm 15mm", color: "#000", fontFamily: "Arial, sans-serif", background: 'white' }}></div>
         </div>
