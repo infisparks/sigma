@@ -530,7 +530,7 @@ const formattedNumber = numberAsString.startsWith("91") ? numberAsString : `91${
         if (!response.ok) throw new Error(`API Error: ${await response.text()}`);
         const result = await response.json();
         if (result.status === "success") toast.success("Prescription sent via WhatsApp!");
-        else toast.error(`WhatsApp failed: ${result.message || "Unknown error"}`);
+        else toast.error(`WhatsApp : ${result.message || "Unknown error"}`);
       } catch (error: any) { toast.error(`WhatsApp Error: ${error.message}`); }
       finally { setIsSendingWhatsApp(false); }
   };
