@@ -25,9 +25,9 @@ import {
   MapPin,
   Stethoscope,
   IndianRupeeIcon,
-  FileText, // For prescription icon
-  BeakerIcon, // For blood test icon
-  ClipboardList, // For viewing tests
+  FileText,
+  BeakerIcon,
+  ClipboardList,
   Loader2,
 } from "lucide-react"
 import Layout from "@/components/global/Layout"
@@ -37,7 +37,7 @@ import { useRouter } from "next/navigation"
 import { format, parseISO, startOfDay, endOfDay, startOfWeek, endOfWeek } from "date-fns"
 import Image from "next/image"
 
-// Patient detail object
+// Interfaces
 interface PatientDetail {
   patient_id: number
   name: string
@@ -49,67 +49,54 @@ interface PatientDetail {
   uhid: string
 }
 
-// Service Info Structure (as used in the component)
 interface ServiceInfo {
   type: string
-  doctor: string | null // Doctor name
+  doctor: string | null
   specialist: string | null
   visitType: string
   service: string | null
   charges: number
 }
 
-
-// OPD Appointment as used in the component
 interface OPDAppointment {
   opd_id: number
   created_at: string
-  date: string // The actual appointment date (timestamp without time zone)
+  date: string
   refer_by: string | null
-  service_info: ServiceInfo[] | null // Updated type
+  service_info: ServiceInfo[] | null
   payment_info: any
   uhid_from_registration: string
   patient_detail: PatientDetail | null
-  bill_no: number // Add bill_no to the interface
-  has_prescription?: boolean // New field to indicate if a prescription exists
+  bill_no: number
+  has_prescription?: boolean
 }
 
-// Blood Test from zblood_test table
 interface BloodTest {
   id: number
   test_name: string
   price: number
 }
 
-// Modal State
 interface ModalState {
   isOpen: boolean
   appointment: OPDAppointment | null
 }
 
-// Function to determine the doctor's name
+// Helper function to determine doctor's name
 const getDoctorName = (serviceInfo: ServiceInfo[] | null, referBy: string | null): string | null => {
-    if (!serviceInfo || serviceInfo.length === 0) {
-        return referBy
-    }
-
-    // 1. Check for a service with type "consultation"
-    const consultationService = serviceInfo.find(s => s.type?.toLowerCase() === "consultation")
-
-    if (consultationService && consultationService.doctor) {
-        return consultationService.doctor
-    }
-
-    // 2. If no consultation, check the first service for a doctor name
-    const firstServiceWithDoctor = serviceInfo.find(s => s.doctor)
-    if (firstServiceWithDoctor && firstServiceWithDoctor.doctor) {
-        return firstServiceWithDoctor.doctor
-    }
-
-    // 3. Fallback to appointment's refer_by if present
+  if (!serviceInfo || serviceInfo.length === 0) {
     return referBy
+  }
+  const consultationService = serviceInfo.find(s => s.type?.toLowerCase() === "consultation")
+  if (consultationService && consultationService.doctor) {
+    return consultationService.doctor
+  }
+  const firstServiceWithDoctor = serviceInfo.find(s => s.doctor)
+  if (firstServiceWithDoctor && firstServiceWithDoctor.doctor) {
+    return firstServiceWithDoctor.doctor
+  }
+  return referBy
 }
-
 
 const OPDListPrescriptionPage = () => {
   const [appointments, setAppointments] = useState<OPDAppointment[]>([])
@@ -123,6 +110,7 @@ const OPDListPrescriptionPage = () => {
   const fetchAppointments = useCallback(async () => {
     setIsLoading(true)
     try {
+      // This query will now work with the corrected schema
       const { data, error } = await supabase
         .from("opd_registration")
         .select(
@@ -171,8 +159,8 @@ const OPDListPrescriptionPage = () => {
 
     const today = startOfDay(new Date())
     const endOfToday = endOfDay(new Date())
-    const startOfThisWeek = startOfWeek(new Date(), { weekStartsOn: 1 }) // Monday
-    const endOfThisWeek = endOfWeek(new Date(), { weekStartsOn: 1 }) // Sunday
+    const startOfThisWeek = startOfWeek(new Date(), { weekStartsOn: 1 })
+    const endOfThisWeek = endOfWeek(new Date(), { weekStartsOn: 1 })
 
     if (activeTab === "today") {
       filtered = filtered.filter(appt => {
@@ -240,14 +228,14 @@ const OPDListPrescriptionPage = () => {
 
   return (
     <Layout>
-      <div className="space-y-8 bg-gray-50 min-h-screen p-0">
+      <div className="space-y-8 p-0">
         <div className="flex justify-center mb-0">
           <Image
             src="/banner.png"
             alt="Hospital Banner"
             width={1300}
             height={300}
-            className="rounded-lg shadow-md transition-all duration-300 hover:shadow-lg"
+            className="rounded-lg shadow-md"
           />
         </div>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -344,6 +332,8 @@ const OPDListPrescriptionPage = () => {
   )
 }
 
+// Sub-components (AppointmentsList and BloodTestModal) remain the same
+
 interface AppointmentsListProps {
   filteredAppointments: OPDAppointment[]
   isLoading: boolean
@@ -372,7 +362,7 @@ const AppointmentsList: React.FC<AppointmentsListProps> = ({
   if (isLoading) {
     return (
       <div className="text-center py-12 text-gray-500 text-lg flex flex-col items-center">
-        <RefreshCw className="h-8 w-8 animate-spin mb-4 text-emerald-600" />
+        <Loader2 className="h-8 w-8 animate-spin mb-4 text-emerald-600" />
         Loading appointments...
       </div>
     )
@@ -381,7 +371,7 @@ const AppointmentsList: React.FC<AppointmentsListProps> = ({
   if (filteredAppointments.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500 text-lg">
-        {searchTerm ? "No appointments found matching your search." : `No appointments found for this period.`}
+        {searchTerm ? "No appointments found matching your search." : `No appointments for this period.`}
         <p className="mt-2 text-base">Please select another time frame or refine your search.</p>
       </div>
     )
@@ -455,9 +445,10 @@ const AppointmentsList: React.FC<AppointmentsListProps> = ({
                       <span>Amount: ₹{getTotalAmount(appointment.payment_info)}</span>
                     </div>
                   </div>
-                  {appointment.refer_by && (
-                    <div className="text-sm text-gray-700">
-                      <span className="font-semibold">Referred by:</span> {appointment.refer_by}
+                  {getDoctorName(appointment.service_info, appointment.refer_by) && (
+                    <div className="flex items-center space-x-2 text-sm text-gray-700">
+                       <Stethoscope className="h-4 w-4 text-gray-500" />
+                      <span>Dr. {getDoctorName(appointment.service_info, appointment.refer_by)}</span>
                     </div>
                   )}
                 </div>
@@ -500,7 +491,6 @@ const AppointmentsList: React.FC<AppointmentsListProps> = ({
   )
 }
 
-// Blood Test Booking Modal Component
 interface BloodTestModalProps {
   isOpen: boolean
   onClose: () => void
@@ -513,19 +503,16 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isTPA, setIsTPA] = useState(false) 
-  const [customDoctorName, setCustomDoctorName] = useState<string>("") // New state for editable doctor name
+  const [isTPA, setIsTPA] = useState(false)
+  const [customDoctorName, setCustomDoctorName] = useState<string>("")
 
-  // Function to determine the doctor's name (moved outside for helper access)
   const initialDoctorName = useMemo(() => {
     return getDoctorName(appointment.service_info, appointment.refer_by) || ""
   }, [appointment.service_info, appointment.refer_by])
 
   useEffect(() => {
     if (isOpen) {
-      // Set the initial doctor name when the modal opens
       setCustomDoctorName(initialDoctorName)
-      
       const fetchBloodTests = async () => {
         setIsLoading(true)
         const { data, error } = await supabase
@@ -542,14 +529,12 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
       }
       fetchBloodTests()
     } else {
-      // Reset state on close
-      setAllTests([])
       setSelectedTests(new Set())
       setSearchTerm("")
-      setIsTPA(false) 
-      setCustomDoctorName("") // Reset custom doctor name
+      setIsTPA(false)
+      setCustomDoctorName("")
     }
-  }, [isOpen, initialDoctorName]) // Depend on initialDoctorName to update when appointment changes
+  }, [isOpen, initialDoctorName])
 
   const filteredTests = useMemo(() => {
     return allTests.filter(test => test.test_name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -567,10 +552,9 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
     })
   }
 
-
   const handleSubmit = async () => {
     if (selectedTests.size === 0) {
-      toast.warning("Please select at least one test to book.")
+      toast.warning("Please select at least one test.")
       return
     }
     if (!appointment.patient_detail) {
@@ -582,34 +566,31 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
     const testsToBook = allTests.filter(test => selectedTests.has(test.id))
     const totalAmount = testsToBook.reduce((sum, test) => sum + test.price, 0)
     const currentTime = new Date().toISOString()
-    
-    // Use the potentially custom doctor name
-    const doctorName = customDoctorName.trim() || null;
-
+    const doctorName = customDoctorName.trim() || null
 
     const newRegistrationData = {
       UHID: appointment.patient_detail.uhid,
       amount_paid: 0,
-      visit_type: "opd",
+      visit_type: "opd-lab",
       registration_time: currentTime,
       samplecollected_time: currentTime,
       discount_amount: 0,
       hospital_name: "MEDFORD HOSPITAL",
-      payment_mode: "online",
-      bloodtest_detail: null, // Left empty as per requirement
+      payment_mode: "pending",
+      bloodtest_detail: null,
       bloodtest_data: testsToBook.map(test => ({
         price: test.price,
         testId: test.id,
         testName: test.test_name,
         testType: "inhospital",
       })),
-      amount_paid_history: ({
+      amount_paid_history: {
         discount: 0,
         totalAmount: totalAmount,
         paymentHistory: [],
-      }),
-      doctor_name: doctorName, // Use the editable state
-      tpa: isTPA, 
+      },
+      doctor_name: doctorName,
+      tpa: isTPA,
       source_opd_id: appointment.opd_id,
       is_enterbydoctor: true,
     }
@@ -618,6 +599,7 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
 
     if (error) {
       toast.error("Failed to book blood test: " + error.message)
+      console.error(error)
     } else {
       toast.success("Blood test(s) booked successfully!")
       onClose()
@@ -631,38 +613,34 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
         <DialogHeader>
           <DialogTitle className="text-2xl">Book Blood Test</DialogTitle>
           <DialogDescription>
-            Search and select tests for{" "}
-            <span className="font-bold text-emerald-700">{appointment.patient_detail?.name}</span> (UHID:{" "}
+            For <span className="font-bold text-emerald-700">{appointment.patient_detail?.name}</span> (UHID:{" "}
             {appointment.patient_detail?.uhid}).
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-4">
-             <div className="flex items-center space-x-3">
-                <Checkbox
-                    id="is-tpa"
-                    checked={isTPA}
-                    onCheckedChange={(checked) => setIsTPA(checked === true)}
-                />
-                <label
-                    htmlFor="is-tpa"
-                    className="text-sm font-medium leading-none cursor-pointer"
-                >
-                    Book under **TPA**
-                </label>
-            </div>
-            <div className="space-y-1">
-                <label htmlFor="doctor-name" className="text-sm font-medium leading-none block">
-                    Referring Doctor Name
-                </label>
-                <Input
-                    id="doctor-name"
-                    placeholder="Enter custom doctor name"
-                    value={customDoctorName}
-                    onChange={e => setCustomDoctorName(e.target.value)}
-                    className="h-9"
-                />
-            </div>
+          <div className="flex items-center space-x-3">
+            <Checkbox
+              id="is-tpa"
+              checked={isTPA}
+              onCheckedChange={checked => setIsTPA(checked === true)}
+            />
+            <label htmlFor="is-tpa" className="text-sm font-medium leading-none cursor-pointer">
+              Book under TPA
+            </label>
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="doctor-name" className="text-sm font-medium leading-none block">
+              Referring Doctor
+            </label>
+            <Input
+              id="doctor-name"
+              placeholder="Enter doctor name"
+              value={customDoctorName}
+              onChange={e => setCustomDoctorName(e.target.value)}
+              className="h-9"
+            />
+          </div>
         </div>
 
         <div className="relative my-4">
@@ -683,10 +661,7 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
           ) : filteredTests.length > 0 ? (
             <div className="space-y-2">
               {filteredTests.map(test => (
-                <div
-                  key={test.id}
-                  className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100"
-                >
+                <div key={test.id} className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100">
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id={`test-${test.id}`}
