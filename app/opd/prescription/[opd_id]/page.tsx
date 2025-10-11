@@ -523,7 +523,9 @@ export default function OPDPrescriptionPage() {
         if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
         const { data: { publicUrl } } = supabase.storage.from("dpr-documents").getPublicUrl(`opd_prescriptions/${fileName}`);
         if (!publicUrl) throw new Error("Failed to get public URL.");
-        const formattedNumber = patientData.number.startsWith("91") ? patientData.number : `91${patientData.number}`;
+        // Corrected Line
+const numberAsString = String(patientData.number);
+const formattedNumber = numberAsString.startsWith("91") ? numberAsString : `91${numberAsString}`;
         const response = await fetch("https://a.infispark.in/send-image-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "9958399157", number: formattedNumber, imageUrl: publicUrl, caption: `Dear ${patientData.name}, here is your prescription for OPD ID ${opd_id}.` }) });
         if (!response.ok) throw new Error(`API Error: ${await response.text()}`);
         const result = await response.json();
