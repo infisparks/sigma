@@ -2082,7 +2082,7 @@ const sendPaymentNotification = async (
                       >
                         <option value="">Select</option>
                         <option value="Self">Self</option>
-                        <option value="Meraj Sir">Meraj Sir</option>
+                        <option value="Admin">Admin</option>
                         {/* <option value="Farid Sir">Farid Sir</option> */}
                         <option value="Other">Other</option>
                       </select>

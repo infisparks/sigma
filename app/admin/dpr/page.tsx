@@ -1096,7 +1096,7 @@ _Generated automatically from the Inficare Management System._`
                   clipRule="evenodd"
                 />
               </svg>
-              Send to Meraj Sir
+              Send to Admin
             </Button>
           </div>
         </div>
