@@ -645,16 +645,42 @@ export default function EditPatientPage() {
       const bloodTestNames = data.bloodTests.map((test) => test.testName).join(", ") || "No blood tests booked."
 
       if (data.sendWhatsApp) {
-        const whatsappMessage = `Dear *${patientName}*,\n\nYour registration has been UPDATED: *${registrationDate}* at *${registrationTime}* \n\n*Patient ID*: ${data.patientId}\n*Registration ID*: ${registrationId}\n*Tests Booked*: ${bloodTestNames}\n\n*Summary*:\n*Total Amount*: ₹${totalAmountFormatted}\n*Amount Paid*: ₹${totalPaidFormatted}\n*Remaining Balance*: ₹${remainingAmountFormatted}\n\nThank you for choosing us!`
-        const whatsappPayload = {
-          token: "9958399157",
-          number: `91${patientContact}`,
-          message: whatsappMessage,
-        }
-        try {
-          console.log("WhatsApp message payload ready but not sent in this environment.")
-        } catch (whatsappError) {
-          console.error("Error sending WhatsApp message:", whatsappError)
+        // 1. Get API Key
+        const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
+        
+        if (!apiKey) {
+          console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
+          // Don't block the submission, just log the error
+        } else {
+          // 2. Create Message
+          const whatsappMessage = `Dear *${patientName}*,\n\nYour registration has been UPDATED: *${registrationDate}* at *${registrationTime}* \n\n*Patient ID*: ${data.patientId}\n*Registration ID*: ${registrationId}\n*Tests Booked*: ${bloodTestNames}\n\n*Summary*:\n*Total Amount*: ₹${totalAmountFormatted}\n*Amount Paid*: ₹${totalPaidFormatted}\n*Remaining Balance*: ₹${remainingAmountFormatted}\n\nThank you for choosing us!`;
+          
+          // 3. Create new payload
+          const whatsappPayload = {
+            number: `91${patientContact}`,
+            text: whatsappMessage,
+          };
+
+          // 4. Send asynchronously (using fetch, no need to await in a way that blocks UI)
+          fetch("https://evo.infispark.in/message/sendText/medfordlab", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": apiKey, // Use the 'apikey' header
+            },
+            body: JSON.stringify(whatsappPayload),
+          })
+          .then(async (response) => {
+            if (!response.ok) {
+              const errorData = await response.json();
+              console.warn(`Failed to send WhatsApp message: ${errorData.message || 'Unknown error'}`);
+            } else {
+              console.log("WhatsApp update sent successfully.");
+            }
+          })
+          .catch((whatsappError) => {
+            console.error("Error sending WhatsApp message:", whatsappError);
+          });
         }
       }
 

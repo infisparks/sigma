@@ -529,7 +529,6 @@ const AppointmentPage = () => {
       setIsSearching(false)
     }
   }
-
   const sendWhatsAppConfirmation = async (
     patientName: string,
     phoneNumber: string,
@@ -540,64 +539,77 @@ const AppointmentPage = () => {
     totalCharges: number,
     discount: number
   ) => {
-    const apiUrl = "https://a.infispark.in/send-text"
-    const token = "9958399157" // Your API token
-    const formattedPhoneNumber = `91${phoneNumber}` // Assuming Indian numbers and API expects 91 prefix
+    // 1. Get the API key from environment variables
+    const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
 
-    let message = `*Dear ${patientName},*\n\n`
+    // 2. Add a check for the API key
+    if (!apiKey) {
+      console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
+      toast.warn("WhatsApp configuration error. Cannot send message."); // Use warn to not block the UI
+      return;
+    }
+
+    const apiUrl = "https://evo.infispark.in/message/sendText/medfordlab"; // <-- NEW URL
+    const formattedPhoneNumber = `91${phoneNumber}`; // Assuming Indian numbers
+
+    let message = `*Dear ${patientName},*\n\n`;
 
     if (appointmentType === "visithospital") {
-      message += `Your *OPD appointment* has been successfully booked at INFIPLUS Hospital.\n\n`
-      if (uhid) message += `*UHID:* ${uhid}\n`
-      if (billNo) message += `*Bill No:* ${billNo}\n\n`
+      message += `Your *OPD appointment* has been successfully booked at INFIPLUS Hospital.\n\n`;
+      if (uhid) message += `*UHID:* ${uhid}\n`;
+      if (billNo) message += `*Bill No:* ${billNo}\n\n`;
 
       if (modalities && modalities.length > 0) {
-        message += `*Services Booked:*\n`
+        message += `*Services Booked:*\n`;
         modalities.forEach((modality, index) => {
           // modality.doctor is already the name here because of `onValueChange` logic
-          const doctorName = modality.doctor || "N/A"
+          const doctorName = modality.doctor || "N/A";
           const serviceName = modality.service || modality.type; // Use custom service name if available, otherwise modality type
-          message += `  ${index + 1}. *${serviceName}* (Dr. ${doctorName}) - ₹${modality.charges}\n`
-        })
-        message += `\n*Total Charges:* ₹${totalCharges}\n`
+          message += `  ${index + 1}. *${serviceName}* (Dr. ${doctorName}) - ₹${modality.charges}\n`;
+        });
+        message += `\n*Total Charges:* ₹${totalCharges}\n`;
         if (discount > 0) {
-          message += `*Discount Applied:* ₹${discount}\n`
-          message += `*Amount Payable:* ₹${totalCharges - discount}\n`
+          message += `*Discount Applied:* ₹${discount}\n`;
+          message += `*Amount Payable:* ₹${totalCharges - discount}\n`;
         } else {
-          message += `*Amount Payable:* ₹${totalCharges}\n`
+          message += `*Amount Payable:* ₹${totalCharges}\n`;
         }
       }
-      message += `\nWe look forward to your visit!`
+      message += `\nWe look forward to your visit!`;
     } else {
-      message += `Your *On-Call appointment* has been successfully registered.\n`
-      if (uhid) message += `*UHID:* ${uhid}\n`
-      message += `\nOur team will contact you shortly.`
+      message += `Your *On-Call appointment* has been successfully registered.\n`;
+      if (uhid) message += `*UHID:* ${uhid}\n`;
+      message += `\nOur team will contact you shortly.`;
     }
-    message += `\n\n*Thank you for choosing INFIPLUS Hospital.*`
+    message += `\n\n*Thank you for choosing INFIPLUS Hospital.*`;
+
+    // 3. Create the new payload
+    const whatsappPayload = {
+      number: formattedPhoneNumber,
+      text: message,
+    };
 
     try {
+      // 4. Use the new fetch call structure
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "apikey": apiKey, // <-- NEW HEADER
         },
-        body: JSON.stringify({
-          token: token,
-          number: formattedPhoneNumber,
-          message: message,
-        }),
-      })
+        body: JSON.stringify(whatsappPayload), // <-- NEW BODY
+      });
 
-      const data = await response.json()
-      if (data.status === "success") {
-        toast.success("WhatsApp confirmation sent!")
+      const data = await response.json();
+      if (response.ok) {
+        toast.success("WhatsApp confirmation sent!");
       } else {
-        console.error("WhatsApp API Error:", data.message)
-        // toast.warn(`Failed to send WhatsApp confirmation: ${data.message}`)
+        console.error("WhatsApp API Error:", data.message || data);
+        toast.warn(`Failed to send WhatsApp confirmation: ${data.message || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error("Error sending WhatsApp message:", error)
-      toast.warn("Could not send WhatsApp confirmation due to a network error.")
+      console.error("Error sending WhatsApp message:", error);
+      toast.warn("Could not send WhatsApp confirmation due to a network error.");
     }
   }
 

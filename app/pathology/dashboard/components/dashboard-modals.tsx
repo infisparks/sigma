@@ -79,49 +79,76 @@ export function DashboardModals({
   const [isSendingBill, setIsSendingBill] = useState(false)
 
   const handleSendBillWhatsApp = async () => {
-    if (!selectedRegistration) return
-    setIsSendingBill(true)
+    if (!selectedRegistration) return;
+    setIsSendingBill(true);
     try {
-      // Generate the bill as a PDF blob (do not download)
-      const blob = await generateBillBlob(selectedRegistration)
-      const filename = `reports/bill_${selectedRegistration.id}_${Date.now()}.pdf`
-      const file = new File([blob], filename, { type: 'application/pdf' })
+      // 1. Get API Key and check if it exists
+      const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
+      if (!apiKey) {
+        console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
+        alert("WhatsApp configuration error. Cannot send message.");
+        setIsSendingBill(false);
+        return;
+      }
 
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage.from("reports").upload(filename, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: "application/pdf",
-      })
-      if (uploadError) throw uploadError
+      // 2. Generate the bill as a PDF blob
+      const blob = await generateBillBlob(selectedRegistration);
+      
+      // 3. Create a user-friendly filename and storage path
+      const friendlyFileName = `bill_${selectedRegistration.name.replace(/\s+/g, "_")}_${selectedRegistration.id}.pdf`;
+      const storagePath = `reports/${friendlyFileName}`; // Use a consistent name
+      const file = new File([blob], friendlyFileName, { type: 'application/pdf' });
 
-      const { data: publicUrlData } = supabase.storage.from("reports").getPublicUrl(filename)
-      const url = publicUrlData.publicUrl
+      // 4. Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("reports") // Make sure 'reports' bucket exists
+        .upload(storagePath, file, {
+          cacheControl: "3600",
+          upsert: true, // Use upsert: true to overwrite if a bill is resent
+          contentType: "application/pdf",
+        });
 
-      // WhatsApp API payload
+      if (uploadError) throw uploadError;
+
+      // 5. Get Public URL
+      const { data: publicUrlData } = supabase.storage.from("reports").getPublicUrl(storagePath);
+      const url = publicUrlData.publicUrl;
+
+      // 6. Create the new WhatsApp API payload
+      const caption = `Dear ${selectedRegistration.name},\n\nYour lab test bill is now available.\n\nRegards,\nMedford Lab Team`;
+
       const payload = {
-        token: "9958399157",
         number: "91" + selectedRegistration.contact,
-        imageUrl: url,
-        caption: `Dear ${selectedRegistration.name},\n\nYour bill is now available:\n${url}\n\nRegards,\nYour Lab Team`,
-      }
-      const res = await fetch("https://a.infispark.in/send-image-url", {
+        mediatype: "document", // Changed to document for PDF
+        mimetype: "application/pdf", // Mimetype for PDF
+        caption: caption,
+        media: url, // This is the public Supabase URL
+        fileName: friendlyFileName, // Send the friendly filename
+      };
+
+      // 7. Send using the new endpoint and headers
+      const res = await fetch("https://evo.infispark.in/message/sendMedia/medfordlab", { // <-- NEW URL
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": apiKey, // <-- NEW HEADER
+        },
+        body: JSON.stringify(payload), // <-- NEW PAYLOAD
+      });
+
       if (!res.ok) {
-        const errorData = await res.text()
-        alert(`Failed to send via WhatsApp. Status: ${res.status}\n${errorData}`)
+        const errorData = await res.text();
+        alert(`Failed to send via WhatsApp. Status: ${res.status}\n${errorData}`);
       } else {
-        alert("Bill sent on WhatsApp!")
+        alert("Bill sent on WhatsApp!");
       }
-    } catch (e) {
-      alert("Error sending bill on WhatsApp.")
+    } catch (e: any) {
+      console.error("Error sending bill on WhatsApp:", e);
+      alert(`Error sending bill on WhatsApp: ${e.message || 'Unknown error'}`);
     } finally {
-      setIsSendingBill(false)
+      setIsSendingBill(false);
     }
-  }
+  };
 
   return (
     <>

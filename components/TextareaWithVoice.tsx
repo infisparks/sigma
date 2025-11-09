@@ -353,26 +353,82 @@ export default function OPDPrescriptionPage() {
   };
   
   const uploadPdfAndSendWhatsApp = async () => {
-      // ... (This function remains unchanged)
-      if (!currentPrescription || !patientData?.number) { toast.error(!patientData?.number ? "Patient phone number missing." : "Prescription data not loaded."); return; }
-      setIsSendingWhatsApp(true);
-      try {
-        const pdfBlob = await generatePDFBlob(currentPrescription);
-        if (!pdfBlob) throw new Error("Failed to generate PDF for WhatsApp.");
-        const fileName = `prescription-${patientData.uhid}-${uuidv4()}.pdf`;
-        const { error: uploadError } = await supabase.storage.from("dpr-documents").upload(`opd_prescriptions/${fileName}`, pdfBlob);
-        if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-        const { data: { publicUrl } } = supabase.storage.from("dpr-documents").getPublicUrl(`opd_prescriptions/${fileName}`);
-        if (!publicUrl) throw new Error("Failed to get public URL.");
-        const formattedNumber = patientData.number.startsWith("91") ? patientData.number : `91${patientData.number}`;
-        const response = await fetch("https://a.infispark.in/send-image-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "9958399157", number: formattedNumber, imageUrl: publicUrl, caption: `Dear ${patientData.name}, here is your prescription for OPD ID ${opd_id}.` }) });
-        if (!response.ok) throw new Error(`API Error: ${await response.text()}`);
-        const result = await response.json();
-        if (result.status === "success") toast.success("Prescription sent via WhatsApp!");
-        else toast.error(`WhatsApp failed: ${result.message || "Unknown error"}`);
-      } catch (error: any) { toast.error(`WhatsApp Error: ${error.message}`); }
-      finally { setIsSendingWhatsApp(false); }
-  };
+    if (!currentPrescription || !patientData?.number) { 
+      toast.error(!patientData?.number ? "Patient phone number missing." : "Prescription data not loaded."); 
+      return; 
+    }
+    setIsSendingWhatsApp(true);
+    try {
+      // 1. Get API Key
+      const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
+      if (!apiKey) {
+        console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
+        toast.error("WhatsApp configuration error. Cannot send message.");
+        setIsSendingWhatsApp(false);
+        return;
+      }
+
+      // 2. Generate PDF
+      const pdfBlob = await generatePDFBlob(currentPrescription);
+      if (!pdfBlob) throw new Error("Failed to generate PDF for WhatsApp.");
+
+      // 3. Create filename and upload to Supabase
+      const friendlyFileName = `prescription-${patientData.uhid}-${opd_id}.pdf`;
+      const storagePath = `opd_prescriptions/${friendlyFileName}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from("dpr-documents")
+        .upload(storagePath, pdfBlob, {
+          cacheControl: "3600",
+          upsert: true, // Use upsert to allow overwriting if needed
+        });
+
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+      // 4. Get Public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from("dpr-documents")
+        .getPublicUrl(storagePath);
+        
+      if (!publicUrl) throw new Error("Failed to get public URL.");
+
+      // 5. Create new WhatsApp Payload
+      const formattedNumber = patientData.number.startsWith("91") ? patientData.number : `91${patientData.number}`;
+      const caption = `Dear ${patientData.name}, here is your prescription for OPD ID ${opd_id}.`;
+
+      const payload = {
+        number: formattedNumber,
+        mediatype: "document",
+        mimetype: "application/pdf",
+        caption: caption,
+        media: publicUrl,
+        fileName: friendlyFileName,
+      };
+
+      // 6. Send with new endpoint and headers
+      const response = await fetch("https://evo.infispark.in/message/sendMedia/medfordlab", { 
+        method: "POST", 
+        headers: { 
+          "Content-Type": "application/json",
+          "apikey": apiKey // Added apikey header
+        }, 
+        body: JSON.stringify(payload) 
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`API Error: ${errorData.message || 'Unknown error'}`);
+      }
+
+      toast.success("Prescription sent via WhatsApp!");
+
+    } catch (error: any) { 
+      toast.error(`WhatsApp Error: ${error.message}`); 
+    }
+    finally { 
+      setIsSendingWhatsApp(false); 
+    }
+};
   
   const viewHistoryPrescription = async (historyItem: OPDPrescriptionRow) => {
       // ... (This function remains unchanged)

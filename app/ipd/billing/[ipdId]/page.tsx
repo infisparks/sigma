@@ -628,34 +628,61 @@ export default function BillingPage() {
   const aggregatedConsultantChargesArray = Object.values(aggregatedConsultantCharges)
 
   // Payment notification
-  const sendPaymentNotification = async (
-    patientMobile: string,
-    patientName: string,
-    paymentAmount: number,
-    updatedDeposit: number,
-    amountType: "advance" | "refund" | "deposit" | "settlement", // Corrected type for notification
-  ) => {
-    const apiUrl = "https://a.infispark.in/send-text"
-    let message = ""
-    if (amountType === "advance" || amountType === "deposit" || amountType === "settlement") {
-      message = `Dear ${patientName}, your payment of Rs ${paymentAmount.toLocaleString()} has been successfully added to your account. Your updated total deposit is Rs ${updatedDeposit.toLocaleString()}. Thank you for choosing our service.`
-    } else if (amountType === "refund") {
-      message = `Dear ${patientName}, a refund of Rs ${paymentAmount.toLocaleString()} has been processed to your account. Your updated total deposit is Rs ${updatedDeposit.toLocaleString()}.`
-    }
-    const payload = { token: "9958399157", number: `91${patientMobile}`, message }
-    try {
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      if (!response.ok) console.error("Notification API error:", response.statusText)
-    } catch (error) {
-      console.error("Error sending notification:", error)
-    }
-    console.log(`[MOCK] Sending WhatsApp notification for ${patientName}: Amount ${paymentAmount}, Type ${amountType}`)
+// Payment notification
+const sendPaymentNotification = async (
+  patientMobile: string,
+  patientName: string,
+  paymentAmount: number,
+  updatedDeposit: number,
+  amountType: "advance" | "refund" | "deposit" | "settlement", // Corrected type for notification
+) => {
+  // 1. Get the API key from environment variables
+  const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
+
+  // 2. Add a check for the API key
+  if (!apiKey) {
+    console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
+    // toast.warn("WhatsApp configuration error. Cannot send message."); // Use warn to not block the UI
+    return;
   }
 
+  const apiUrl = "https://evo.infispark.in/message/sendText/medfordlab"; // <-- NEW URL
+  let message = "";
+  if (amountType === "advance" || amountType === "deposit" || amountType === "settlement") {
+    message = `Dear ${patientName}, your payment of Rs ${paymentAmount.toLocaleString()} has been successfully added to your account. Your updated total deposit is Rs ${updatedDeposit.toLocaleString()}. Thank you for choosing our service.`;
+  } else if (amountType === "refund") {
+    message = `Dear ${patientName}, a refund of Rs ${paymentAmount.toLocaleString()} has been processed to your account. Your updated total deposit is Rs ${updatedDeposit.toLocaleString()}.`;
+  }
+
+  // 3. Create the new payload
+  const whatsappPayload = {
+    number: `91${patientMobile}`,
+    text: message,
+  };
+
+  try {
+    // 4. Use the new fetch call structure
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": apiKey, // <-- NEW HEADER
+      },
+      body: JSON.stringify(whatsappPayload), // <-- NEW BODY
+    });
+
+    const data = await response.json();
+    if (response.ok) {
+      toast.success("WhatsApp payment notification sent!");
+    } else {
+      console.error("WhatsApp API Error:", data.message || data);
+      // toast.warn(`Failed to send WhatsApp notification: ${data.message || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error("Error sending WhatsApp message:", error);
+    // toast.warn("Could not send WhatsApp notification due to a network error.");
+  }
+}
   // --- Handlers ---
   const onSubmitAdditionalService: SubmitHandler<AdditionalServiceForm> = async (data) => {
     if (!selectedRecord) return

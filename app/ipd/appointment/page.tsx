@@ -577,32 +577,48 @@ const IPDAppointmentPage = () => {
   }
 
   const sendWhatsAppNotification = async (phoneNumber: string, message: string) => {
+    // 1. Validate the phone number
     if (!phoneNumber || typeof phoneNumber !== 'string' || phoneNumber.trim() === '') {
       console.warn("Skipping WhatsApp notification: Phone number is missing or invalid.");
       return;
     }
-    const token = "9958399157";
+
+    // 2. Get the API key from your environment variables
+    const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
+
+    // 3. Add a check to make sure the API key is loaded
+    if (!apiKey) {
+      console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
+      toast.error("WhatsApp configuration error. Cannot send message.");
+      return;
+    }
+
+    // 4. Create the new payload structure { number, text }
+    const whatsappPayload = {
+      number: `91${phoneNumber}`,
+      text: message,
+    };
 
     try {
-      const response = await fetch("https://a.infispark.in/send-text", {
+      // 5. Use the new URL and fetch options
+      const response = await fetch("https://evo.infispark.in/message/sendText/medfordlab", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "apikey": apiKey // Use the 'apikey' header here
         },
-        body: JSON.stringify({
-          token: token,
-          number: `91${phoneNumber}`,
-          message: message,
-        }),
+        body: JSON.stringify(whatsappPayload),
       });
 
       const data = await response.json();
+
       if (response.ok) {
         toast.success(`WhatsApp message sent to ${phoneNumber} successfully!`);
       } else {
         toast.error(`Failed to send WhatsApp message to ${phoneNumber}: ${data.message || 'Unknown error'}`);
       }
     } catch (error) {
+      console.error("Error sending WhatsApp message:", error);
       toast.error(`Error sending WhatsApp message to ${phoneNumber}.`);
     }
   };

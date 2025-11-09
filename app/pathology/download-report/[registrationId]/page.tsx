@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { JSX, Suspense, useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import type {
@@ -680,6 +680,18 @@ function DownloadReport() {
         true,
         testDisplayOptions, 
       )
+
+      // Get API Key
+      const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
+      if (!apiKey) {
+        console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
+        alert("WhatsApp configuration error. Cannot send message.");
+        setIsSending(false);
+        return;
+      }
+
+      // Upload to Supabase
+      const friendlyFileName = `report-${patientData.name.replace(/\s+/g, "_")}.pdf`
       const filename = `reports/${patientData.registration_id}_${Date.now()}.pdf`
       const { error: uploadError } = await supabase.storage.from("reports").upload(filename, blob, {
         cacheControl: "3600",
@@ -691,17 +703,28 @@ function DownloadReport() {
       }
       const { data: publicUrlData } = supabase.storage.from("reports").getPublicUrl(filename)
       const url = publicUrlData.publicUrl
+
+      // Create new payload
+      const caption = `Dear ${patientData.name},\n\nYour blood test report is now available.\n\nRegards,\nYour Lab Team`
       const payload = {
-        token: "9958399157",
         number: "91" + patientData.contact,
-        imageUrl: url,
-        caption: `Dear ${patientData.name},\n\nYour blood test report is now available:\n${url}\n\nRegards,\nYour Lab Team`,
+        mediatype: "document",
+        mimetype: "application/pdf",
+        caption: caption,
+        media: url, // This is the public Supabase URL
+        fileName: friendlyFileName,
       }
-      const res = await fetch("https://a.infispark.in/send-image-url", {
+      
+      // Send with new endpoint and headers
+      const res = await fetch("https://evo.infispark.in/message/sendMedia/medfordlab", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "apikey": apiKey
+        },
         body: JSON.stringify(payload),
       })
+
       if (!res.ok) {
         alert(`Failed to send via WhatsApp. Status: ${res.status}`)
       } else {
@@ -732,6 +755,18 @@ function DownloadReport() {
         false,
         testDisplayOptions, 
       )
+      
+      // Get API Key
+      const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
+      if (!apiKey) {
+        console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
+        alert("WhatsApp configuration error. Cannot send message.");
+        setIsSending(false);
+        return;
+      }
+
+      // Upload to Supabase
+      const friendlyFileName = `report-${patientData.name.replace(/\s+/g, "_")}.pdf`
       const filename = `reports/${patientData.registration_id}_${Date.now()}.pdf`
       const { error: uploadError } = await supabase.storage.from("reports").upload(filename, blob, {
         cacheControl: "3600",
@@ -743,17 +778,28 @@ function DownloadReport() {
       }
       const { data: publicUrlData } = supabase.storage.from("reports").getPublicUrl(filename)
       const url = publicUrlData.publicUrl
+
+      // Create new payload
+      const caption = `Dear ${patientData.name},\n\nYour blood test report is now available.\n\nRegards,\nYour Lab Team`
       const payload = {
-        token: "9958399157",
         number: "91" + patientData.contact,
-        imageUrl: url,
-        caption: `Dear ${patientData.name},\n\nYour blood test report is now available:\n${url}\n\nRegards,\nYour Lab Team`,
+        mediatype: "document",
+        mimetype: "application/pdf",
+        caption: caption,
+        media: url,
+        fileName: friendlyFileName,
       }
-      const res = await fetch("https://a.infispark.in/send-image-url", {
+      
+      // Send with new endpoint and headers
+      const res = await fetch("https://evo.infispark.in/message/sendMedia/medfordlab", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "apikey": apiKey
+        },
         body: JSON.stringify(payload),
       })
+
       if (!res.ok) {
         alert(`Failed to send via WhatsApp. Status: ${res.status}`)
       } else {
@@ -768,81 +814,97 @@ function DownloadReport() {
   }
   
   // Function to send report to the lab group
-  const sendReportToGroup = async () => {
-    if (!patientData || selectedTests.length === 0) {
-      alert("Please select at least one test to send.")
-      return
-    }
-    
-    setIsSending(true)
-    try {
-      // 1. Generate the PDF blob
-      const blob = await generateReportPdf(
-        patientData,
-        selectedTests,
-        combinedGroups,
-        historicalTestsData,
-        comparisonSelections,
-        "normal",
-        true, // includeLetterhead
-        true, // skipCover 
-        undefined, // no AI suggestions
-        false, 
-        testDisplayOptions,
-      )
-
-      // 2. Upload the PDF to Supabase storage
-      const filename = `group_reports/${patientData.registration_id}_${Date.now()}.pdf`
-      const { error: uploadError } = await supabase.storage.from("reports").upload(filename, blob, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: "application/pdf",
-      })
-
-      if (uploadError) {
-        throw new Error(`Failed to upload file to Supabase: ${uploadError.message}`)
-      }
-
-      // 3. Get the public URL for the uploaded file
-      const { data: publicUrlData } = supabase.storage.from("reports").getPublicUrl(filename)
-      const url = publicUrlData.publicUrl
-
-      // 4. Construct the message caption
-      const formattedTestNames = selectedTests
-        .map((testKey) => `- ${testKey.replace(/_/g, " ")}`)
-        .join("\n")
-
-      const caption = `Report for ${patientData.name}\nRegistration Time: ${
-        patientData.createdAt ? format12Hour(patientData.createdAt) : "Not set"
-      }\n\nTest(s) included:\n${formattedTestNames}`
-
-      // 5. Create the WhatsApp payload for the group
-      const payload = {
-        token: "9958399157", 
-        number: "120363404060783775@g.us", // The target group ID
-        imageUrl: url,
-        caption: caption,
-      }
-
-      // 6. Send the message
-      const res = await fetch("https://a.infispark.in/send-image-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      if (!res.ok) {
-        alert(`Failed to send to group. Status: ${res.status}`)
-      } else {
-        alert("Report sent to the lab group!")
-      }
-    } catch (e) {
-      console.error("Error sending to lab group:", e)
-      alert("Error sending report to the lab group.")
-    } finally {
-      setIsSending(false)
-    }
+ // Function to send report to the lab group
+ const sendReportToGroup = async () => {
+  if (!patientData || selectedTests.length === 0) {
+    alert("Please select at least one test to send.")
+    return
   }
+  
+  setIsSending(true)
+  try {
+    // 1. Generate the PDF blob
+    const blob = await generateReportPdf(
+      patientData,
+      selectedTests,
+      combinedGroups,
+      historicalTestsData,
+      comparisonSelections,
+      "normal",
+      true, // includeLetterhead
+      true, // skipCover 
+      undefined, // no AI suggestions
+      false, 
+      testDisplayOptions,
+    )
+
+    // Get API Key
+    const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
+    if (!apiKey) {
+      console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
+      alert("WhatsApp configuration error. Cannot send message.");
+      setIsSending(false);
+      return;
+    }
+
+    // 2. Upload the PDF to Supabase storage
+    const friendlyFileName = `group-report-${patientData.name.replace(/\s+/g, "_")}.pdf`
+    const filename = `group_reports/${patientData.registration_id}_${Date.now()}.pdf`
+    const { error: uploadError } = await supabase.storage.from("reports").upload(filename, blob, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: "application/pdf",
+    })
+
+    if (uploadError) {
+      throw new Error(`Failed to upload file to Supabase: ${uploadError.message}`)
+    }
+
+    // 3. Get the public URL for the uploaded file
+    const { data: publicUrlData } = supabase.storage.from("reports").getPublicUrl(filename)
+    const url = publicUrlData.publicUrl
+
+    // 4. Construct the message caption
+    const formattedTestNames = selectedTests
+      .map((testKey) => `- ${testKey.replace(/_/g, " ")}`)
+      .join("\n")
+
+    const caption = `Report for ${patientData.name}\nRegistration Time: ${
+      patientData.createdAt ? format12Hour(patientData.createdAt) : "Not set"
+    }\n\nTest(s) included:\n${formattedTestNames}`
+
+    // 5. Create the new WhatsApp payload for the group
+    const payload = {
+      number: "120363404060783775@g.us", // The target group ID
+      mediatype: "document",
+      mimetype: "application/pdf",
+      caption: caption,
+      media: url,
+      fileName: friendlyFileName,
+    }
+
+    // 6. Send the message with new endpoint and headers
+    const res = await fetch("https://evo.infispark.in/message/sendMedia/medfordlab", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "apikey": apiKey
+      },
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) {
+      alert(`Failed to send to group. Status: ${res.status}`)
+    } else {
+      alert("Report sent to the lab group!")
+    }
+  } catch (e) {
+    console.error("Error sending to lab group:", e)
+    alert("Error sending report to the lab group.")
+  } finally {
+    setIsSending(false)
+  }
+}
 
   // --- NEW: Visit Details component ---
   const VisitDetails = () => {

@@ -241,7 +241,7 @@ export default function InvoiceDownload({ record, beds, doctors, children }: Inv
     return pdf
   }
 
-  const handleSendPdfOnWhatsapp = async () => {
+ const handleSendPdfOnWhatsapp = async () => {
     try {
       const pdf = await generatePDF()
       const pdfBlob = pdf.output("blob")
@@ -251,52 +251,67 @@ export default function InvoiceDownload({ record, beds, doctors, children }: Inv
         return
       }
 
-      const fileName = `invoice-${record.ipdId}-${Date.now()}.pdf`
+      // 1. Check for WhatsApp API Key
+      const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || ""
+      if (!apiKey) {
+        console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.")
+        toast.error("WhatsApp configuration error. Cannot send message.")
+        return
+      }
+
+      // 2. Upload PDF to Supabase
+      const fileName = `ipd-invoice-${record.ipdId}-${Date.now()}.pdf`
       const { data, error: uploadError } = await supabase.storage
-        .from('invoices') // Your Supabase Storage bucket name
+        .from("invoices") // Your Supabase Storage bucket name
         .upload(fileName, pdfBlob, {
-          cacheControl: '3600',
-          upsert: false // Set to true if you want to overwrite existing files
-        });
+          cacheControl: "3600",
+          upsert: false,
+        })
 
       if (uploadError) {
-        console.error("Supabase upload error:", uploadError);
-        toast.error(`Failed to upload invoice: ${uploadError.message}`);
-        return;
+        console.error("Supabase upload error:", uploadError)
+        toast.error(`Failed to upload invoice: ${uploadError.message}`)
+        return
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from('invoices')
-        .getPublicUrl(fileName);
+      // 3. Get Public URL
+      const { data: publicUrlData } = supabase.storage.from("invoices").getPublicUrl(fileName)
 
       if (!publicUrlData || !publicUrlData.publicUrl) {
-        toast.error("Failed to get public URL for the invoice.");
-        return;
+        toast.error("Failed to get public URL for the invoice.")
+        return
       }
 
-      const downloadUrl = publicUrlData.publicUrl;
+      const downloadUrl = publicUrlData.publicUrl
 
+      // 4. Construct the new WhatsApp Payload
       const formattedNumber = record.mobileNumber.startsWith("91") ? record.mobileNumber : `91${record.mobileNumber}`
+      const caption = `Dear ${record.name},\n\nPlease find your IPD bill attached for UHID ${record.uhid}.\n\nThank you,\nINFIPLUS Hospital`
+      const friendlyFileName = `IPD_Bill-${record.uhid}-${record.name.replace(/\s+/g, "_")}.pdf`
 
-      // WhatsApp API payload
       const payload = {
-        token: "9958399157", // Replace with your actual WhatsApp API token
         number: formattedNumber,
-        imageUrl: downloadUrl, // Use imageUrl for sending a document link (check your API's requirement for PDFs)
-        caption:
-          "Dear Patient, please find attached your invoice PDF for your recent visit. Thank you for choosing our services.",
+        mediatype: "document",
+        mimetype: "application/pdf",
+        caption: caption,
+        media: downloadUrl, // The public Supabase URL
+        fileName: friendlyFileName,
       }
 
-      const response = await fetch("https://a.infispark.in/send-image-url", { // Assuming this endpoint accepts imageUrl for PDFs
+      // 5. Send using the new API endpoint and headers
+      const response = await fetch("https://evo.infispark.in/message/sendMedia/medfordlab", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": apiKey, // Added apikey header
+        },
         body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("WhatsApp API error:", response.status, errorText);
-        throw new Error(`Failed to send the invoice on WhatsApp: ${errorText}`);
+        const errorText = await response.text()
+        console.error("WhatsApp API error:", response.status, errorText)
+        throw new Error(`Failed to send the invoice on WhatsApp: ${errorText}`)
       }
 
       toast.success("Invoice PDF sent successfully on WhatsApp!")
@@ -305,7 +320,6 @@ export default function InvoiceDownload({ record, beds, doctors, children }: Inv
       toast.error(`An error occurred while sending the invoice PDF on WhatsApp: ${error.message}`)
     }
   }
-
   const handlePreviewInvoice = async () => {
     try {
       const pdf = await generatePDF()
