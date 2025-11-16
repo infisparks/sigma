@@ -2,15 +2,15 @@
 
 import type React from "react"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 
 import { useForm, type SubmitHandler, type Path, type UseFormSetValue } from "react-hook-form"
 
 import { useParams, useRouter } from "next/navigation"
 
-import { supabase } from "@/lib/supabase" // Assuming your Supabase client is configured here
+import { supabase } from "@/lib/supabase"
 
-import { Droplet, User, AlertCircle, CheckCircle, Loader2, Calculator, CircleUserRound } from "lucide-react" // Using Lucide React icons
+import { Droplet, User, AlertCircle, CheckCircle, Loader2, Calculator, CircleUserRound, Plus } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -32,10 +32,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { generateReportPdf } from "@/app/pathology/download-report/[registrationId]/pdf-generator"
 import type { PatientData, CombinedTestGroup, HistoricalTestEntry, ComparisonTestSelection } from "@/app/pathology/download-report/[registrationId]/types/report"
 
-// Import for the new PrimeReact AutoComplete component
+// PrimeReact AutoComplete component
 import { AutoComplete, type AutoCompleteCompleteEvent } from "primereact/autocomplete"
 
 /* ─────────────────── Types ─────────────────── */
+
+interface SuggestionEntry {
+  shortName: string
+  description: string
+}
 
 interface SubParameterValue {
   name: string
@@ -55,7 +60,7 @@ interface TestParameterValue {
   valueType: "number" | "text"
   visibility?: string
   subparameters?: SubParameterValue[]
-  suggestions?: { shortName: string; description: string }[]
+  suggestions?: SuggestionEntry[] // Updated type for clarity
 }
 
 interface SubHeading {
@@ -64,13 +69,8 @@ interface SubHeading {
   is100?: boolean | string
 }
 
-interface TestStructure {
-  parameter: TestParameterValue[]
-  sub_heading: SubHeading[]
-}
-
 interface TestValueEntry {
-  testId: string
+  testId: string // Used to link back to zblood_test ID if needed, but we'll use testName
   testName: string
   testType: string
   parameters: TestParameterValue[]
@@ -142,8 +142,6 @@ const parseRangeKey = (key: string): { lower: number; upper: number } => {
   }
   return { lower: lowerDays, upper: upperDays }
 }
-
-const fmt3 = (n: number) => n.toFixed(3).replace(/\.?0+$/, "")
 
 // Helper to extract parameter names from a formula string
 const getFormulaDependencies = (formula: string): string[] => {
@@ -231,7 +229,6 @@ const BloodValuesForm: React.FC = () => {
   const registrationId = params.registrationId as string
 
   const [loading, setLoading] = useState(true)
-  const [dbText, setDbText] = useState<string[]>([])
   const [warn100, setWarn100] = useState<Record<string, boolean>>({})
   const [patientDetails, setPatientDetails] = useState<PatientData | null>(null)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
@@ -248,18 +245,90 @@ const BloodValuesForm: React.FC = () => {
     defaultValues: { registrationId: registrationId || "", tests: [] },
   })
 
-  /* ── Fetch autocomplete values ── */
-  useEffect(() => {
-    ;(async () => {
+  const testsWatch = watch("tests")
+
+  /* ── Helper to update the Test Definition with a new suggestion ── */
+  const updateTestDefinitionSuggestion = useCallback(
+    async (testName: string, paramName: string, newValue: string) => {
+      const newShortName = newValue.trim().slice(0, 3).toUpperCase() // Simple short name logic
+
       try {
-        const { data, error } = await supabase.from("autocomplete_values").select("value")
-        if (error) throw error
-        setDbText(data.map((row) => row.value))
-      } catch (e) {
-        console.error("Error fetching autocomplete values:", e)
+        setLoading(true)
+        
+        // 1. Fetch the current test definition record
+        const { data: testDefData, error: fetchError } = await supabase
+          .from("zblood_test")
+          .select("id, parameter")
+          .eq("test_name", testName)
+          .single()
+
+        if (fetchError || !testDefData) throw new Error(`Failed to fetch test definition for ${testName}.`)
+        
+        const existingParameters = Array.isArray(testDefData.parameter) ? testDefData.parameter : []
+        
+        // 2. Find the index of the parameter to update
+        const paramIndex = existingParameters.findIndex((p: any) => p.name === paramName)
+
+        if (paramIndex === -1) throw new Error(`Parameter ${paramName} not found in test definition.`)
+        
+        // 3. Create the new suggestion entry
+        const newSuggestion: SuggestionEntry = {
+          description: newValue.trim(),
+          shortName: newShortName,
+        }
+        
+        // 4. Update the parameter's suggestions array in the JSON structure
+        const updatedParameters = [...existingParameters]
+        const currentSuggestions = updatedParameters[paramIndex].suggestions || []
+
+        // Check for duplicates before pushing (case-insensitive description check)
+        const isDuplicate = currentSuggestions.some(
+            (s: SuggestionEntry) => s.description.toLowerCase() === newSuggestion.description.toLowerCase()
+        );
+
+        if (isDuplicate) {
+            alert(`Suggestion "${newValue.trim()}" already exists for ${paramName}.`);
+            return;
+        }
+
+        updatedParameters[paramIndex].suggestions = [...currentSuggestions, newSuggestion];
+
+        // 5. Update the record in Supabase
+        const { error: updateError } = await supabase
+          .from("zblood_test")
+          .update({ parameter: updatedParameters })
+          .eq("id", testDefData.id)
+
+        if (updateError) throw updateError
+        
+        alert(`Successfully added new suggestion "${newValue.trim()}" to ${paramName} definition.`);
+        
+        // 6. Update the local form state (testsWatch) to reflect the change immediately
+        const testIdx = testsWatch.findIndex(t => t.testName === testName);
+        if (testIdx > -1) {
+            const newTests = [...testsWatch];
+            const paramIdxInForm = newTests[testIdx].parameters.findIndex(p => p.name === paramName);
+            
+            if (paramIdxInForm > -1) {
+                // IMPORTANT: Update the suggestions array in the local form data
+                newTests[testIdx].parameters[paramIdxInForm].suggestions = updatedParameters[paramIndex].suggestions;
+                
+                // Use setValue to update the entire 'tests' array to trigger re-render
+                setValue("tests", newTests, { shouldValidate: false, shouldDirty: true });
+            }
+        }
+
+
+      } catch (e: any) {
+        console.error("Error updating test definition with new suggestion:", e.message || e)
+        alert("Failed to add new suggestion to test definition: " + (e.message || "Unknown error"))
+      } finally {
+        setLoading(false)
       }
-    })()
-  }, [])
+    },
+    [setValue, testsWatch],
+  )
+
 
   /* ── Fetch patient’s booked tests and definitions ── */
   useEffect(() => {
@@ -303,18 +372,20 @@ const BloodValuesForm: React.FC = () => {
         const originalTestNames = (bookedTests || []).map((t: any) => t.testName)
         const { data: bloodTests, error: bloodTestError } = await supabase
           .from("zblood_test")
-          .select(`id, test_name, interpretation`)
+          .select(`id, test_name, interpretation, parameter, sub_heading`) // Fetch definition details here
           .in("test_name", originalTestNames)
 
         if (bloodTestError) throw new Error(`Failed to fetch blood tests: ${bloodTestError.message}`)
 
+        const testDefinitions: Record<string, any> = {}
         const testInterpretations: Record<string, string> = {}
         bloodTests.forEach((test: any) => {
-          const slug = test.test_name
-            .toLowerCase()
-            .replace(/\s+/g, "_")
-            .replace(/[.#$[\]()]/g, "")
-          testInterpretations[slug] = test.interpretation || ""
+             const key = test.test_name
+                .toLowerCase()
+                .replace(/\s+/g, "_")
+                .replace(/[.#$[\]()]/g, "")
+            testDefinitions[test.test_name] = test;
+            testInterpretations[key] = test.interpretation || ""
         })
 
         const mappedPatientData: PatientData = {
@@ -336,32 +407,27 @@ const BloodValuesForm: React.FC = () => {
           doctorName: registrationData.doctor_name,
         }
 
-        const tests: TestValueEntry[] = await Promise.all(
-          bookedTests.map(async (bt: any) => {
-            const { data: testDefData, error: testDefError } = await supabase
-              .from("zblood_test")
-              .select("parameter, sub_heading")
-              .eq("test_name", bt.testName)
-              .single()
-
-            if (testDefError || !testDefData) {
-              console.warn(`Test definition not found for ${bt.testName}:`, testDefError)
-              return {
-                testId: bt.testId,
-                testName: bt.testName,
-                testType: bt.testType,
-                parameters: [],
-                subheadings: [],
-                selectedParameters: bt.selectedParameters,
-              } as TestValueEntry
+        const tests: TestValueEntry[] = bookedTests.map((bt: any) => {
+            const testDef = testDefinitions[bt.testName];
+            
+            if (!testDef) {
+                console.warn(`Test definition not found for ${bt.testName}`);
+                return {
+                    testId: bt.testId,
+                    testName: bt.testName,
+                    testType: bt.testType,
+                    parameters: [],
+                    subheadings: [],
+                    selectedParameters: bt.selectedParameters,
+                } as TestValueEntry
             }
 
-            const allParams = Array.isArray(testDefData.parameter) ? testDefData.parameter : []
-            const subheadings = Array.isArray(testDefData.sub_heading) ? testDefData.sub_heading : []
+            const allParams = Array.isArray(testDef.parameter) ? testDef.parameter : []
+            const subheadings = Array.isArray(testDef.sub_heading) ? testDef.sub_heading : []
 
             const wanted = bt.selectedParameters?.length
-              ? allParams.filter((p: any) => bt.selectedParameters.includes(p.name))
-              : allParams
+                ? allParams.filter((p: any) => bt.selectedParameters.includes(p.name))
+                : allParams
 
             const params: TestParameterValue[] = wanted.map((p: any) => {
               const ranges = p.range?.[genderKey] || []
@@ -420,15 +486,14 @@ const BloodValuesForm: React.FC = () => {
             })
 
             return {
-              testId: bt.testId,
+              testId: testDef.id, // Use the actual ID from zblood_test
               testName: bt.testName,
               testType: bt.testType,
               parameters: params,
               subheadings: subheadings,
               selectedParameters: bt.selectedParameters,
             } as TestValueEntry
-          }),
-        )
+          });
 
         const mappedBloodtestDetail: Record<string, any> = {}
         for (const t of tests) {
@@ -463,7 +528,6 @@ const BloodValuesForm: React.FC = () => {
   }, [registrationId, reset])
 
   /* ══════════════ “Sum to 100” warning logic ══════════════ */
-  const testsWatch = watch("tests")
   useEffect(() => {
     const warn: Record<string, boolean> = {}
     testsWatch.forEach((t, tIdx) => {
@@ -501,6 +565,7 @@ const BloodValuesForm: React.FC = () => {
       })
 
       try {
+        // eslint-disable-next-line no-new-func
         const r = Function('"use strict";return (' + expr + ");")()
         if (!isNaN(r)) {
           const formatted = Number(r).toFixed(2)
@@ -543,16 +608,13 @@ const BloodValuesForm: React.FC = () => {
   /* ══════════════ Build suggestions for text inputs ══════════════ */
   const buildMatches = (param: TestParameterValue, q: string): string[] => {
     const query = q.toLowerCase()
-    if (Array.isArray(param.suggestions) && param.suggestions.length > 0) {
-      const pool = param.suggestions.map((s) => s.description)
-      return query ? pool.filter((d) => d.toLowerCase().includes(query)) : pool
-    }
-    return query ? dbText.filter((s) => s.toLowerCase().includes(query)) : dbText
+    const pool = param.suggestions?.map((s) => s.description) || []
+    return query ? pool.filter((d) => d.toLowerCase().includes(query)) : pool
   }
 
   /* ══════════════ Handle “fill remaining” for subheadings that sum to 100 ══════════════ */
   const fillRemaining = (tIdx: number, sh: SubHeading, lastIdx: number) => {
-    const test = watch("tests")[tIdx]
+    const test = testsWatch[tIdx]
     const idxs = sh.parameterNames.map((n) => test.parameters.findIndex((p) => p.name === n)).filter((i) => i >= 0)
     let total = 0
     idxs.slice(0, -1).forEach((i) => {
@@ -666,7 +728,7 @@ const BloodValuesForm: React.FC = () => {
     }
 
     try {
-      const formDataForPreview = getFormDataForPreview(tests, patientDetails as PatientData, fullPatientData)
+      const formDataForPreview = getFormDataForPreview(testsWatch, patientDetails as PatientData, fullPatientData)
 
       if (!formDataForPreview) {
         alert("Could not prepare data for preview.")
@@ -708,8 +770,6 @@ const BloodValuesForm: React.FC = () => {
         Loading…
       </CenterCard>
     )
-
-  const tests = watch("tests")
 
   return (
     <TooltipProvider>
@@ -758,7 +818,7 @@ const BloodValuesForm: React.FC = () => {
             )}
             <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
               <div className="flex-1 overflow-y-auto space-y-1.5 pb-1">
-                {tests.map((test, tIdx) => {
+                {testsWatch.map((test, tIdx) => {
                   if (test.testType?.toLowerCase() === "outsource") {
                     return (
                       <Card key={test.testId} className="mb-1.5 border-l-4 border-yellow-500 bg-yellow-50 shadow-sm">
@@ -798,12 +858,14 @@ const BloodValuesForm: React.FC = () => {
                                   tIdx={tIdx}
                                   pIdx={p.originalIndex}
                                   param={p}
-                                  value={tests[tIdx].parameters[p.originalIndex].value}
+                                  testName={test.testName}
+                                  value={testsWatch[tIdx].parameters[p.originalIndex].value}
                                   setValue={setValue}
                                   errors={errors}
                                   numericChange={numericChange}
                                   calcOne={calcFormulaOnce}
                                   buildMatches={buildMatches}
+                                  updateTestDefinitionSuggestion={updateTestDefinitionSuggestion}
                                 />
                               ))}
                             </div>
@@ -839,7 +901,8 @@ const BloodValuesForm: React.FC = () => {
                                           tIdx={tIdx}
                                           pIdx={p.originalIndex}
                                           param={{ ...p, originalIndex: p.originalIndex }}
-                                          value={tests[tIdx].parameters[p.originalIndex].value}
+                                          testName={test.testName}
+                                          value={testsWatch[tIdx].parameters[p.originalIndex].value}
                                           setValue={setValue}
                                           errors={errors}
                                           numericChange={numericChange}
@@ -847,6 +910,7 @@ const BloodValuesForm: React.FC = () => {
                                           isLastOf100={isLast}
                                           fillRemaining={() => fillRemaining(tIdx, s, p.originalIndex)}
                                           buildMatches={buildMatches}
+                                          updateTestDefinitionSuggestion={updateTestDefinitionSuggestion}
                                         />
                                       )
                                     })}
@@ -860,12 +924,14 @@ const BloodValuesForm: React.FC = () => {
                                 tIdx={tIdx}
                                 pIdx={pIdx}
                                 param={{ ...p, originalIndex: pIdx }}
-                                value={tests[tIdx].parameters[pIdx].value}
+                                testName={test.testName}
+                                value={testsWatch[tIdx].parameters[pIdx].value}
                                 setValue={setValue}
                                 errors={errors}
                                 numericChange={numericChange}
                                 calcOne={calcFormulaOnce}
                                 buildMatches={buildMatches}
+                                updateTestDefinitionSuggestion={updateTestDefinitionSuggestion}
                               />
                             ))}
                       </CardContent>
@@ -951,12 +1017,11 @@ const BloodValuesForm: React.FC = () => {
 
 /* ─────────────────── ParamRow Component ─────────────────── */
 
-type InputElement = HTMLInputElement | HTMLTextAreaElement
-
 interface RowProps {
   tIdx: number
   pIdx: number
   param: IndexedParam
+  testName: string // Need testName to find the zblood_test record
   value: string | number
   setValue: UseFormSetValue<BloodValuesFormInputs>
   errors: any
@@ -965,12 +1030,42 @@ interface RowProps {
   buildMatches: (param: TestParameterValue, q: string) => string[]
   isLastOf100?: boolean
   fillRemaining?: () => void
+  updateTestDefinitionSuggestion: (testName: string, paramName: string, newValue: string) => Promise<void>
 }
+
+const AddSuggestionButton: React.FC<{
+    value: string;
+    testName: string;
+    paramName: string;
+    updateTestDefinitionSuggestion: (testName: string, paramName: string, newValue: string) => Promise<void>;
+}> = ({ value, testName, paramName, updateTestDefinitionSuggestion }) => {
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button
+                    type="button"
+                    onClick={() => updateTestDefinitionSuggestion(testName, paramName, value)}
+                    variant="outline"
+                    size="sm"
+                    className="ml-1 h-5 text-2xs text-blue-600 border-blue-600 hover:bg-blue-50 hover:text-blue-800 bg-transparent"
+                >
+                    <Plus className="h-3 w-3 mr-0.5" />
+                    Add Suggestion
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+                <p>Add "{value}" to the **{paramName}** definition.</p>
+            </TooltipContent>
+        </Tooltip>
+    );
+};
+
 
 const ParamRow: React.FC<RowProps> = ({
   tIdx,
   pIdx,
   param,
+  testName,
   value,
   setValue,
   errors,
@@ -979,8 +1074,17 @@ const ParamRow: React.FC<RowProps> = ({
   buildMatches,
   isLastOf100,
   fillRemaining,
+  updateTestDefinitionSuggestion,
 }) => {
   const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([])
+  // Use the form value directly for the text input local state
+  const [currentTextValue, setCurrentTextValue] = useState(String(value ?? "")) 
+  
+  // Keep local state in sync with form hook state
+  useEffect(() => {
+    setCurrentTextValue(String(value ?? ""))
+  }, [value])
+
 
   const numValue = Number.parseFloat(value as string)
   const parsedRange = parseRange(param.range)
@@ -1019,6 +1123,17 @@ const ParamRow: React.FC<RowProps> = ({
     setFilteredSuggestions(suggestions)
   }
 
+  // Check if the current value is a candidate for a new suggestion
+  const existingDescriptions = useMemo(() => {
+    return param.suggestions?.map(s => s.description.toLowerCase()) || [];
+  }, [param.suggestions]);
+
+  const isNewSuggestionCandidate = 
+    param.valueType === "text" &&
+    currentTextValue.trim() !== "" &&
+    !existingDescriptions.includes(currentTextValue.trim().toLowerCase());
+
+
   return (
     <div className="flex items-center rounded-lg border bg-background px-1.5 py-0.5 text-xs shadow-sm">
       <div className="flex flex-1 items-center gap-1">
@@ -1056,6 +1171,14 @@ const ParamRow: React.FC<RowProps> = ({
             Calculate Rem.
           </Button>
         )}
+        {isNewSuggestionCandidate && (
+             <AddSuggestionButton
+                value={currentTextValue.trim()}
+                testName={testName}
+                paramName={param.name}
+                updateTestDefinitionSuggestion={updateTestDefinitionSuggestion}
+            />
+        )}
       </div>
       {param.valueType === "number" ? (
         <div className="relative ml-1.5 w-28">
@@ -1083,14 +1206,17 @@ const ParamRow: React.FC<RowProps> = ({
         <div className="relative ml-1.5 w-48">
           <AutoComplete
             id={`param-${tIdx}-${pIdx}`}
-            value={String(value ?? "")}
+            value={currentTextValue}
             suggestions={filteredSuggestions}
             completeMethod={searchSuggestions}
-            onChange={(e) =>
-              setValue(`tests.${tIdx}.parameters.${pIdx}.value` as Path<BloodValuesFormInputs>, e.value, {
+            onChange={(e) => {
+              const newValue = e.value || "";
+              setCurrentTextValue(newValue) // Update local state for input visibility
+              // Update react-hook-form state
+              setValue(`tests.${tIdx}.parameters.${pIdx}.value` as Path<BloodValuesFormInputs>, newValue, {
                 shouldValidate: false,
               })
-            }
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Text (suggestions available)"
             inputClassName="w-full h-6 text-xs p-2 border-input"
