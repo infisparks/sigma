@@ -71,10 +71,10 @@ const sendXrayWhatsAppNotification = async (
     }
 
     const formattedDate = format(apptDate, "PPP");
-    const messageText = `Dear *${patientName}*,\n\nThank you for visiting Sigma Clinic.\n\n*Radiology/X-ray Order Confirmed*\n📅 Date: ${formattedDate}\n🔢 Bill No: *${billNumber || "N/A"}*\n☢️ Exams: ${examNames}\n\n*Payment Summary:*\n💰 Total: ₹${financials.total.toFixed(2)}\n✅ Paid: ₹${financials.paid.toFixed(2)}\n⚠️ Balance: ₹${financials.balance.toFixed(2)}`;
+    const messageText = `Dear *${patientName}*,\n\nThank you for visiting Cigma Clinic.\n\n*Radiology/X-ray Order Confirmed*\n📅 Date: ${formattedDate}\n🔢 Bill No: *${billNumber || "N/A"}*\n☢️ Exams: ${examNames}\n\n*Payment Summary:*\n💰 Total: ₹${financials.total.toFixed(2)}\n✅ Paid: ₹${financials.paid.toFixed(2)}\n⚠️ Balance: ₹${financials.balance.toFixed(2)}`;
 
     try {
-        const response = await fetch("https://evo.infispark.in/message/sendText/sigma", {
+        const response = await fetch("https://evo.infispark.in/message/sendText/Cigma", {
             method: "POST",
             headers: { 
                 "Content-Type": "application/json", 
@@ -148,7 +148,7 @@ const XrayRegistration: React.FC<XrayProps> = ({
     const discount = watch("discount") || 0;
     const payments = watch("payments") || [];
     const watchVisitType = watch("visitType");
-    const isGautamiHospital = watch("hospitalName") === "Sigma clinic";
+    const isGautamiHospital = watch("hospitalName") === "Cigma clinic";
 
     const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});
     const searchInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -328,7 +328,7 @@ const XrayRegistration: React.FC<XrayProps> = ({
                     <div className="grid grid-cols-12 gap-2">
                          <div className="col-span-3"><Label className="text-sm">Hospital</Label>
                             <Select value={watch("hospitalName")} onValueChange={(v) => setValue("hospitalName", v)} disabled={!isExistingPatient}><SelectTrigger className={`h-8`}><SelectValue /></SelectTrigger>
-                                <SelectContent><SelectItem value="Sigma Clinic">Sigma Clinic</SelectItem><SelectItem value="Gautami Medford NX Hospital">Gautami Medford NX Hospital</SelectItem><SelectItem value="Apex Clinic">Apex Clinic</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
+                                <SelectContent><SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem><SelectItem value="Gautami Medford NX Hospital">Gautami Medford NX Hospital</SelectItem><SelectItem value="Apex Clinic">Apex Clinic</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
                         <div className="col-span-4 relative"><Label className="text-sm">Doctor Name</Label>
                             <Input {...control.register("doctorName", { required: "Doctor is required" })} className="h-8" placeholder="Referring Doctor" disabled={!isExistingPatient}/>
                             {errors.doctorName && <p className="text-red-500 text-xs mt-1">{errors.doctorName.message}</p>}</div>

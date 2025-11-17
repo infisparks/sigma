@@ -219,7 +219,7 @@ export function DashboardHeader({
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
                 >
                   <option value="all">All Hospitals</option>
-                  <option value="Sigma Clinic">Sigma Clinic</option>
+                  <option value="Cigma Clinic">Cigma Clinic</option>
                 
                 </select>
               </div>

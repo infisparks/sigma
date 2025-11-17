@@ -392,7 +392,7 @@ export default function BillingPage() {
                   className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all duration-300 bg-white hover:border-gray-300 min-w-[200px]"
                 >
                   <option value="all">All Hospitals</option>
-                  <option value="Sigma Clinic">Sigma Clinic</option>
+                  <option value="Cigma Clinic">Cigma Clinic</option>
                  
                 </select>
               </div>

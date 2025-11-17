@@ -115,7 +115,7 @@ export function DashboardModals({
       const url = publicUrlData.publicUrl;
 
       // 6. Create the new WhatsApp API payload
-      const caption = `Dear ${selectedRegistration.name},\n\nYour lab test bill is now available.\n\nRegards,\nSigma Lab Team`;
+      const caption = `Dear ${selectedRegistration.name},\n\nYour lab test bill is now available.\n\nRegards,\nCigma Lab Team`;
 
       const payload = {
         number: "91" + selectedRegistration.contact,
@@ -127,7 +127,7 @@ export function DashboardModals({
       };
 
       // 7. Send using the new endpoint and headers
-      const res = await fetch("https://evo.infispark.in/message/sendMedia/sigma", { // <-- NEW URL
+      const res = await fetch("https://evo.infispark.in/message/sendMedia/Cigma", { // <-- NEW URL
         method: "POST",
         headers: {
           "Content-Type": "application/json",

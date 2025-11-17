@@ -152,7 +152,7 @@ export default function TurnAroundTimePage() {
 
       // Hospital filter
       if (hospitalFilter !== 'all') {
-        if (hospitalFilter === 'Other' && r.hospitalName && !['Sigma Clinic'].includes(r.hospitalName)) {
+        if (hospitalFilter === 'Other' && r.hospitalName && !['Cigma Clinic'].includes(r.hospitalName)) {
           return true
         }
         if (hospitalFilter !== 'Other' && r.hospitalName !== hospitalFilter) {
@@ -394,7 +394,7 @@ export default function TurnAroundTimePage() {
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
                   >
                     <option value="all">All Hospital</option>
-                    <option value="Sigma Clinic">Sigma Clinic</option>
+                    <option value="Cigma Clinic">Cigma Clinic</option>
                    
                   </select>
                 </div>

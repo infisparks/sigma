@@ -150,7 +150,7 @@ const getDefaultFormState = (): IFormState => ({
     title: "",
     address: "",
     uhid: "", // Default to empty
-    hospitalName: "Sigma Clinic",
+    hospitalName: "Cigma Clinic",
     billNumber: "",
     doctorName: "",
     visitType: "OPD",
@@ -184,7 +184,7 @@ export default function XrayPage() {
   const isExistingPatient = useMemo(() => Boolean(formData.uhid), [formData.uhid])
 
   const isGautamiHospital = () => {
-    return formData.hospitalName === "Sigma clinic"
+    return formData.hospitalName === "Cigma clinic"
   }
 
   const getCurrentDataMaps = () => {
@@ -839,7 +839,7 @@ export default function XrayPage() {
                     <SelectValue placeholder="Select hospital" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Sigma Clinic">Sigma Clinic</SelectItem>
+                    <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
                   
                   </SelectContent>
                 </Select>

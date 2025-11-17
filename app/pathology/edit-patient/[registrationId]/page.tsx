@@ -213,7 +213,7 @@ export default function EditPatientPage() {
     formState: { errors, isSubmitting },
   } = useForm<IFormInput>({
     defaultValues: {
-      hospitalName: "Sigma Clinic",
+      hospitalName: "Cigma Clinic",
       visitType: "direct", 
       title: "",
       name: "",
@@ -419,7 +419,7 @@ export default function EditPatientPage() {
         }
 
         const formData: IFormInput = {
-          hospitalName: registrationData.hospital_name || "Sigma Clinic",
+          hospitalName: registrationData.hospital_name || "Cigma Clinic",
           visitType: initialVisitType,
           title: patient.title || "",
           name: patient.name || "",
@@ -662,7 +662,7 @@ export default function EditPatientPage() {
           };
 
           // 4. Send asynchronously (using fetch, no need to await in a way that blocks UI)
-          fetch("https://evo.infispark.in/message/sendText/sigma", {
+          fetch("https://evo.infispark.in/message/sendText/Cigma", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1004,7 +1004,7 @@ export default function EditPatientPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Sigma Clinic">Sigma Clinic</SelectItem>
+                          <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
                          
                         </SelectContent>
                       </Select>

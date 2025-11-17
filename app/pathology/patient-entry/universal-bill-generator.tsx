@@ -325,7 +325,7 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
     doc.setFont("helvetica", "normal")
     // doc.text("This is an auto-generated bill and may not require a signature.", 20, pageHeight - 15)
     doc.setFont("helvetica", "bold")
-    // doc.text("For: Sigma Clinic", pageWidth - 40, pageHeight - 15)
+    // doc.text("For: Cigma Clinic", pageWidth - 40, pageHeight - 15)
 
 
     return doc

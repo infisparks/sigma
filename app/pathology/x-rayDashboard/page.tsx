@@ -533,7 +533,7 @@ export default function XrayDashboardPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All">All Hospitals</SelectItem>
-                  <SelectItem value="">Sigma Clinic</SelectItem>
+                  <SelectItem value="">Cigma Clinic</SelectItem>
                  
                 </SelectContent>
               </Select>
