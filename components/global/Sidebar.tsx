@@ -42,6 +42,12 @@ const pathologyMenuItems = [
     roles: ['admin', 'technician'] 
   },
   { 
+    icon: UserPlus, 
+    label: 'opd List', 
+    href: '/pathology/opd', 
+    roles: ['admin', 'technician'] 
+  },
+  { 
     icon: Clock, 
     label: 'Turn Around Time', 
     href: '/pathology/turnAroundTime', 
