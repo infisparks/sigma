@@ -68,8 +68,8 @@ export type ReportConfig = {
   export const defaultReportConfig: ReportConfig = {
     // Page layout and printable area
     page: {
-      marginTop: 50, // Space from the top of the page to the start of the patient header.
-      marginBottom: 25, // Space from the bottom, creating the footer area. Content will move to a new page before crossing this.
+      marginTop: 38, // Space from the top of the page to the start of the patient header.
+      marginBottom: 40, // Space from the bottom, creating the footer area. Content will move to a new page before crossing this.
       marginHorizontal: 23, // Left and right margins.
     },
   
@@ -102,13 +102,13 @@ export type ReportConfig = {
         display: true,
         width: 35,
         height: 30, // Note: This will be dynamically calculated
-        marginBottom: 21,
+        marginBottom: 32,
       },
       stampCenter: {
         display: false, // Default to false as requested
         width: 40,
         height: 30, // Note: This will be dynamically calculated
-        marginBottom: 21,
+        marginBottom: 35,
       },
     },
   

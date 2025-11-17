@@ -1,4 +1,3 @@
-// app/pathology/patient-entry/PathologyRegistration.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form"
 import { supabase } from "@/lib/supabase"
@@ -10,23 +9,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Calendar, Clock, Plus, X, Search, Trash2, Timer, FlaskConical } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 
-// Import types from the parent file
 import type { IUnifiedFormInput, VisitType, TpaType } from "./page"
 
-// --- Helpers and Constants ---
 const TABLE = { PATIENT: "patient_detail", REGISTRATION: "zregistration", DOCTOR: "zdoctorlist", BLOOD: "zblood_test" } as const;
 
-// Minimal type definitions required for this component
+// --- Types ---
+
 interface PatientData { uhid: string; name: string; contact: string; age: number; dayType: "year" | "month" | "day"; title: string; address?: string; gender: string; }
 interface CommonRegDetails { hospitalName: string; visitType: VisitType; doctorName: string; tpa: TpaType; registrationDate: string; registrationTime: string; sendWhatsApp: boolean; sourceOpdId: number | null; sourceIpdId: number | null; }
 interface PathologyData { estimatedTime: string; bloodTests: any[]; discountAmount: number; paymentEntries: any[]; }
 interface PackageType { id: number; package_name: string; tests: any[]; discountamount: number; }
 
-// Combined RHF interface for this component (FIXED)
 interface PathRegFormFields extends CommonRegDetails, PathologyData {}
 
-// Helper implementation placeholders
+
+// --- Helpers ---
+
 function throwIfError(error: any) { if (error) throw error; }
+
 function time12ToISO(date: string, time12: string): string {
   const [time, mer] = time12.split(" ");
   let [hh, mm] = time.split(":").map(Number);
@@ -34,6 +34,7 @@ function time12ToISO(date: string, time12: string): string {
   if (mer === "AM" && hh === 12) hh = 0;
   return new Date(`${date}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`).toISOString();
 }
+
 function calculateDOB(age: number, unit: 'year' | 'month' | 'day'): string {
     const today = new Date(); const dob = new Date(today);
     dob.setHours(0, 0, 0, 0); 
@@ -43,44 +44,83 @@ function calculateDOB(age: number, unit: 'year' | 'month' | 'day'): string {
     return dob.toISOString().split('T')[0];
 }
 
-// FIX: Corrected implementation for minutes to Day/Hour/Minute conversion
 function formatMinutesToDuration(totalMinutes: number): string {
     if (totalMinutes < 0 || isNaN(totalMinutes) || totalMinutes === 0) return "Less than 1 Minute";
-
     const MIN_PER_HOUR = 60;
     const MIN_PER_DAY = 24 * MIN_PER_HOUR;
-
     const days = Math.floor(totalMinutes / MIN_PER_DAY);
     let remainingMinutes = totalMinutes % MIN_PER_DAY;
     const hours = Math.floor(remainingMinutes / MIN_PER_HOUR);
     const minutes = remainingMinutes % MIN_PER_HOUR;
-
     let result = [];
     if (days > 0) result.push(`${days} Day${days > 1 ? 's' : ''}`);
     if (hours > 0) result.push(`${hours} Hour${hours > 1 ? 's' : ''}`);
     if (minutes > 0) result.push(`${minutes} Minute${minutes > 1 ? 's' : ''}`);
-    
     return result.join(" ");
 }
 
-// FIX: Corrected time calculation logic using estimated_time_mm
 function calculateMaxEstimatedTime(tests: any[], bloodRows: any[]): number {
     if (tests.length === 0) return 0;
     let maxTime = 0;
     tests.forEach((selectedTest: any) => {
-        // Find the full test definition using the testId from the selected test
         const testDef = bloodRows.find((row: any) => row.id === selectedTest.testId);
-        // Safely parse the estimated_time_mm string from the test definition
         const timeInMinutes = parseInt((testDef as any)?.estimated_time_mm || '0', 10);
         if (!isNaN(timeInMinutes) && timeInMinutes > maxTime) { maxTime = timeInMinutes; }
     });
     return maxTime;
 }
 
+function generateFallbackUHID() {
+    return `P${new Date().getFullYear()}${Math.floor(100000 + Math.random() * 900000)}`;
+}
+
 const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => { return fn() }
 
 
-// --- Component ---
+// 🟢 UPDATED: WhatsApp Sender Function
+const sendWhatsAppNotification = async (
+    contactNumber: string, 
+    patientName: string, 
+    regId: number, 
+    estTimeDuration: string,
+    testNames: string,
+    financials: { total: number, paid: number, balance: number }
+): Promise<void> => {
+    const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
+    
+    if (!apiKey) {
+        console.warn("⚠️ WhatsApp API Key missing. Notification skipped.");
+        return;
+    }
+
+    const messageText = `Dear *${patientName}*,\n\nThank you for visiting Medford Hospital.\n\n*Pathology Registration Confirmed*\n🆔 Reg ID: *${regId}*\n🧪 Tests: ${testNames}\n⏱ Est. Report Time: ${estTimeDuration}\n\n*Payment Summary:*\n💰 Total: ₹${financials.total.toFixed(2)}\n✅ Paid: ₹${financials.paid.toFixed(2)}\n⚠️ Balance: ₹${financials.balance.toFixed(2)}\n\nYour reports will be ready shortly.`;
+
+    try {
+        const response = await fetch("https://evo.infispark.in/message/sendText/medfordlab", {
+            method: "POST",
+            headers: { 
+                "Content-Type": "application/json", 
+                "apikey": apiKey 
+            },
+            body: JSON.stringify({
+                number: `91${contactNumber}`,
+                text: messageText
+            }),
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            console.error("❌ WhatsApp API Error:", errData);
+        } else {
+            console.log(`✅ WhatsApp sent to ${contactNumber}`);
+        }
+    } catch (error) {
+        console.error("❌ WhatsApp Network Error:", error);
+    }
+};
+
+
+// --- Component Interfaces and Main Component ---
 
 interface PathologyProps {
     patientData: PatientData;
@@ -95,17 +135,17 @@ interface PathologyProps {
     opdRecords: any[]; ipdRecords: any[];
     showSourceSelection: boolean; setShowSourceSelection: React.Dispatch<React.SetStateAction<boolean>>;
     fetchSourceRecords: (uhid: string, visitType: 'opd' | 'ipd', autoOpen: boolean) => Promise<void>;
+    onSuccess: () => void;
 }
-
 
 const PathologyRegistration: React.FC<PathologyProps> = ({ 
     patientData, isExistingPatient, bloodRows, packageRows,
     pathologyData, setPathologyData,
     commonRegDetails, setCommonRegDetails,
     fetchSourceRecords, setShowSourceSelection,
+    onSuccess, 
 }) => {
     
-    // 1. Initialize RHF with combined data
     const defaultRHFValues: PathRegFormFields = useMemo(() => ({
         ...commonRegDetails,
         ...pathologyData,
@@ -118,19 +158,16 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
 
     const watchFields = watch();
 
-    // 2. Sync RHF changes back to parent state
     useEffect(() => {
         const { estimatedTime, bloodTests, discountAmount, paymentEntries, ...regDetails } = watchFields;
-        
         setPathologyData({ estimatedTime, bloodTests, discountAmount, paymentEntries });
-
         (Object.keys(regDetails) as Array<keyof CommonRegDetails>).forEach((key) => {
+             // @ts-ignore
              setCommonRegDetails(key, regDetails[key]); 
         });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [JSON.stringify(watchFields), setPathologyData, setCommonRegDetails]);
 
-    }, [watchFields, setPathologyData, setCommonRegDetails]);
-
-    // 3. Field Arrays & Watchers
     const { fields: bloodTestFields, append: appendBloodTest, remove: removeBloodTest } = useFieldArray({ control, name: "bloodTests" as "bloodTests" });
     const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({ control, name: "paymentEntries" as "paymentEntries" });
 
@@ -140,7 +177,6 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
     const watchEstimatedTime = watch("estimatedTime");
     const watchVisitType = watch("visitType");
 
-    // FIXED: Calculate total amounts safely
     const totalAmount = bloodTests.reduce((s: number, t: any) => s + (t.price || 0), 0);
     const totalPaid = paymentEntries.reduce((s: number, p: any) => s + (p.amount || 0), 0);
     const remainingAmount = totalAmount - discountAmount - totalPaid;
@@ -149,7 +185,6 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
     const testSearchRef = useRef<HTMLDivElement | null>(null);
     const [searchText, setSearchText] = useState("");
     
-    // 4. Calculation and Visit Logic (Time and Source Popover Trigger)
     useEffect(() => {
         const maxMinutes = calculateMaxEstimatedTime(bloodTests, bloodRows);
         setValue("estimatedTime", String(maxMinutes)); 
@@ -157,6 +192,7 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
 
     useEffect(() => {
         if (patientData.uhid && (watchVisitType === 'opd' || watchVisitType === 'ipd')) {
+            // @ts-ignore
             fetchSourceRecords(patientData.uhid, watchVisitType as 'opd' | 'ipd', true); 
         } else {
             setShowSourceSelection(false);
@@ -164,7 +200,6 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
         }
     }, [patientData.uhid, watchVisitType, fetchSourceRecords, setShowSourceSelection, setValue]);
 
-    // 5. Handlers
     const addTestById = (id: number) => {
         const t = bloodRows.find((x: any) => x.id === id);
         if (!t) return;
@@ -174,24 +209,50 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
     const removeAllTests = () => { for (let i = bloodTestFields.length - 1; i >= 0; i--) removeBloodTest(i) }
     const addAllTests = () => { unselectedTests.forEach((t: any) => addTestById(t.id)) }
     const addPaymentEntry = () => {
-        const currentTime = watch("registrationTime"); // Use current RHF time value
+        const currentTime = watch("registrationTime");
         appendPayment({ amount: 0, paymentMode: "online", time: currentTime });
     }
 
-    // 6. Submission Handler
+    // --- ON SUBMIT HANDLER ---
     const onSubmit: SubmitHandler<PathRegFormFields> = async (data) => {
-        if (!patientData.uhid || data.bloodTests.length === 0) { alert("Please complete patient details and add at least one test."); return; }
+        if (!patientData.name || !patientData.contact || patientData.age === 0 || !patientData.title || !patientData.gender) { 
+             alert("Please ensure all Patient Details are filled out."); 
+             return; 
+        }
+        if (data.bloodTests.length === 0) { alert("Please add at least one test."); return; }
+        if (data.doctorName.trim().length === 0) { alert("Doctor Name is required."); return; }
         if ((data.visitType === 'opd' && data.sourceOpdId === null) || (data.visitType === 'ipd' && data.sourceIpdId === null)) { alert(`Please select a source ${data.visitType.toUpperCase()} registration.`); return; }
 
         try {
-            const finalUHID: string = patientData.uhid;
-            
-            // 1. Patient Update 
+            let finalUHID: string = patientData.uhid;
             const dob = calculateDOB(patientData.age, patientData.dayType);
             const totalDay = patientData.age * (patientData.dayType === "year" ? 360 : patientData.dayType === "month" ? 30 : 1);
-            await withRetry(async () => supabase.from(TABLE.PATIENT).update({ name: patientData.name.toUpperCase(), number: Number(patientData.contact), age: patientData.age, age_unit: patientData.dayType, total_day: totalDay, gender: patientData.gender, address: patientData.address || "", title: patientData.title, dob: dob, }).eq("uhid", finalUHID));
             
-            // 2. Registration Insertion
+            const patientPayload = {
+                name: patientData.name.toUpperCase(),
+                number: Number(patientData.contact),
+                age: patientData.age,
+                age_unit: patientData.dayType,
+                total_day: totalDay,
+                gender: patientData.gender,
+                address: patientData.address || "",
+                title: patientData.title,
+                dob: dob,
+            };
+
+            // 1. HANDLE PATIENT
+            if (!finalUHID) {
+                const newUHID = generateFallbackUHID(); 
+                const { data: newP, error: newPErr } = await withRetry(async () => 
+                    supabase.from(TABLE.PATIENT).insert({ ...patientPayload, uhid: newUHID }).select().single()
+                );
+                if (newPErr) throw newPErr;
+                finalUHID = (newP as any)?.uhid || newUHID;
+            } else {
+                await withRetry(async () => supabase.from(TABLE.PATIENT).update(patientPayload).eq("uhid", finalUHID));
+            }
+            
+            // 2. HANDLE REGISTRATION
             const isoTime = time12ToISO(data.registrationDate, data.registrationTime);
             const paymentHistoryData = { totalAmount: totalAmount, discount: data.discountAmount, paymentHistory: data.paymentEntries || [], };
             
@@ -204,47 +265,30 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                 }).select().single());
                 
             throwIfError(regErr);
-            const registrationId = regData.id;
+            const registrationId = (regData as any).id;
             
-            // 3. WhatsApp FIX: RESTORED WHATSAPP SENDING LOGIC
-            if (data.sendWhatsApp) {
-                const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
-                if (!apiKey) {
-                  console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
-                } else {
-                  const bloodTestNames = data.bloodTests.map((test: any) => test.testName).join(", ") || "No blood tests booked.";
-                  const formattedEstimatedTime = formatMinutesToDuration(parseInt(data.estimatedTime, 10) || 0);
-                  const whatsappCaption = `Dear *${patientData.name}*,\n\nWe have received your Pathology request for: *${data.registrationDate}* at *${data.registrationTime}* \n\n*UHID (Patient ID)*: ${finalUHID}\n*Registration ID*: ${registrationId}\n*Tests Booked*: ${bloodTestNames}\n*Estimated Report Time*: ${formattedEstimatedTime}\n\n*Summary*:\n*Total Amount*: ₹${totalAmount.toFixed(2)}\n*Amount Paid*: ₹${totalPaid.toFixed(2)}\n*Remaining Balance*: ₹${remainingAmount.toFixed(2)}\n\nThank you for choosing us!`;
-                  const whatsappPayload = { number: `91${patientData.contact}`, text: whatsappCaption };
-
-                  fetch("https://evo.infispark.in/message/sendText/medfordlab", {
-                    method: "POST", headers: { "Content-Type": "application/json", "apikey": apiKey }, body: JSON.stringify(whatsappPayload),
-                  }).then(async (response) => {
-                      if (!response.ok) {
-                        const errorData = await response.json();
-                        console.warn(`Failed to send WhatsApp message: ${errorData.message || 'Unknown error'}`);
-                      } else {
-                        console.log("WhatsApp registration message sent successfully.");
-                      }
-                  }).catch((whatsappError) => {
-                      console.error("Error sending WhatsApp message:", whatsappError);
-                  });
-                }
+            // 3. 🟢 SEND WHATSAPP
+            if (data.sendWhatsApp && patientData.contact) {
+                const contactNumber = String(patientData.contact);
+                const estTimeDuration = formatMinutesToDuration(parseInt(data.estimatedTime, 10) || 0);
+                const testNameList = data.bloodTests.map((t: any) => t.testName).join(", ");
+                
+                await sendWhatsAppNotification(
+                    contactNumber,
+                    patientData.name,
+                    registrationId,
+                    estTimeDuration,
+                    testNameList,
+                    { total: totalAmount, paid: totalPaid, balance: remainingAmount }
+                );
             }
 
             alert(`Pathology Registration successful (ID: ${registrationId}) ✅`);
-            
-            // 4. Reset service-specific fields
-            const defaultPathology = { estimatedTime: "1100", bloodTests: [], discountAmount: 0, paymentEntries: [] };
-            setPathologyData(defaultPathology);
-            setValue("estimatedTime", defaultPathology.estimatedTime);
-            setValue("bloodTests", defaultPathology.bloodTests);
-            setValue("discountAmount", defaultPathology.discountAmount);
-            setValue("paymentEntries", defaultPathology.paymentEntries);
+            onSuccess(); 
 
         } catch (err: any) {
             console.error(err);
-            alert(err.message ?? "Unexpected error during Pathology submission – check console");
+            alert(err.message ?? "Unexpected error during Pathology submission");
         }
     }
 
@@ -253,13 +297,12 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
         <form onSubmit={handleSubmit(onSubmit)}>
             <div className="flex items-center justify-between p-3 bg-white rounded-t-lg border-b border-gray-200">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center"><FlaskConical className="mr-2 h-6 w-6 text-indigo-600" />Pathology/Lab Services</h3>
-                <Button type="submit" disabled={isSubmitting || !patientData.uhid} className="bg-indigo-600 hover:bg-indigo-700">
+                <Button type="submit" disabled={isSubmitting} className="bg-indigo-600 hover:bg-indigo-700">
                     {isSubmitting ? "Submitting..." : "Submit Pathology Order"}
                 </Button>
             </div>
             
             <div className="p-3 space-y-3">
-                 {/* Registration Details (Inside Tab) */}
                 <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
                     <h2 className="text-lg font-bold text-gray-700 mb-3">Registration & Visit Details</h2>
                     <div className="grid grid-cols-12 gap-2">
@@ -294,7 +337,7 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                             <Label htmlFor="patho-whatsapp-checkbox" className="text-sm cursor-pointer ml-2 flex items-center gap-1"><span className="text-green-600">📱</span>Send WhatsApp SMS</Label></div>
                     </div>
                 </div>
-                {/* Blood Tests Section */}
+                
                 <div className="bg-white p-1 rounded-lg border">
                     <div className="flex items-center justify-between mb-1">
                         <h3 className="text-lg font-semibold text-gray-700">Tests Selection</h3>
@@ -350,7 +393,7 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                         </Table>
                     </div>
                 </div>
-                {/* Payment Section */}
+                
                 <div className="grid grid-cols-2 gap-4">
                     <div className="bg-white p-3 rounded-lg border">
                         <div className="flex items-center justify-between mb-3"><h3 className="text-lg font-semibold text-gray-700">Payment Details</h3><Button type="button" variant="outline" size="sm" onClick={addPaymentEntry}><Plus className="h-4 w-4 mr-1" /> Add Payment</Button></div>

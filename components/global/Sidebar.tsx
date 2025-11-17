@@ -1,3 +1,4 @@
+// Sidebar.tsx
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
@@ -8,19 +9,17 @@ import {
   X, 
   LayoutDashboard, 
   Users, 
-  FileText, 
-  Bed, 
   LogOut,
   Hospital,
   ChevronRight,
   UserPlus,
-  Settings,
-  Stethoscope,
   FlaskConical,
   Package,
   Clock,
-  Scan, 
   ChevronLeft,
+  Trash2,
+  Receipt,
+  TestTube2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -28,21 +27,65 @@ import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useUserRole } from '../userrole' 
 
-// Define the menu items
+// Define the menu items with Icons for every route
 const pathologyMenuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/pathology/dashboard', roles: ['admin', 'technician', 'phlebo'] },
-  { icon: UserPlus, label: 'Patient Entry', href: '/pathology/patient-entry', roles: ['admin', 'technician'] },
-  { icon: Clock, label: 'Turn Around Time', href: '/pathology/turnAroundTime', roles: ['admin'] },
-  { icon: Users, label: 'Deleted Entry', href: '/pathology/deleted', roles: ['admin'] },
-  { icon: FlaskConical, label: 'Billing', href: '/pathology/billing', roles: ['admin'] },
-  { icon: FlaskConical, label: 'Blood Tests', href: '/pathology/blood-tests', roles: ['admin'] },
-  { icon: Package, label: 'Packages', href: '/pathology/packages', roles: ['admin'] },
+  { 
+    icon: LayoutDashboard, 
+    label: 'Dashboard', 
+    href: '/pathology/dashboard', 
+    roles: ['admin', 'technician', 'phlebo'] 
+  },
+  { 
+    icon: UserPlus, 
+    label: 'Patient Entry', 
+    href: '/pathology/patient-entry', 
+    roles: ['admin', 'technician'] 
+  },
+  { 
+    icon: Clock, 
+    label: 'Turn Around Time', 
+    href: '/pathology/turnAroundTime', 
+    roles: ['admin'] 
+  },
+  { 
+    icon: Trash2, 
+    label: 'Deleted Entry', 
+    href: '/pathology/deleted', 
+    roles: ['admin'] 
+  },
+  { 
+    icon: Receipt, 
+    label: 'Billing', 
+    href: '/pathology/billing', 
+    roles: ['admin'] 
+  },
+  { 
+    icon: TestTube2, 
+    label: 'Blood Tests', 
+    href: '/pathology/blood-tests', 
+    roles: ['admin'] 
+  },
+  { 
+    icon: Package, 
+    label: 'Packages', 
+    href: '/pathology/packages', 
+    roles: ['admin'] 
+  },
 ];
 
-const xrayMenuItems = [
-  { title: 'X-ray Entry', href: '/pathology/x-ray' },
-  { title: 'X-ray Dashboard', href: '/pathology/x-rayDashboard' },
-];
+type SubMenuItem = { title: string; href: string };
+type MenuItem = {
+  title: string;
+  icon: React.ElementType;
+  href?: string;
+  submenu: SubMenuItem[];
+};
+
+interface FlyoutState { 
+    title: string; 
+    top: number; 
+    submenu: SubMenuItem[]; 
+}
 
 interface SidebarProps {
     isCollapsed: boolean;
@@ -53,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
   const { role, loading } = useUserRole();
   const [isOpen, setIsOpen] = useState(false) // Mobile state
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]) // Expanded state for full sidebar
-  const [activeFlyout, setActiveFlyout] = useState<{ title: string; top: number; submenu: SubMenuItem[] } | null>(null); // Flyout state for collapsed sidebar
+  const [activeFlyout, setActiveFlyout] = useState<FlyoutState | null>(null); // Flyout state for collapsed sidebar
   
   const pathname = usePathname()
   const router = useRouter()
@@ -69,26 +112,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500" />
-        <span className="ml-3 text-blue-700 font-medium text-sm">Loading...</span>
+      <div className="flex items-center justify-center min-h-screen bg-white border-r">
+        <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500" />
       </div>
     );
   }
 
   if (!role) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <span className="text-red-600 font-medium text-sm">Access denied: User role not found.</span>
+      <div className="flex items-center justify-center min-h-screen bg-white border-r">
+        <span className="text-red-600 font-medium text-xs">Access denied</span>
       </div>
     );
   }
 
   const toggleMobileSidebar = () => setIsOpen(!isOpen)
   
-  // Close flyout on any route change or external click
   const closeFlyout = () => setActiveFlyout(null);
-
 
   const toggleMenu = (item: MenuItem, buttonRef: React.RefObject<HTMLButtonElement>) => {
     if (isCollapsed) {
@@ -96,12 +136,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
         if (activeFlyout?.title === item.title) {
             closeFlyout();
         } else {
-            // Calculate position of the flyout based on the clicked button
             const rect = buttonRef.current?.getBoundingClientRect();
             if (rect) {
                 setActiveFlyout({ 
                     title: item.title, 
-                    top: rect.top, // Use absolute screen position
+                    top: rect.top,
                     submenu: item.submenu 
                 });
             }
@@ -121,127 +160,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
     router.push('/login')
   }
 
-  type SubMenuItem = { title: string; href: string };
+  // Filter menu items based on the current user role
+  // We map them to be top-level items (submenu: []) since we only have one category now.
+  const menuItems: MenuItem[] = pathologyMenuItems
+    .filter(item => item.roles.includes(role as any))
+    .map(item => ({
+      title: item.label,
+      icon: item.icon,
+      href: item.href,
+      submenu: [] // Flattened structure for cleaner UI
+    }));
 
-  type MenuItem = {
-    title: string;
-    icon: React.ElementType;
-    href?: string;
-    submenu: SubMenuItem[];
-  };
-  
-  // Dynamically build the menu items based on the user's role
-  let menuItems: MenuItem[] = [];
-  
-  if (role === 'admin') {
-    menuItems = [
-      {
-        title: 'Dashboard',
-        icon: LayoutDashboard,
-        href: '/dashboard',
-        submenu: [],
-      },
-      {
-        title: 'Admin Panel',
-        icon: Users,
-        submenu: [
-          { title: 'June Backup', href: '/backup' },
-          { title: 'OPD Admin', href: '/admin/opd-admin' },
-          { title: 'IPD Admin', href: '/admin/ipd-admin' },
-          { title: 'Patient Admin', href: '/admin/patient-admin' },
-          { title: 'DPR', href: '/admin/dpr' },
-          { title: 'OT Management', href: '/admin/ot' },
-          { title: 'Collections', href: '/amount' },
-        ]
-      },
-      {
-        title: 'OPD',
-        icon: Stethoscope,
-        submenu: [
-          { title: 'Appointments', href: '/opd/appointment' },
-          { title: 'Patient List', href: '/opd/list' },
-          { title: 'Prescriptions', href: '/opd/list/opdlistprescripitono' },
-          { title: 'Add Doctor', href: '/opd/add-doctor' },
-        ]
-      },
-      {
-        title: 'IPD',
-        icon: Bed,
-        submenu: [
-          { title: 'New Admission', href: '/ipd/appointment' },
-          { title: 'Patient Management', href: '/ipd/management' },
-          { title: 'Bed Management', href: '/ipd/bed-management' },
-          { title: 'Add Doctor', href: '/ipd/add-doctor' },
-          { title: 'Daily Reports', href: '/amount' },
-        ]
-      },
-      // Admin sees a separate X-ray group
-      {
-        title: 'X-ray',
-        icon: Scan,
-        submenu: xrayMenuItems,
-      },
-      // Admin sees all other pathology links
-      {
-        title: 'Pathology',
-        icon: FlaskConical,
-        submenu: pathologyMenuItems.map(item => ({ title: item.label, href: item.href }))
-      }
-    ];
-  } else if (role === 'opd-ipd') {
-    menuItems = [
-      {
-        title: 'OPD',
-        icon: Stethoscope,
-        submenu: [
-          { title: 'Appointments', href: '/opd/appointment' },
-          { title: 'Patient List', href: '/opd/list' },
-          { title: 'Prescriptions', href: '/opd/list/opdlistprescripitono' },
-          { title: 'Add Doctor', href: '/opd/add-doctor' },
-        ]
-      },
-      {
-        title: 'IPD',
-        icon: Bed,
-        submenu: [
-          { title: 'New Admission', href: '/ipd/appointment' },
-          { title: 'Patient Management', href: '/ipd/management' },
-          { title: 'Bed Management', href: '/ipd/bed-management' },
-          { title: 'Add Doctor', href: '/ipd/add-doctor' },
-          { title: 'Daily Reports', href: '/amount' },
-        ]
-      },
-    ];
-  } else if (role === 'xray') {
-    // X-ray role only sees the dedicated X-ray group
-    menuItems = [
-      {
-        title: 'X-ray',
-        icon: Scan,
-        submenu: xrayMenuItems,
-      }
-    ];
-  } else if (['technician', 'phlebo'].includes(role)) {
-    // Technician/Phlebo only see their specific pathology links (excluding X-ray)
-    menuItems = [
-      {
-        title: 'Pathology',
-        icon: FlaskConical,
-        submenu: pathologyMenuItems
-          .filter(item => item.roles.includes(role as 'technician' | 'phlebo'))
-          .map(item => ({ title: item.label, href: item.href }))
-      }
-    ];
-  }
-
-  // Determine width based on collapse state
-  const sidebarWidthClass = isCollapsed ? 'w-[5.5rem]' : 'w-64';
-
-  // Create refs for menu buttons that can open a flyout
+  // Create refs for menu buttons (kept for compatibility if you add submenus later)
   const menuRefs = useRef<{ [key: string]: React.RefObject<HTMLButtonElement> }>({});
   menuItems.forEach(item => {
     if (item.submenu.length > 0) {
-      // Initialize ref only for items that have submenus
       menuRefs.current[item.title] = React.createRef<HTMLButtonElement>() as React.RefObject<HTMLButtonElement>;
     }
   });
@@ -280,7 +213,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
         className={cn(
         "fixed left-0 top-0 h-full bg-white/95 backdrop-blur-sm border-r border-gray-200/80 z-50 transition-all duration-200 ease-out shadow-xl",
         isOpen ? "translate-x-0" : "-translate-x-full", // Mobile state
-        sidebarWidthClass, // Desktop collapse state
+        isCollapsed ? 'w-[5.5rem]' : 'w-64', // Desktop collapse state
         "lg:translate-x-0" // Always visible on desktop
       )}>
         {/* Header and Collapse Button */}
@@ -297,7 +230,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
                 </div>
                 <div>
                     <h2 className="text-sm font-bold text-gray-900">InfiPlus</h2>
-                    <p className="text-xs text-gray-600">Hospital System</p>
+                    <p className="text-xs text-gray-600">Pathology Lab</p>
                 </div>
             </div>
             
@@ -333,23 +266,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
                 <li key={item.title}>
                   {item.submenu.length > 0 ? (
                     <div>
-                        {/* Parent Menu Toggle/Link */}
+                        {/* Parent Menu Toggle/Link (For Submenus - currently unused but kept for logic) */}
                         <button
-                          ref={menuRefs.current[item.title]} // Attach ref
+                          ref={menuRefs.current[item.title]} 
                           onClick={() => toggleMenu(item, menuRefs.current[item.title]!)}
                           className={cn(
                             "w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-all duration-150 group",
                             "hover:bg-gray-50 text-gray-700 hover:text-gray-900",
-                            isCollapsed ? 'justify-center' : '', // Center icon when collapsed
-                            (isCollapsed && activeFlyout?.title === item.title) ? 'bg-blue-50 text-blue-700' : '' // Highlight active flyout button
+                            isCollapsed ? 'justify-center' : '', 
+                            (isCollapsed && activeFlyout?.title === item.title) ? 'bg-blue-50 text-blue-700' : ''
                           )}
                         >
                             <div className={cn("flex items-center space-x-2 w-full", isCollapsed ? 'justify-center' : '')}>
                                 <item.icon className="h-4 w-4 transition-colors group-hover:text-blue-600" />
-                                {/* Label shown only when NOT collapsed */}
                                 {!isCollapsed && <span className="text-xs">{item.title}</span>}
                             </div>
-                            {/* Chevron shown only when NOT collapsed */}
                             {!isCollapsed && (
                                 <div className={cn(
                                     "transition-transform duration-150",
@@ -360,7 +291,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
                             )}
                         </button>
                       
-                        {/* Submenu: Hide completely when collapsed */}
+                        {/* Submenu List */}
                         {!isCollapsed && (
                           <div className={cn(
                             "overflow-hidden transition-all duration-200 ease-out",
@@ -378,7 +309,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
                                           ? "bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-500 ml-0"
                                           : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                                       )}
-                                      onClick={() => setIsOpen(false)}
+                                      onClick={() => { setIsOpen(false); closeFlyout(); }}
                                     >
                                       {subItem.title}
                                     </Link>
@@ -390,7 +321,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
                         )}
                     </div>
                   ) : (
-                    // Single-level Link (always clickable)
+                    // Single-level Link (Main Pathology Items)
                     <Link
                       href={item.href ?? '/'}
                       className={cn(
@@ -400,10 +331,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
                           : "text-gray-700 hover:bg-gray-50 hover:text-gray-900",
                         isCollapsed ? 'justify-center' : ''
                       )}
-                      onClick={() => setIsOpen(false)}
+                      onClick={() => { setIsOpen(false); closeFlyout(); }}
                     >
                       <item.icon className="h-4 w-4" />
-                      {/* Label shown only when NOT collapsed */}
                       {!isCollapsed && <span className="text-xs">{item.title}</span>}
                     </Link>
                   )}
@@ -415,7 +345,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
 
         {/* User Info & Logout */}
         <div className="border-t border-gray-100 p-3 bg-gray-50/50">
-          {/* User Info shown only when NOT collapsed */}
           {!isCollapsed && (
             <div className="mb-2 px-3 py-2">
               <div className="text-xs font-medium text-gray-700 mb-0.5">Logged in as</div>
@@ -437,13 +366,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
         </div>
       </div>
       
-      {/* Flyout Menu (Desktop only, when sidebar is collapsed) */}
+      {/* Flyout Menu (Only renders if items have submenus - kept for scalability) */}
       {isCollapsed && activeFlyout && (
           <div 
               style={{ top: activeFlyout.top }}
               className={cn(
                 "absolute left-[5.5rem] mt-[-3px] w-48 bg-white border border-gray-200 rounded-lg shadow-2xl z-50 transition-all duration-100 ease-out p-1",
-                "hidden lg:block" // Ensure it's only for desktop collapsed state
+                "hidden lg:block"
               )}
           >
               <p className="text-xs font-semibold text-gray-800 px-2 py-1 mb-1 border-b border-gray-100">
@@ -460,7 +389,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
                                       ? "bg-blue-50 text-blue-700 font-medium"
                                       : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                               )}
-                              onClick={closeFlyout} // Close flyout on click
+                              onClick={closeFlyout}
                           >
                               {subItem.title}
                           </Link>
@@ -471,7 +400,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
       )}
 
       {/* Main content spacer for desktop */}
-      {/* We use the same width class here */}
       <div className={cn(
           "hidden lg:block flex-shrink-0 transition-all duration-200",
           isCollapsed ? 'w-[5.5rem]' : 'w-64'
