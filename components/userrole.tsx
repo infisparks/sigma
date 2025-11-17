@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation'; // Added usePathname
 import { supabase } from '@/lib/supabase';
 
 interface UserRoleContextType {
@@ -15,50 +15,75 @@ interface UserRoleProviderProps {
   children: ReactNode;
 }
 
+// Define allowed routes for technicians
+const TECHNICIAN_ALLOWED_ROUTES = ['/pathology/dashboard', '/pathology/patient-entry'];
+
 export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname(); // Get the current URL path
 
   useEffect(() => {
-    const fetchRole = async () => {
-      setLoading(true);
+    const fetchRoleAndProtectRoutes = async () => {
+      // 1. Get Auth User
       const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
       if (userError || !user) {
         router.replace('/login');
         setLoading(false);
         return;
       }
-      // Fetch role from public.user table using user's id or email
-      // Try by id first, fallback to email if needed
+
+      // 2. Fetch User Role
+      let userRole: string | null = null;
+      
+      // Try fetching by ID
       let { data, error } = await supabase
         .from('user')
         .select('role')
         .eq('id', user.id)
         .single();
-      if (error || !data) {
-        // fallback: try by email if id fails (for legacy)
+
+      if (data) {
+        userRole = data.role;
+      } else {
+        // Fallback: Try fetching by Email
         if (user.email) {
-          const { data: emailData, error: emailError } = await supabase
+          const { data: emailData } = await supabase
             .from('user')
             .select('role')
             .eq('email', user.email)
             .single();
-          if (emailData && emailData.role) {
-            setRole(emailData.role);
-            setLoading(false);
-            return;
+          
+          if (emailData) {
+            userRole = emailData.role;
           }
         }
-        setRole(null);
-        setLoading(false);
-        return;
       }
-      setRole(data.role);
+
+      // 3. Enforce Role-Based Access Control
+      if (userRole === 'technician') {
+        // Check if the current path starts with any allowed route
+        const isAllowed = TECHNICIAN_ALLOWED_ROUTES.some(route => 
+          pathname.startsWith(route)
+        );
+
+        if (!isAllowed) {
+          // If they are on a forbidden page, kick them to dashboard
+          router.replace('/pathology/dashboard');
+          // Note: We don't return here, we still set the role so the UI loads
+        }
+      }
+
+      setRole(userRole);
       setLoading(false);
     };
-    fetchRole();
-  }, [router]);
+
+    fetchRoleAndProtectRoutes();
+    
+    // Re-run this check if the path changes (to prevent manual URL entry)
+  }, [router, pathname]); 
 
   if (loading) {
     return (
