@@ -1,4 +1,4 @@
-// app/pathology/patient-entry/page.tsx
+// @/app/pathology/patient-entry/page.tsx
 "use client"
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react"
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { UserCircle, Phone, FlaskConical, Stethoscope, UserPlus, X, Hospital, Save } from "lucide-react"
+import { UserCircle, Phone, FlaskConical, Stethoscope, UserPlus, X, Hospital, Save, User } from "lucide-react" 
 import { useRouter } from "next/navigation"
 import { useUserRole } from "@/hooks/useUserRole"
 import { cn } from "@/lib/utils"
@@ -17,12 +17,14 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Table } from "@/components/ui/table"
 
 import PathologyRegistration from "./PathologyRegistration" 
-import XrayRegistration from "./XrayRegistration"         
+import XrayRegistration from "./XrayRegistration"
+import OPDRegistration from "./OPDRegistration" 
 
 // --- Helpers and Constants ---
 const TABLE = {
   PATIENT: "patient_detail",
-  DOCTOR: "zdoctorlist",
+  DOCTOR: "zdoctorlist", // NOTE: This is partially deprecated, using config_data for OPD fees
+  CONFIG: "config_data", // 🟢 NEW: Config table
   PACKAGE: "zpackages",
   BLOOD: "zblood_test",
   OPD_REGISTRATION: "opd_registration", 
@@ -72,6 +74,12 @@ function calculateDOB(age: number, unit: 'year' | 'month' | 'day'): string {
 
 // --- Types ---
 
+interface DoctorFee { // Doctor type with fees
+    id: number; 
+    doctor_name: string;
+    first_visit_fee: number;
+    follow_up_fee: number;
+}
 interface BloodTestRow { id: number; test_name: string; price: number; outsource: boolean; estimated_time_mm: string | null; }
 interface PackageType { id: number; package_name: string; tests: any[]; discountamount: number; }
 interface PatientSuggestion { id: number; name: string; number: number; uhid: string; title?: string; age: number; age_unit: "year" | "month" | "day"; gender: string; address?: string; }
@@ -80,7 +88,7 @@ interface IpdRegistration { ipd_id: number; admission_date: string; admission_ti
 
 export type VisitType = "direct" | "opd" | "ipd";
 export type TpaType = boolean;
-export type ActiveTab = 'Pathology' | 'Xray';
+export type ActiveTab = 'OPD' | 'Pathology' | 'Xray'; 
 
 // Nested Service Data Structures
 interface PathologyData {
@@ -97,6 +105,17 @@ interface XrayData {
     discount: number;
     payments: any[];
 }
+interface OPDData { 
+    treatingDoctorId: number | null;
+    referringDoctorName: string;
+    visitCategory: 'First Visit' | 'Follow Up';
+    bp: string;
+    pulse: number | null;
+    weight: number | null;
+    discountAmount: number;
+    paymentEntries: any[];
+}
+
 export interface IUnifiedFormInput {
     // Patient Details (Managed by Parent RHF)
     title: string;
@@ -111,7 +130,7 @@ export interface IUnifiedFormInput {
     // Registration Details (Managed by Parent RHF, synced by active child)
     hospitalName: string;
     visitType: VisitType;
-    doctorName: string;
+    doctorName: string; // Holds the name of the doctor currently associated with the service (Treating/Referring)
     tpa: TpaType;
     registrationDate: string;
     registrationTime: string;
@@ -122,6 +141,7 @@ export interface IUnifiedFormInput {
     // Nested Service Data (Managed by Child State/RHF)
     pathology: PathologyData;
     xray: XrayData;
+    opd: OPDData; 
 }
 
 const getDefaultUnifiedFormValues = (): IUnifiedFormInput => ({
@@ -130,7 +150,8 @@ const getDefaultUnifiedFormValues = (): IUnifiedFormInput => ({
     registrationDate: defaultDate, registrationTime: defaultTime, sendWhatsApp: true,
     sourceOpdId: null, sourceIpdId: null,
     pathology: { estimatedTime: "1100", bloodTests: [], discountAmount: 0, paymentEntries: [] },
-    xray: { billNumber: "", remark: "", dateOfAppointment: new Date(), xrayTests: [{ examination: "", amount: 0 }], discount: 0, payments: [] }
+    xray: { billNumber: "", remark: "", dateOfAppointment: new Date(), xrayTests: [{ examination: "", amount: 0 }], discount: 0, payments: [] },
+    opd: { treatingDoctorId: null, referringDoctorName: "", visitCategory: 'First Visit', bp: "", pulse: null, weight: null, discountAmount: 0, paymentEntries: [] }, 
 })
 
 const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => { return fn() }
@@ -140,8 +161,8 @@ const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => { return fn() 
 export default function UnifiedPatientEntry() {
   const router = useRouter()
   const { role } = useUserRole()
-  const [activeTab, setActiveTab] = useState<ActiveTab>('Pathology');
-  const [doctorList, setDoctorList] = useState<{ id: number; doctor_name: string }[]>([])
+  const [activeTab, setActiveTab] = useState<ActiveTab>('OPD'); 
+  const [doctorList, setDoctorList] = useState<DoctorFee[]>([]) // DoctorList now holds fee data
   const [bloodRows, setBloodRows] = useState<BloodTestRow[]>([])
   const [packageRows, setPackageRows] = useState<PackageType[]>([])
   const [patientHints, setPatientHints] = useState<PatientSuggestion[]>([])
@@ -157,15 +178,16 @@ export default function UnifiedPatientEntry() {
     watch,
     setValue,
     reset,
-    getValues, // Use getValues to safely retrieve data for immediate DB insertion
+    getValues, 
     formState: { errors },
   } = useForm<IUnifiedFormInput>({
     defaultValues: getDefaultUnifiedFormValues(),
   })
   
-  // Local state to manage the service-specific parts (Pathology/Xray)
+  // Local state to manage the service-specific parts
   const [pathologyData, setPathologyData] = useState<IUnifiedFormInput['pathology']>(getDefaultUnifiedFormValues().pathology);
   const [xrayData, setXrayData] = useState<IUnifiedFormInput['xray']>(getDefaultUnifiedFormValues().xray);
+  const [opdData, setOpdData] = useState<IUnifiedFormInput['opd']>(getDefaultUnifiedFormValues().opd); 
   
   const currentUhId = watch("uhid");
   const isPatientSelectedOrRegistered = Boolean(currentUhId); 
@@ -202,6 +224,7 @@ export default function UnifiedPatientEntry() {
     // 2. Reset local state for service-specific data
     setPathologyData(defaultValues.pathology);
     setXrayData(defaultValues.xray);
+    setOpdData(defaultValues.opd); 
     
     // 3. Clear service-specific RHF fields (like source IDs, but preserve patient/doctor/visit type)
     setValue("sourceOpdId", null);
@@ -215,7 +238,7 @@ export default function UnifiedPatientEntry() {
     // 5. Alert user they can submit another service for the same patient
     alert(`Service submitted successfully. You can now process the next service for patient UHID: ${currentUhId}`);
 
-  }, [setValue, currentUhId]); // Removed 'reset' from dependencies, replaced by explicit setValues.
+  }, [setValue, currentUhId]); 
 
 
   // --- New User Button Logic ---
@@ -286,9 +309,19 @@ export default function UnifiedPatientEntry() {
     
     const fetchLists = async () => {
         try {
-            const { data: doctors, error: dErr } = await supabase.from(TABLE.DOCTOR).select("id, doctor_name").order("doctor_name")
-            throwIfError(dErr)
-            setDoctorList(doctors ?? [])
+            // 🟢 UPDATED: Fetch doctor fees from config_data
+            const { data: doctorConfig, error: dcErr } = await supabase.from(TABLE.CONFIG)
+                .select('data')
+                .eq('data_heading', 'opd_doctor_data')
+                .single();
+            
+            if (dcErr) {
+                 // Throwing error for production environment might be too harsh, log and use empty array instead.
+                console.warn("Error fetching doctor config, using fallback data:", dcErr);
+                setDoctorList([]);
+            } else {
+                setDoctorList((doctorConfig?.data as DoctorFee[]) ?? []);
+            }
 
             const { data: bloods, error: bErr } = await supabase.from(TABLE.BLOOD).select("id, test_name, price, outsource, estimated_time_mm").order("test_name")
             throwIfError(bErr)
@@ -394,6 +427,7 @@ export default function UnifiedPatientEntry() {
     reset(getDefaultUnifiedFormValues());
     setPathologyData(getDefaultUnifiedFormValues().pathology);
     setXrayData(getDefaultUnifiedFormValues().xray);
+    setOpdData(getDefaultUnifiedFormValues().opd); 
     setShowSourceSelection(false);
     setCanRegisterNew(false); // Reset new registration flag
   }
@@ -530,12 +564,23 @@ export default function UnifiedPatientEntry() {
 
             {/* 2. Service Tabs */}
             <div className="flex space-x-2 mb-4 border-b border-gray-300">
+                <Button type="button" onClick={() => setActiveTab('OPD')} className={cn("py-2 px-6 rounded-t-lg font-semibold transition-colors duration-200", activeTab === 'OPD' ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><User className="mr-2 h-5 w-5" /> OPD Consultation</Button>
                 <Button type="button" onClick={() => setActiveTab('Pathology')} className={cn("py-2 px-6 rounded-t-lg font-semibold transition-colors duration-200", activeTab === 'Pathology' ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><FlaskConical className="mr-2 h-5 w-5" /> Pathology/Lab</Button>
                 <Button type="button" onClick={() => setActiveTab('Xray')} className={cn("py-2 px-6 rounded-t-lg font-semibold transition-colors duration-200", activeTab === 'Xray' ? "bg-green-600 hover:bg-green-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><Stethoscope className="mr-2 h-5 w-5" /> X-ray</Button>
             </div>
 
             {/* 3. Active Service Form */}
             <div className="min-h-[400px]">
+                {activeTab === 'OPD' && ( 
+                    <OPDRegistration
+                        patientData={patientData as any} 
+                        isExistingPatient={isPatientDataLocked} 
+                        doctorList={doctorList} 
+                        opdData={opdData} setOpdData={setOpdData}
+                        commonRegDetails={commonRegDetails} setCommonRegDetails={handleUpdateRHF}
+                        onSuccess={handleSuccessfulSubmission}
+                    />
+                )}
                 {activeTab === 'Pathology' && (
                     <PathologyRegistration
                         patientData={patientData as any} 

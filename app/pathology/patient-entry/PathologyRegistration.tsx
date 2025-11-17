@@ -1,3 +1,4 @@
+// @/app/pathology/patient-entry/PathologyRegistration.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form"
 import { supabase } from "@/lib/supabase"
@@ -8,6 +9,9 @@ import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Calendar, Clock, Plus, X, Search, Trash2, Timer, FlaskConical } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
+
+// 🟢 NEW IMPORT: Import Bill Utility and DoctorLite interface
+import { openUniversalBillInNewTabProgrammatically, type UniversalBillData, type BillServiceItem, type DoctorLite } from "./universal-bill-generator"
 
 import type { IUnifiedFormInput, VisitType, TpaType } from "./page"
 
@@ -125,7 +129,7 @@ const sendWhatsAppNotification = async (
 interface PathologyProps {
     patientData: PatientData;
     isExistingPatient: boolean;
-    doctorList: any[];
+    doctorList: DoctorLite[]; // 🟢 CHANGED: Using DoctorLite interface
     bloodRows: any[];
     packageRows: PackageType[];
     pathologyData: PathologyData;
@@ -139,7 +143,7 @@ interface PathologyProps {
 }
 
 const PathologyRegistration: React.FC<PathologyProps> = ({ 
-    patientData, isExistingPatient, bloodRows, packageRows,
+    patientData, isExistingPatient, bloodRows, packageRows, doctorList,
     pathologyData, setPathologyData,
     commonRegDetails, setCommonRegDetails,
     fetchSourceRecords, setShowSourceSelection,
@@ -152,7 +156,7 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
     }), [commonRegDetails, pathologyData]);
 
     const { 
-        control, watch, setValue, handleSubmit, 
+        control, watch, setValue, handleSubmit, reset, // 🟢 ADDED: reset function
         formState: { isSubmitting, errors },
     } = useForm<PathRegFormFields>({ defaultValues: defaultRHFValues });
 
@@ -266,8 +270,36 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                 
             throwIfError(regErr);
             const registrationId = (regData as any).id;
+            const registrationDate = new Date(data.registrationDate); // Convert date string to Date object for the bill
+
+            // 3. 🟢 GENERATE AND OPEN BILL
+            const serviceItems: BillServiceItem[] = data.bloodTests.map((t: any) => ({
+                type: 'Pathology',
+                name: t.testName,
+                charges: t.price,
+                doctor: data.doctorName,
+                details: t.testType.charAt(0).toUpperCase() + t.testType.slice(1) // InHouse/Outsource
+            }));
+
+            const billData: UniversalBillData = {
+                patientInfo: { ...patientData, uhid: finalUHID },
+                registrationId: registrationId,
+                date: registrationDate,
+                time: data.registrationTime,
+                referredBy: data.doctorName,
+                discount: data.discountAmount,
+                services: serviceItems,
+                paymentEntries: data.paymentEntries.map(p => ({ 
+                    amount: p.amount, 
+                    paymentMode: p.paymentMode.toLowerCase() as 'online' | 'cash' | 'card', 
+                    time: new Date().toISOString() 
+                })),
+                sendWhatsApp: data.sendWhatsApp
+            };
+
+            await openUniversalBillInNewTabProgrammatically(billData, doctorList);
             
-            // 3. 🟢 SEND WHATSAPP
+            // 4. 🟢 SEND WHATSAPP
             if (data.sendWhatsApp && patientData.contact) {
                 const contactNumber = String(patientData.contact);
                 const estTimeDuration = formatMinutesToDuration(parseInt(data.estimatedTime, 10) || 0);
@@ -284,6 +316,17 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
             }
 
             alert(`Pathology Registration successful (ID: ${registrationId}) ✅`);
+            
+            // 5. 🟢 CLEAR FORM: Reset the form fields managed by react-hook-form.
+            // We ensure dynamic arrays are cleared, and other fields revert to defaults.
+            reset({
+                ...defaultRHFValues,
+                bloodTests: [],        
+                paymentEntries: [],    
+                discountAmount: 0,     
+            }); 
+            
+            // Call the onSuccess callback (which should clear the main patientData and commonRegDetails in the parent)
             onSuccess(); 
 
         } catch (err: any) {

@@ -1,3 +1,4 @@
+// @/app/pathology/patient-entry/XrayRegistration.tsx
 import React, { useEffect, useMemo, useRef, useCallback, useState } from "react"
 import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form"
 import { supabase } from "@/lib/supabase"
@@ -11,6 +12,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
+
+// 🟢 NEW IMPORT: Import Bill Utility
+import { openUniversalBillInNewTabProgrammatically, type UniversalBillData, type BillServiceItem, type DoctorLite } from "./universal-bill-generator"
 
 import type { IUnifiedFormInput, VisitType, TpaType } from "./page"
 
@@ -96,7 +100,7 @@ const sendXrayWhatsAppNotification = async (
 interface XrayProps {
     patientData: PatientData;
     isExistingPatient: boolean;
-    doctorList: any[];
+    doctorList: DoctorLite[]; // Use new DoctorLite interface
     xrayData: XrayData;
     setXrayData: (data: XrayData) => void;
     commonRegDetails: CommonRegDetails;
@@ -108,7 +112,7 @@ interface XrayProps {
 }
 
 const XrayRegistration: React.FC<XrayProps> = ({ 
-    patientData, isExistingPatient, 
+    patientData, isExistingPatient, doctorList,
     xrayData, setXrayData,
     commonRegDetails, setCommonRegDetails,
     fetchSourceRecords, setShowSourceSelection,
@@ -121,7 +125,7 @@ const XrayRegistration: React.FC<XrayProps> = ({
     }), [commonRegDetails, xrayData]);
 
     const { 
-        control, watch, setValue, handleSubmit, 
+        control, watch, setValue, handleSubmit, reset, // 🟢 ADDED: reset function
         formState: { isSubmitting, errors },
     } = useForm<XrayRegFormFields>({ defaultValues: defaultRHFValues });
 
@@ -233,7 +237,7 @@ const XrayRegistration: React.FC<XrayProps> = ({
             };
             await withRetry(async () => supabase.from(TABLE.PATIENT).update(patientPayload).eq("uhid", finalUHID));
             
-            // 2. HANDLE X-RAY ORDER
+            // 2. HANDLE X-RAY ORDER (Assuming Supabase auto-generates the X-ray ID)
             const amountDetail = { totalAmount: totalAmount, discount: data.discount, paymentHistory: data.payments.map((p: any) => ({ amount: p.amount, paymentMode: p.paymentMode.toLowerCase(), time: new Date().toISOString() })) };
             const xrayDetail = data.xrayTests.map((test: any) => ({ Examination: test.examination, Xray_Via: "N/A", Amount: test.amount, })); 
             
@@ -242,10 +246,39 @@ const XrayRegistration: React.FC<XrayProps> = ({
                 "Tpa": data.tpa ? 'Yes' : 'No', "Remark": data.remark || null, "x-ray_detail": xrayDetail, amount_detail: amountDetail,
             };
 
-            const result = await withRetry(async () => supabase.from(TABLE.XRAY).insert(dataToInsert));
+            const result = await withRetry(async () => supabase.from(TABLE.XRAY).insert(dataToInsert).select().single());
             if (result.error) throw result.error;
 
-            // 3. 🟢 SEND WHATSAPP
+            const registrationId = (result.data as any).id; // Assuming ID is the auto-generated PK
+
+            // 3. 🟢 GENERATE AND OPEN BILL
+            const serviceItems: BillServiceItem[] = data.xrayTests.map((t: any) => ({
+                type: 'Xray',
+                name: t.examination,
+                charges: t.amount,
+                doctor: data.doctorName,
+                details: data.billNumber || 'N/A'
+            }));
+
+            const billData: UniversalBillData = {
+                patientInfo: { ...patientData, uhid: finalUHID },
+                registrationId: registrationId,
+                date: data.dateOfAppointment,
+                time: format(data.dateOfAppointment, 'hh:mm a'),
+                referredBy: data.doctorName,
+                discount: data.discount,
+                services: serviceItems,
+                paymentEntries: data.payments.map(p => ({ 
+                    amount: p.amount, 
+                    paymentMode: p.paymentMode.toLowerCase() as 'online' | 'cash' | 'card', 
+                    time: new Date().toISOString() 
+                })),
+                sendWhatsApp: data.sendWhatsApp
+            };
+
+            await openUniversalBillInNewTabProgrammatically(billData, doctorList);
+            
+            // 4. 🟢 SEND WHATSAPP
             if (data.sendWhatsApp && patientData.contact) {
                 const contactNumber = String(patientData.contact);
                 const examNameList = data.xrayTests.map((t: any) => t.examination).join(", ");
@@ -260,7 +293,17 @@ const XrayRegistration: React.FC<XrayProps> = ({
                 );
             }
 
-            alert(`X-ray Registration successful (UHID: ${finalUHID}) ✅`);
+            alert(`X-ray Registration successful (ID: ${registrationId}) ✅`);
+            
+            // 5. 🟢 CLEAR FORM: Reset the form fields managed by react-hook-form.
+            reset({
+                ...defaultRHFValues,
+                xrayTests: [{ examination: "", amount: 0 }], // Keep one empty test field, or use [] to clear completely
+                payments: [],    
+                discount: 0,     
+            }); 
+            
+            // Call the onSuccess callback (which should clear the main patientData and commonRegDetails in the parent)
             onSuccess(); 
 
         } catch (err: any) {
