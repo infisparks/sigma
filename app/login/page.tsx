@@ -21,7 +21,7 @@ const LoginPage = () => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        router.replace('/opd/appointment');
+        router.replace('/pathology/dashboard');
       }
     };
     checkUser();

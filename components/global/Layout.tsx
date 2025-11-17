@@ -64,7 +64,7 @@ function RestrictedLayout({
         pathname.startsWith('/admin/') ||
         pathname === '/admin' 
       ) {
-        router.replace('/opd/appointment');
+        router.replace('/pathology/dashboard');
       }
     }
   }, [role, loading, pathname, router]);
