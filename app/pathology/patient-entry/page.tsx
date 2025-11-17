@@ -126,7 +126,7 @@ export interface IUnifiedFormInput {
 
 const getDefaultUnifiedFormValues = (): IUnifiedFormInput => ({
     title: "", name: "", contact: "", age: 0, dayType: "year", gender: "", address: "", uhid: "",
-    hospitalName: "MEDFORD HOSPITAL", visitType: "direct", doctorName: "", tpa: false,
+    hospitalName: "Sigma Clinic", visitType: "direct", doctorName: "", tpa: false,
     registrationDate: defaultDate, registrationTime: defaultTime, sendWhatsApp: true,
     sourceOpdId: null, sourceIpdId: null,
     pathology: { estimatedTime: "1100", bloodTests: [], discountAmount: 0, paymentEntries: [] },

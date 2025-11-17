@@ -646,7 +646,7 @@ const sendPaymentNotification = async (
     return;
   }
 
-  const apiUrl = "https://evo.infispark.in/message/sendText/medfordlab"; // <-- NEW URL
+  const apiUrl = "https://evo.infispark.in/message/sendText/sigma"; // <-- NEW URL
   let message = "";
   if (amountType === "advance" || amountType === "deposit" || amountType === "settlement") {
     message = `Dear ${patientName}, your payment of Rs ${paymentAmount.toLocaleString()} has been successfully added to your account. Your updated total deposit is Rs ${updatedDeposit.toLocaleString()}. Thank you for choosing our service.`;

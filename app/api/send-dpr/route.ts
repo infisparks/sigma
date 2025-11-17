@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Send to new WhatsApp Document API
-    const whatsappApiUrl = 'https://evo.infispark.in/message/sendMedia/medfordlab';
+    const whatsappApiUrl = 'https://evo.infispark.in/message/sendMedia/sigma';
     
     // Use a server-side environment variable (NOT NEXT_PUBLIC_)
     const apiKey = process.env.WHATSAPP_API_KEY || ''; 

@@ -132,7 +132,7 @@ const initialFormData: IFormState = {
   ageUnit: "year", 
   address: "",
 
-  hospitalName: "MEDFORD HOSPITAL",
+  hospitalName: "Sigma Clinic",
   billNumber: "",
   doctorName: "", 
   visitType: "OPD", 
@@ -168,7 +168,7 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
   const registrationId = params.registrationid
 
   const isGautamiHospital = (hospitalName: string) => {
-    return hospitalName === "Gautami Medford NX Hospital"
+    return hospitalName === "Sigma clinic"
   }
   
   // Helper to ensure values are cast to correct types for the form state
@@ -276,7 +276,7 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
       }
 
 
-      const hospitalName = xrayData.Hospital_name || "MEDFORD HOSPITAL"
+      const hospitalName = xrayData.Hospital_name || "Sigma Clinic"
       const isGautami = isGautamiHospital(hospitalName)
 
       setInitialHospitalName(hospitalName)
@@ -746,10 +746,8 @@ export default function XrayDetailPage({ params }: XrayDetailPageProps) {
                     <SelectValue placeholder="Select hospital" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="MEDFORD HOSPITAL">MEDFORD HOSPITAL</SelectItem>
-                    <SelectItem value="Gautami Medford NX Hospital">Gautami Medford NX Hospital</SelectItem>
-                    <SelectItem value="Apex Clinic">Apex Clinic</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    <SelectItem value="Sigma Clinic">Sigma Clinic</SelectItem>
+                  
                   </SelectContent>
                 </Select>
               </div>

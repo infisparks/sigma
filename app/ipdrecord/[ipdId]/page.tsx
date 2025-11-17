@@ -415,7 +415,7 @@ const IPDBloodTestModal: React.FC<IPDBloodTestModalProps> = ({ isOpen, onClose, 
       registration_time: currentTime,
       samplecollected_time: currentTime,
       discount_amount: 0,
-      hospital_name: "MEDFORD HOSPITAL",
+      hospital_name: "Sigma Clinic",
       payment_mode: "online",
       bloodtest_detail: null, 
       bloodtest_data: testsToBook.map(test => ({

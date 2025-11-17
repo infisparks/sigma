@@ -213,7 +213,7 @@ export default function FakeBill({ patient, onClose }: FakeBillProps) {
           align: "center",
         });
 
-      doc.save(`Medfordlab_${patient.name}.pdf`);
+      doc.save(`Sigmalab_${patient.name}.pdf`);
     };
 
     img.onerror = () => alert("Failed to load letter-head image.");

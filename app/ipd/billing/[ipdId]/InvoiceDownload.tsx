@@ -299,7 +299,7 @@ export default function InvoiceDownload({ record, beds, doctors, children }: Inv
       }
 
       // 5. Send using the new API endpoint and headers
-      const response = await fetch("https://evo.infispark.in/message/sendMedia/medfordlab", {
+      const response = await fetch("https://evo.infispark.in/message/sendMedia/sigma", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

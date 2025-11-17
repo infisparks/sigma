@@ -575,7 +575,7 @@ const BloodTestModal: React.FC<BloodTestModalProps> = ({ isOpen, onClose, appoin
       registration_time: currentTime,
       samplecollected_time: currentTime,
       discount_amount: 0,
-      hospital_name: "MEDFORD HOSPITAL",
+      hospital_name: "Sigma Clinic",
       payment_mode: "pending",
       bloodtest_detail: null,
       bloodtest_data: testsToBook.map(test => ({

@@ -533,10 +533,8 @@ export default function XrayDashboardPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All">All Hospitals</SelectItem>
-                  <SelectItem value="MEDFORD HOSPITAL">MEDFORD HOSPITAL</SelectItem>
-                  <SelectItem value="Gautami Medford NX Hospital">Gautami Medford NX Hospital</SelectItem>
-                  <SelectItem value="Apex Clinic">Apex Clinic</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
+                  <SelectItem value="">Sigma Clinic</SelectItem>
+                 
                 </SelectContent>
               </Select>
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

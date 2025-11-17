@@ -152,7 +152,7 @@ export default function TurnAroundTimePage() {
 
       // Hospital filter
       if (hospitalFilter !== 'all') {
-        if (hospitalFilter === 'Other' && r.hospitalName && !['MEDFORD HOSPITAL', 'Gautami Medford NX Hospital', 'Apex Clinic'].includes(r.hospitalName)) {
+        if (hospitalFilter === 'Other' && r.hospitalName && !['Sigma Clinic'].includes(r.hospitalName)) {
           return true
         }
         if (hospitalFilter !== 'Other' && r.hospitalName !== hospitalFilter) {
@@ -394,10 +394,8 @@ export default function TurnAroundTimePage() {
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
                   >
                     <option value="all">All Hospital</option>
-                    <option value="MEDFORD HOSPITAL">MEDFORD HOSPITAL</option>
-                    <option value="Gautami Medford NX Hospital">Gautami Medford NX Hospital</option>
-                    <option value="Apex Clinic">Apex Clinic</option>
-                    <option value="Other">Other</option>
+                    <option value="Sigma Clinic">Sigma Clinic</option>
+                   
                   </select>
                 </div>
               )}

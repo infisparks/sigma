@@ -601,7 +601,7 @@ const IPDAppointmentPage = () => {
 
     try {
       // 5. Use the new URL and fetch options
-      const response = await fetch("https://evo.infispark.in/message/sendText/medfordlab", {
+      const response = await fetch("https://evo.infispark.in/message/sendText/sigma", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

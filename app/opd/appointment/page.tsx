@@ -549,7 +549,7 @@ const AppointmentPage = () => {
       return;
     }
 
-    const apiUrl = "https://evo.infispark.in/message/sendText/medfordlab"; // <-- NEW URL
+    const apiUrl = "https://evo.infispark.in/message/sendText/sigma"; // <-- NEW URL
     const formattedPhoneNumber = `91${phoneNumber}`; // Assuming Indian numbers
 
     let message = `*Dear ${patientName},*\n\n`;

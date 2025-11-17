@@ -93,10 +93,10 @@ const sendWhatsAppNotification = async (
         return;
     }
 
-    const messageText = `Dear *${patientName}*,\n\nThank you for visiting Medford Hospital.\n\n*Pathology Registration Confirmed*\n🆔 Reg ID: *${regId}*\n🧪 Tests: ${testNames}\n⏱ Est. Report Time: ${estTimeDuration}\n\n*Payment Summary:*\n💰 Total: ₹${financials.total.toFixed(2)}\n✅ Paid: ₹${financials.paid.toFixed(2)}\n⚠️ Balance: ₹${financials.balance.toFixed(2)}\n\nYour reports will be ready shortly.`;
+    const messageText = `Dear *${patientName}*,\n\nThank you for visiting Sigma Clinic.\n\n*Pathology Registration Confirmed*\n🆔 Reg ID: *${regId}*\n🧪 Tests: ${testNames}\n⏱ Est. Report Time: ${estTimeDuration}\n\n*Payment Summary:*\n💰 Total: ₹${financials.total.toFixed(2)}\n✅ Paid: ₹${financials.paid.toFixed(2)}\n⚠️ Balance: ₹${financials.balance.toFixed(2)}\n\nYour reports will be ready shortly.`;
 
     try {
-        const response = await fetch("https://evo.infispark.in/message/sendText/medfordlab", {
+        const response = await fetch("https://evo.infispark.in/message/sendText/sigma", {
             method: "POST",
             headers: { 
                 "Content-Type": "application/json", 
@@ -308,7 +308,7 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                     <div className="grid grid-cols-12 gap-2">
                         <div className="col-span-3"><Label className="text-sm">Hospital</Label>
                         <Select value={watch("hospitalName")} onValueChange={(v) => setValue("hospitalName", v)}><SelectTrigger className={`h-8`}><SelectValue /></SelectTrigger>
-                            <SelectContent><SelectItem value="MEDFORD HOSPITAL">MEDFORD HOSPITAL</SelectItem><SelectItem value="Gautami Medford NX Hospital">Gautami Medford NX Hospital</SelectItem><SelectItem value="Apex Clinic">Apex Clinic</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
+                            <SelectContent><SelectItem value="Sigma Clinic">Sigma Clinic</SelectItem><SelectItem value="Sigma clinic">Sigma clinic</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
                         <div className="col-span-4 relative"><Label className="text-sm">Doctor Name</Label>
                             <Input {...control.register("doctorName", { required: "Doctor is required" })} className="h-8" placeholder="Referring Doctor"/>
                             {errors.doctorName && <p className="text-red-500 text-xs mt-1">{errors.doctorName.message}</p>}</div>
