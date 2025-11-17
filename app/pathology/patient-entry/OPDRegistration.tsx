@@ -9,10 +9,18 @@ import { Label } from "@/components/ui/label"
 import { Plus, X, User, Heart, Scale, Stethoscope } from "lucide-react"
 import { format } from "date-fns"
 
+// --- Supabase and Config Imports ---
+// 🚨 IMPORTANT: Ensure this path is correct for your Supabase client setup
+import { supabase } from "@/lib/supabase"
+
 // Import types from universal-bill-generator
 import { openUniversalBillInNewTabProgrammatically, type UniversalBillData, type BillServiceItem, type DoctorLite } from "./universal-bill-generator"
 
-// --- Component Types ---
+// --- Component Types & Constants ---
+
+const TABLE = {
+  OPD_REGISTRATION: "opd_registration", 
+} as const;
 
 interface DoctorFee extends DoctorLite {
     first_visit_fee: number;
@@ -50,24 +58,41 @@ interface OPDProps {
     setOpdData: (data: OPDData) => void;
     commonRegDetails: CommonRegDetails;
     setCommonRegDetails: (key: keyof CommonRegDetails, value: any) => void;
-    // Other props (simplified for this component)
     onSuccess: () => void;
 }
 
-// --- Helper Functions (Mocking DB interaction) ---
+// --- Helper Functions (DB interaction) ---
 function throwIfError(error: any) { if (error) throw error; }
-const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => { return fn() }
-// Mock supabase for insertion (replace with actual logic)
-// Replace this with your actual Supabase DB interaction.
-const mockSupabaseOPDInsert = async (data: any): Promise<number> => {
-    // This mocks the DB insertion and returns the new ID
-    // In a real scenario, you'd use: supabase.from('opd_registration').insert(...).select('id').single()
-    console.log("OPD Insertion Payload:", data);
-    await new Promise(resolve => setTimeout(resolve, 500)); 
-    return Math.floor(1000 + Math.random() * 9000); // Mock ID
+const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => { 
+    // Simplified retry logic, returns the function execution result
+    return fn() 
+}
+
+// 🟢 REAL SUPABASE INSERTION FUNCTION
+const insertOPDRegistration = async (data: any): Promise<number> => {
+    // We use withRetry helper for robustness
+    const { data: newP, error: insertErr } = await withRetry(async () => 
+        supabase
+            .from(TABLE.OPD_REGISTRATION)
+            .insert(data)
+            .select("id") // Select the primary key (id) back
+            .single()
+    );
+
+    if (insertErr) {
+        console.error("Supabase Error during OPD insert:", insertErr);
+        throw new Error(insertErr.message || "Failed to save OPD registration to database.");
+    }
+    
+    const registrationId = newP?.id;
+    if (!registrationId) {
+        throw new Error("Database failed to return the new registration ID.");
+    }
+    return registrationId;
 };
 
-// 🟢 NEW Helper to safely create ISO time, defaulting to current time if input is invalid
+
+// 🟢 Helper to safely create ISO time, defaulting to current time if input is invalid
 function safeTime12ToISO(dateString: string, time12String: string): string {
     try {
         const [time, mer] = time12String.split(" ");
@@ -75,7 +100,6 @@ function safeTime12ToISO(dateString: string, time12String: string): string {
         if (mer === "PM" && hh < 12) hh += 12;
         if (mer === "AM" && hh === 12) hh = 0;
         
-        // Ensure valid time components
         if (isNaN(hh) || isNaN(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) {
             console.warn("Invalid time input, falling back to current time.");
             return new Date().toISOString();
@@ -150,7 +174,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
     const remainingAmount = totalFees - discountAmount - totalPaid;
     
     const addPaymentEntry = () => {
-        // 🟢 FIX: Set default amount to null/undefined so the input box is visually empty
+        // Set default amount to null/undefined so the input box is visually empty
         appendPayment({ amount: null, paymentMode: "cash", time: new Date().toISOString() });
     }
 
@@ -163,10 +187,11 @@ const OPDRegistration: React.FC<OPDProps> = ({
         if (!data.treatingDoctorId) { alert("Please select the Treating Doctor."); return; }
         if (!data.visitCategory) { alert("Please select the Visit Type (First Visit/Follow Up)."); return; }
         
-        // 🟢 FIX: Use safe time conversion to prevent Invalid Date error
+        // Use safe time conversion
         const isoTime = safeTime12ToISO(data.registrationDate, data.registrationTime);
         const finalPaymentEntries = data.paymentEntries.filter(p => p.amount > 0);
         const finalTotalPaid = finalPaymentEntries.reduce((s: number, p: any) => s + (p.amount || 0), 0);
+        const doctorName = treatingDoctor?.doctor_name || data.doctorName;
 
         try {
             
@@ -180,23 +205,22 @@ const OPDRegistration: React.FC<OPDProps> = ({
                 source_opd_id: data.sourceOpdId,
                 source_ipd_id: data.sourceIpdId,
                 treating_doctor_id: Number(data.treatingDoctorId),
-                referring_doctor_name: data.referringDoctorName || data.doctorName, 
+                referring_doctor_name: data.referringDoctorName || doctorName, 
                 visit_category: data.visitCategory,
                 total_fees: totalFees,
                 bp: data.bp || null,
                 pulse: data.pulse || null,
                 weight: data.weight || null,
                 discount_amount: data.discountAmount,
-                amount_paid: finalTotalPaid, // Use filtered/calculated paid amount
+                amount_paid: finalTotalPaid, 
                 payment_entries: finalPaymentEntries,
                 created_at: isoTime,
             };
 
-            // 2. Mock Insertion (Replace with actual Supabase code)
-            const registrationId = await mockSupabaseOPDInsert(dataToInsert); 
+            // 2. 🚨 ACTUAL SUPABASE INSERTION
+            const registrationId = await insertOPDRegistration(dataToInsert); 
             
-            // 3. 🟢 GENERATE AND OPEN BILL
-            const doctorName = treatingDoctor?.doctor_name || data.doctorName;
+            // 3. GENERATE AND OPEN BILL
             
             const serviceItems: BillServiceItem[] = [{
                 type: 'OPD',
@@ -226,7 +250,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
             
             alert(`OPD Registration successful (ID: ${registrationId}) ✅`);
             
-            // 5. CLEAR FORM: Reset component-specific fields
+            // 4. CLEAR FORM: Reset component-specific fields
             reset({
                 ...defaultRHFValues,
                 bp: '', pulse: null, weight: null,
@@ -238,7 +262,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
 
         } catch (err: any) {
             console.error("Unexpected error:", err);
-            alert(err.message ?? "An unexpected error occurred during OPD submission.");
+            alert(err.message ?? "An unexpected error occurred during OPD submission. Check console for details.");
         }
     }
 
@@ -326,7 +350,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                 className="h-8" 
                                 placeholder="e.g., 72" 
                                 disabled={!isExistingPatient}
-                                onWheel={(e) => e.currentTarget.blur()} // 🟢 FIX: Disable scroll wheel
+                                onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
                             />
                         </div>
                         <div className="col-span-3">
@@ -338,7 +362,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                 className="h-8" 
                                 placeholder="e.g., 65.5" 
                                 disabled={!isExistingPatient}
-                                onWheel={(e) => e.currentTarget.blur()} // 🟢 FIX: Disable scroll wheel
+                                onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
                             />
                         </div>
                         <div className="col-span-3">
@@ -369,7 +393,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                 placeholder="0" 
                                 className="h-8" 
                                 disabled={!isExistingPatient}
-                                onWheel={(e) => e.currentTarget.blur()} // 🟢 FIX: Disable scroll wheel
+                                onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
                             />
                         </div>
                         <div className="space-y-2">
@@ -392,14 +416,13 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                                     step="0.01" 
                                                     {...control.register(`paymentEntries.${idx}.amount` as `paymentEntries.${number}.amount`, { 
                                                         valueAsNumber: true, 
-                                                        // 🟢 FIX: Set required to false to allow initial null/empty input
-                                                        required: false
+                                                        required: false // Not strictly required for RHF validation if we filter amounts later
                                                     })} 
                                                     className="h-8" 
-                                                    placeholder="Enter amount" // 🟢 FIX: Updated placeholder
+                                                    placeholder="Enter amount" 
                                                     disabled={!isExistingPatient}
-                                                    onWheel={(e) => e.currentTarget.blur()} // 🟢 FIX: Disable scroll wheel
-                                                    value={watch(`paymentEntries.${idx}.amount`) === 0 ? "" : watch(`paymentEntries.${idx}.amount`)} // 🟢 FIX: Display empty string if value is 0
+                                                    onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
+                                                    value={watch(`paymentEntries.${idx}.amount`) === 0 ? "" : watch(`paymentEntries.${idx}.amount`)} // Display empty string if value is 0
                                                 /> 
                                             </div>
                                             <div> 

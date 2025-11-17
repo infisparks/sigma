@@ -5,7 +5,7 @@ import { format } from "date-fns"
 import { toWords } from "number-to-words"
 import { Download, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { IFormInput } from "../app/opd/types" // Import AgeUnit
+import type { IFormInput } from "../app/pathology/opd/types" // Import AgeUnit
 
 interface DoctorLite {
   id: string
