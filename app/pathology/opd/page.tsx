@@ -2,27 +2,27 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { supabase } from "@/lib/supabase" 
+import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge" // Ensure you have this shadcn component or remove if not
-import { 
-  Search, User, Calendar, Filter, 
-  ArrowLeft, ArrowRight, FilePenLine, 
-  Activity, CreditCard, Users, AlertCircle 
-} from "lucide-react" 
+import {
+    Search, User, Calendar, Filter,
+    ArrowLeft, ArrowRight, FilePenLine,
+    Activity, CreditCard, Users, AlertCircle, Pill
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 
 import OPDRecordEditModal from "./OPDRecordEditModal"
 
 // --- Types & Constants ---
 const TABLE = {
-  OPD_REGISTRATION: "opd_registration", 
-  PATIENT: "patient_detail",
-  CONFIG: "config_data",
+    OPD_REGISTRATION: "opd_registration",
+    PATIENT: "patient_detail",
+    CONFIG: "config_data",
 } as const
 
 interface OPDRecord {
@@ -31,17 +31,17 @@ interface OPDRecord {
     treating_doctor_id: number;
     total_fees: number;
     amount_paid: number;
-    created_at: string; 
-    patient_name?: string; 
-    doctor_name?: string; 
+    created_at: string;
+    patient_name?: string;
+    doctor_name?: string;
     referring_doctor_name: string;
 }
 
 interface DoctorFee {
-    id: number; 
+    id: number;
     doctor_name: string;
-    first_visit_fee: number; 
-    follow_up_fee: number; 
+    first_visit_fee: number;
+    follow_up_fee: number;
 }
 
 // Helper: Format Currency
@@ -55,19 +55,19 @@ const formatCurrency = (amount: number) => {
 
 // Helper: Format Date
 function formatDate(isoString: string | null | undefined): string {
-  if (!isoString) return 'N/A';
-  try {
-    const date = new Date(isoString);
-    return date.toLocaleDateString('en-IN', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-  } catch {
-    return '-';
-  }
+    if (!isoString) return 'N/A';
+    try {
+        const date = new Date(isoString);
+        return date.toLocaleDateString('en-IN', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+        });
+    } catch {
+        return '-';
+    }
 }
 
 const defaultEndDate = new Date().toISOString().split('T')[0];
@@ -76,13 +76,13 @@ const defaultStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOStr
 // --- Main Component ---
 export default function OPDDashboard() {
     const router = useRouter();
-    
+
     // Data State
     const [records, setRecords] = useState<OPDRecord[]>([]);
     const [doctorList, setDoctorList] = useState<DoctorFee[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    
+
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
@@ -120,8 +120,8 @@ export default function OPDDashboard() {
                 .order('created_at', { ascending: false })
                 .limit(pageSize)
                 .range(page * pageSize, (page + 1) * pageSize - 1);
-            
-            if (selectedDoctorId && selectedDoctorId !== '0') { 
+
+            if (selectedDoctorId && selectedDoctorId !== '0') {
                 query = query.eq('treating_doctor_id', Number(selectedDoctorId));
             }
 
@@ -137,7 +137,7 @@ export default function OPDDashboard() {
                 amount_paid: r.amount_paid,
                 created_at: r.created_at,
                 referring_doctor_name: r.referring_doctor_name,
-                patient_name: r[TABLE.PATIENT]?.name || 'Unknown Patient', 
+                patient_name: r[TABLE.PATIENT]?.name || 'Unknown Patient',
                 doctor_name: fetchedDoctors.find(d => d.id === r.treating_doctor_id)?.doctor_name || 'Unknown Doctor',
             }));
 
@@ -158,7 +158,7 @@ export default function OPDDashboard() {
     const filteredRecords = useMemo(() => {
         if (!searchTerm) return records;
         const lower = searchTerm.toLowerCase();
-        return records.filter(r => 
+        return records.filter(r =>
             r.uhid.toLowerCase().includes(lower) ||
             r.patient_name?.toLowerCase().includes(lower) ||
             r.doctor_name?.toLowerCase().includes(lower)
@@ -191,7 +191,7 @@ export default function OPDDashboard() {
 
     return (
         <div className="min-h-screen bg-gray-50/50 p-4 md:p-8 space-y-6">
-            
+
             {/* --- Header Section --- */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -199,9 +199,9 @@ export default function OPDDashboard() {
                     <p className="text-slate-500 text-sm mt-1">Manage patient registrations, finances, and doctor assignments.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                     <Button variant="outline" className="bg-white text-slate-700 shadow-sm" onClick={() => fetchDashboardData()}>
+                    <Button variant="outline" className="bg-white text-slate-700 shadow-sm" onClick={() => fetchDashboardData()}>
                         <Activity className="w-4 h-4 mr-2 text-slate-500" /> Refresh Data
-                     </Button>
+                    </Button>
                 </div>
             </div>
 
@@ -242,34 +242,34 @@ export default function OPDDashboard() {
             {/* --- Filters & Main Content --- */}
             <Card className="border shadow-sm bg-white overflow-hidden">
                 <div className="p-5 border-b bg-white flex flex-col lg:flex-row gap-4 items-end lg:items-center justify-between sticky top-0 z-10">
-                    
+
                     {/* Left: Filters */}
                     <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
                         <div className="grid grid-cols-2 gap-3 w-full sm:w-auto">
                             <div className="space-y-1.5">
                                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">From</label>
-                                <Input 
-                                    type="date" 
-                                    className="h-9 w-full sm:w-36 bg-slate-50 border-slate-200 focus:bg-white transition-colors" 
-                                    value={startDate} 
-                                    onChange={(e) => { setStartDate(e.target.value); setPage(0); }} 
+                                <Input
+                                    type="date"
+                                    className="h-9 w-full sm:w-36 bg-slate-50 border-slate-200 focus:bg-white transition-colors"
+                                    value={startDate}
+                                    onChange={(e) => { setStartDate(e.target.value); setPage(0); }}
                                 />
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">To</label>
-                                <Input 
-                                    type="date" 
-                                    className="h-9 w-full sm:w-36 bg-slate-50 border-slate-200 focus:bg-white transition-colors" 
-                                    value={endDate} 
-                                    onChange={(e) => { setEndDate(e.target.value); setPage(0); }} 
+                                <Input
+                                    type="date"
+                                    className="h-9 w-full sm:w-36 bg-slate-50 border-slate-200 focus:bg-white transition-colors"
+                                    value={endDate}
+                                    onChange={(e) => { setEndDate(e.target.value); setPage(0); }}
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-1.5 w-full sm:w-48">
                             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Doctor</label>
-                            <Select 
-                                value={selectedDoctorId} 
+                            <Select
+                                value={selectedDoctorId}
                                 onValueChange={(v) => { setSelectedDoctorId(v); setPage(0); }}
                             >
                                 <SelectTrigger className="h-9 bg-slate-50 border-slate-200 focus:bg-white"><SelectValue placeholder="Select Doctor" /></SelectTrigger>
@@ -285,10 +285,10 @@ export default function OPDDashboard() {
                     {/* Right: Search */}
                     <div className="relative w-full lg:w-72">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <Input 
-                            type="text" 
-                            placeholder="Search by UHID, Name..." 
-                            value={searchTerm} 
+                        <Input
+                            type="text"
+                            placeholder="Search by UHID, Name..."
+                            value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-9 h-10 bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all"
                         />
@@ -370,8 +370,17 @@ export default function OPDDashboard() {
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Button 
-                                                        variant="ghost" 
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => router.push(`/pathology/opd/${r.id}/prescription`)}
+                                                        className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 mr-1"
+                                                        title="Add Prescription"
+                                                    >
+                                                        <Pill className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
                                                         size="icon"
                                                         onClick={() => handleEditClick(r.id)}
                                                         className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
@@ -387,25 +396,25 @@ export default function OPDDashboard() {
                         </div>
                     )}
                 </CardContent>
-                
+
                 {/* Pagination Footer */}
                 <div className="border-t bg-slate-50/50 p-4 flex items-center justify-between">
                     <div className="text-xs text-slate-500">
                         Showing page {page + 1}
                     </div>
                     <div className="flex gap-2">
-                        <Button 
+                        <Button
                             size="sm"
-                            onClick={() => setPage(p => Math.max(0, p - 1))} 
+                            onClick={() => setPage(p => Math.max(0, p - 1))}
                             disabled={page === 0 || loading}
                             variant="outline"
                             className="h-8 bg-white"
                         >
                             <ArrowLeft className="h-3 w-3 mr-1" /> Prev
                         </Button>
-                        <Button 
+                        <Button
                             size="sm"
-                            onClick={() => setPage(p => p + 1)} 
+                            onClick={() => setPage(p => p + 1)}
                             disabled={filteredRecords.length < pageSize || loading}
                             variant="outline"
                             className="h-8 bg-white"
@@ -415,7 +424,7 @@ export default function OPDDashboard() {
                     </div>
                 </div>
             </Card>
-            
+
             {/* Edit Modal */}
             {isModalOpen && selectedRecordId !== null && (
                 <OPDRecordEditModal
