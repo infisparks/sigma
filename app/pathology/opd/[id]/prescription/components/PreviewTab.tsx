@@ -239,9 +239,9 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
 
     // --- Render Helpers ---
     const renderSection = (title: string, content: React.ReactNode) => (
-        <div className="mb-4 flex items-start text-[11px]">
+        <div className="mb-1.5 flex items-start text-[11px]">
             <div className="w-[100px] shrink-0 font-black text-slate-900 uppercase tracking-wide pt-0.5">{title}</div>
-            <div className="flex-1 text-slate-800 leading-relaxed">{content}</div>
+            <div className="flex-1 text-slate-800 leading-tight">{content}</div>
         </div>
     );
 
@@ -250,18 +250,18 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
     return (
         <div className="flex h-full bg-slate-200">
             {/* --- LEFT SIDEBAR (Controls) --- */}
-            <div className="w-[320px] flex flex-col bg-white border-r border-slate-200">
-                <div className="p-4 border-b border-slate-100 flex items-center gap-3">
-                    <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Settings className="w-4 h-4" /></div>
-                    <span className="font-bold text-sm text-slate-900">Report Settings</span>
+            <div className="w-[260px] flex flex-col bg-white border-r border-slate-200">
+                <div className="p-3 border-b border-slate-100 flex items-center gap-2.5">
+                    <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600"><Settings className="w-3.5 h-3.5" /></div>
+                    <span className="font-black text-[11px] uppercase tracking-wider text-slate-900">Report Settings</span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                <div className="flex-1 overflow-y-auto p-4 space-y-5">
                     {/* Main Action */}
                     <Button
                         onClick={saveAndFinalize}
                         disabled={saving}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] uppercase tracking-widest py-5"
                     >
                         {saving ? "Saving..." : "Save & Finalize"}
                     </Button>
@@ -271,21 +271,21 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                     {/* Margins */}
                     <div>
                         <div
-                            className="flex items-center justify-between cursor-pointer mb-2"
+                            className="flex items-center justify-between cursor-pointer mb-1.5"
                             onClick={() => setShowMargins(!showMargins)}
                         >
-                            <span className="text-[11px] font-bold text-slate-500">PAGE MARGINS</span>
-                            {showMargins ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Page Margins</span>
+                            {showMargins ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
                         </div>
 
                         {showMargins && (
-                            <div className="space-y-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                            <div className="space-y-3 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
                                 <div>
-                                    <div className="flex justify-between text-xs mb-1"><span>Top</span><span>{margins.top}px</span></div>
+                                    <div className="flex justify-between text-[10px] font-bold mb-1"><span>Top</span><span>{margins.top}px</span></div>
                                     <Slider value={[margins.top]} max={200} step={5} onValueChange={(v) => setMargins(prev => ({ ...prev, top: v[0] }))} />
                                 </div>
                                 <div>
-                                    <div className="flex justify-between text-xs mb-1"><span>Bottom</span><span>{margins.bottom}px</span></div>
+                                    <div className="flex justify-between text-[10px] font-bold mb-1"><span>Bottom</span><span>{margins.bottom}px</span></div>
                                     <Slider value={[margins.bottom]} max={200} step={5} onValueChange={(v) => setMargins(prev => ({ ...prev, bottom: v[0] }))} />
                                 </div>
                             </div>
@@ -296,17 +296,17 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
 
                     {/* Follow Up */}
                     <div>
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-[11px] font-bold text-slate-500">FOLLOW UP</span>
-                            {followUp && <button onClick={() => setFollowUp("")} className="text-[10px] text-red-500 font-bold">RESET</button>}
+                        <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Follow Up</span>
+                            {followUp && <button onClick={() => setFollowUp("")} className="text-[9px] text-red-500 font-black uppercase">Reset</button>}
                         </div>
-                        <div className="flex flex-wrap gap-2 mb-3">
+                        <div className="flex flex-wrap gap-1.5 mb-2.5">
                             {["3d", "5d", "1w", "2w", "1m", "3m"].map(d => (
                                 <button
                                     key={d}
                                     onClick={() => setFollowUp(d)}
                                     className={cn(
-                                        "w-10 h-8 rounded text-xs font-bold border transition-all",
+                                        "w-9 h-7 rounded text-[10px] font-black border transition-all",
                                         followUp === d ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-200"
                                     )}
                                 >
@@ -319,8 +319,8 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                                 type="text"
                                 value={followUpNote}
                                 onChange={(e) => setFollowUpNote(e.target.value)}
-                                placeholder="Specific note..."
-                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs"
+                                placeholder="Note..."
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-medium"
                             />
                         )}
                     </div>
@@ -329,49 +329,49 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
 
                     {/* Clinical Note */}
                     <div>
-                        <span className="text-[11px] font-bold text-slate-500 mb-2 block">CLINICAL NOTE</span>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Clinical Note</span>
                         <textarea
                             value={clinicalNote}
                             onChange={(e) => setClinicalNote(e.target.value)}
                             placeholder="Internal remarks..."
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs h-24 resize-none focus:outline-none focus:border-blue-300"
+                            className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-medium h-20 resize-none focus:outline-none focus:border-blue-300"
                         />
                     </div>
 
                     <div className="h-px bg-slate-100" />
 
                     {/* Actions */}
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                         <button
                             onClick={() => setIsDoctorDialogOpen(true)}
-                            className="w-full flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+                            className="w-full flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
                         >
-                            <div className="flex items-center gap-3">
-                                <UserPlus className="w-4 h-4 text-slate-400" />
+                            <div className="flex items-center gap-2.5">
+                                <UserPlus className="w-3.5 h-3.5 text-slate-400" />
                                 <div className="text-left">
-                                    <div className="text-xs font-bold text-slate-900">Refer Patient</div>
-                                    {referDoctor && <div className="text-[10px] text-blue-600">Dr. {referDoctor.name}</div>}
+                                    <div className="text-[10px] font-black text-slate-900 uppercase tracking-wider">Refer Patient</div>
+                                    {referDoctor && <div className="text-[9px] text-blue-600 font-bold">Dr. {referDoctor.name}</div>}
                                 </div>
                             </div>
-                            {referDoctor ? <X className="w-4 h-4 text-red-400" onClick={(e) => { e.stopPropagation(); setReferDoctor(null); }} /> : <ChevronDown className="w-4 h-4 text-slate-300" />}
+                            {referDoctor ? <X className="w-3.5 h-3.5 text-red-400" onClick={(e) => { e.stopPropagation(); setReferDoctor(null); }} /> : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />}
                         </button>
 
                         <button
                             onClick={() => setIsPrintDialogOpen(true)}
-                            className="w-full flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+                            className="w-full flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
                         >
-                            <div className="flex items-center gap-3">
-                                <FileText className="w-4 h-4 text-slate-400" />
-                                <span className="text-xs font-bold text-slate-900">Print Sections</span>
+                            <div className="flex items-center gap-2.5">
+                                <FileText className="w-3.5 h-3.5 text-slate-400" />
+                                <span className="text-[10px] font-black text-slate-900 uppercase tracking-wider">Print Sections</span>
                             </div>
-                            <ChevronDown className="w-4 h-4 text-slate-300" />
+                            <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
                         </button>
                     </div>
                 </div>
             </div>
 
             {/* --- RIGHT PANEL (Preview) --- */}
-            <div className="flex-1 overflow-auto p-10 flex justify-center">
+            <div className="flex-1 overflow-auto p-4 flex justify-center">
                 <div
                     className="bg-white shadow-2xl transition-all origin-top"
                     style={{
@@ -381,6 +381,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                         paddingBottom: `${margins.bottom}px`,
                         paddingLeft: '45px',
                         paddingRight: '45px',
+                        transform: 'scale(0.7)',
                     }}
                 >
                     {/* Header */}
@@ -447,7 +448,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                     {/* 2. Diagnosis - Detailed */}
                     {toggles["Diagnosis"] && reportData.diagnosis_list?.length > 0 &&
                         renderSection("Diagnosis", (
-                            <div className="space-y-2">
+                            <div className="space-y-0">
                                 {reportData.diagnosis_list.map((d: any, idx: number) => {
                                     const details = [];
                                     if (d.status && d.status !== 'Suspected') details.push(d.status);

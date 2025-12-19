@@ -179,19 +179,19 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
     return (
         <div className="flex flex-col h-full overflow-hidden">
             {/* Tab Header */}
-            <div className={`${ModernTheme.surface} border-b border-slate-200 p-4`}>
-                <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
+            <div className={`${ModernTheme.surface} border-b border-slate-200 p-3`}>
+                <div className="flex bg-slate-100 p-0.5 rounded-lg mb-3">
                     <SegmentTab title="Instructions" index={0} selectedIndex={selectedSubTab} onSelect={setSelectedSubTab} />
                     <SegmentTab title="Investigations" index={1} selectedIndex={selectedSubTab} onSelect={setSelectedSubTab} />
                     <SegmentTab title="Procedures" index={2} selectedIndex={selectedSubTab} onSelect={setSelectedSubTab} />
                 </div>
 
                 <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-600" />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-600" />
                     <input
                         type="text"
-                        placeholder={`Search ${selectedSubTab === 0 ? 'instructions' : selectedSubTab === 1 ? 'investigations' : 'procedures'}...`}
-                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 text-sm"
+                        placeholder={`Search...`}
+                        className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-100 text-[11px]"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -200,21 +200,21 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
 
             {/* Selection Bar */}
             {currentSelectedSet.size > 0 && (
-                <div className="bg-blue-50 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-blue-600">
-                        <CheckCircle className="w-4 h-4" />
-                        <span className="text-xs font-bold">{currentSelectedSet.size} Items Selected</span>
+                <div className="bg-blue-50 border-b border-slate-200 px-4 py-1.5 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-blue-600">
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-black uppercase tracking-wider">{currentSelectedSet.size} Selected</span>
                     </div>
-                    <span className="text-[10px] text-slate-400 italic">Auto-saved</span>
+                    <span className="text-[9px] text-slate-400 italic font-medium">Auto-saved</span>
                 </div>
             )}
 
             {/* List Content */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
                 {currentList.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                        <List className="w-12 h-12 mb-4 opacity-20" />
-                        <p className="text-sm font-medium">No items found</p>
+                        <List className="w-10 h-10 mb-3 opacity-20" />
+                        <p className="text-[11px] font-bold">No items found</p>
                     </div>
                 ) : (
                     currentList.map((item, idx) => {
@@ -224,20 +224,20 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
                                 key={idx}
                                 onClick={() => toggleSelection(item)}
                                 className={cn(
-                                    "flex items-center gap-3 p-3.5 rounded-xl border transition-all cursor-pointer",
+                                    "flex items-center gap-2.5 p-2.5 rounded-lg border transition-all cursor-pointer",
                                     isSelected
                                         ? "bg-blue-50 border-blue-200 shadow-sm"
                                         : "bg-white border-slate-200 hover:border-blue-200"
                                 )}
                             >
                                 <div className={cn(
-                                    "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
+                                    "w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors",
                                     isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300"
                                 )}>
-                                    {isSelected && <Check className="w-3 h-3 text-white" />}
+                                    {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
                                 </div>
                                 <span className={cn(
-                                    "text-sm font-medium",
+                                    "text-[11px] font-bold",
                                     isSelected ? "text-slate-900" : "text-slate-600"
                                 )}>{item}</span>
                             </div>
@@ -255,7 +255,7 @@ function SegmentTab({ title, index, selectedIndex, onSelect }: { title: string, 
         <button
             onClick={() => onSelect(index)}
             className={cn(
-                "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+                "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md transition-all",
                 isSelected ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:bg-slate-200/50"
             )}
         >

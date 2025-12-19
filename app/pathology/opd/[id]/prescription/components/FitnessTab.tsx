@@ -206,33 +206,33 @@ export default function FitnessTab({ opdId }: FitnessTabProps) {
     return (
         <div className={`flex h-full ${FitTheme.background}`}>
             {/* --- LEFT SIDEBAR (Library) --- */}
-            <div className={`w-[300px] flex flex-col border-r ${FitTheme.border} ${FitTheme.surface}`}>
+            <div className={`w-[240px] flex flex-col border-r ${FitTheme.border} ${FitTheme.surface}`}>
                 {/* Header */}
-                <div className={`p-4 border-b ${FitTheme.border} flex items-center gap-3`}>
-                    <div className={`p-2 rounded-lg bg-blue-50 ${FitTheme.primary}`}>
-                        <Library className="w-4 h-4" />
+                <div className={`p-3 border-b ${FitTheme.border} flex items-center gap-2.5`}>
+                    <div className={`p-1.5 rounded-lg bg-blue-50 ${FitTheme.primary}`}>
+                        <Library className="w-3.5 h-3.5" />
                     </div>
-                    <span className={`font-bold text-sm ${FitTheme.textMain}`}>Wellness Plans</span>
+                    <span className={`font-black text-[11px] uppercase tracking-wider ${FitTheme.textMain}`}>Wellness Plans</span>
                 </div>
 
                 {/* Search */}
-                <div className="p-4">
+                <div className="p-3">
                     <div className="relative">
-                        <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${FitTheme.textSub}`} />
+                        <Search className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${FitTheme.textSub}`} />
                         <input
                             type="text"
-                            placeholder="Filter templates..."
-                            className={`w-full pl-9 pr-3 py-2 bg-slate-100 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-200`}
+                            placeholder="Filter..."
+                            className={`w-full pl-8 pr-2 py-1.5 bg-slate-100 rounded-lg text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-200`}
                         />
                     </div>
                 </div>
 
                 {/* List */}
-                <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-6">
+                <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-4">
                     {/* Diet Section */}
                     <div>
                         <SectionLabel text="DIET & NUTRITION" />
-                        <div className="space-y-2 mt-2">
+                        <div className="space-y-1.5 mt-1.5">
                             {plans.filter(p => p.type === 'diet').map(p => (
                                 <PlanCard
                                     key={p.id}
@@ -247,7 +247,7 @@ export default function FitnessTab({ opdId }: FitnessTabProps) {
                     {/* Exercise Section */}
                     <div>
                         <SectionLabel text="PHYSICAL ACTIVITY" />
-                        <div className="space-y-2 mt-2">
+                        <div className="space-y-1.5 mt-1.5">
                             {plans.filter(p => p.type === 'exercise').map(p => (
                                 <PlanCard
                                     key={p.id}
@@ -264,48 +264,48 @@ export default function FitnessTab({ opdId }: FitnessTabProps) {
             {/* --- RIGHT CONTENT (Editor) --- */}
             <div className="flex-1 flex flex-col bg-slate-50">
                 {/* Toolbar */}
-                <div className={`px-8 py-5 bg-white border-b ${FitTheme.border} flex items-center justify-between`}>
+                <div className={`px-4 py-3 bg-white border-b ${FitTheme.border} flex items-center justify-between`}>
                     <div>
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-[10px] font-bold tracking-wider uppercase ${selectedPlan.type === 'diet' ? FitTheme.dietColor : FitTheme.exerciseColor}`}>
-                                {selectedPlan.type === 'diet' ? "NUTRITION PLAN" : "WORKOUT PLAN"}
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className={`text-[8px] font-black tracking-widest uppercase ${selectedPlan.type === 'diet' ? FitTheme.dietColor : FitTheme.exerciseColor}`}>
+                                {selectedPlan.type === 'diet' ? "Nutrition" : "Workout"}
                             </span>
                             {selectedPlan.isAssigned && (
-                                <span className="bg-emerald-50 text-emerald-600 text-[9px] font-bold px-1.5 py-0.5 rounded">ASSIGNED</span>
+                                <span className="bg-emerald-50 text-emerald-600 text-[8px] font-black px-1 py-0.5 rounded">ASSIGNED</span>
                             )}
                         </div>
-                        <h2 className={`text-xl font-extrabold ${FitTheme.textMain}`}>{selectedPlan.title}</h2>
+                        <h2 className={`text-lg font-black text-slate-900 leading-tight`}>{selectedPlan.title}</h2>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                         <button
                             onClick={() => setIsEditing(!isEditing)}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border ${FitTheme.border} text-xs font-medium hover:bg-slate-50 transition-colors`}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border ${FitTheme.border} text-[10px] font-bold hover:bg-slate-50 transition-colors`}
                         >
-                            {isEditing ? <Check className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
-                            {isEditing ? "Done Editing" : "Customize"}
+                            {isEditing ? <Check className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
+                            {isEditing ? "Done" : "Edit"}
                         </button>
 
                         <button
                             onClick={toggleAssign}
                             className={cn(
-                                "flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all shadow-sm",
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-black transition-all shadow-sm",
                                 selectedPlan.isAssigned
                                     ? "bg-white border border-red-200 text-red-500 hover:bg-red-50"
                                     : "bg-blue-600 text-white hover:bg-blue-700"
                             )}
                         >
-                            {selectedPlan.isAssigned ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                            {selectedPlan.isAssigned ? "Unassign" : "Assign Plan"}
+                            {selectedPlan.isAssigned ? <X className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                            {selectedPlan.isAssigned ? "Unassign" : "Assign"}
                         </button>
                     </div>
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-8">
+                <div className="flex-1 overflow-y-auto p-4">
                     {selectedPlan.type === 'diet' ? (
-                        <div className="space-y-4">
-                            {selectedPlan.dietEntries?.length === 0 && <EmptyState msg="No meal details added." />}
+                        <div className="space-y-3">
+                            {selectedPlan.dietEntries?.length === 0 && <EmptyState msg="No meals." />}
                             {selectedPlan.dietEntries?.map((entry, idx) => (
                                 isEditing ? (
                                     <DietRowEditor
@@ -320,8 +320,8 @@ export default function FitnessTab({ opdId }: FitnessTabProps) {
                             ))}
                         </div>
                     ) : (
-                        <div className="flex flex-wrap gap-4">
-                            {selectedPlan.exerciseEntries?.length === 0 && <EmptyState msg="No exercises added." />}
+                        <div className="flex flex-wrap gap-3">
+                            {selectedPlan.exerciseEntries?.length === 0 && <EmptyState msg="No exercises." />}
                             {selectedPlan.exerciseEntries?.map((entry, idx) => (
                                 isEditing ? (
                                     <ExerciseRowEditor
@@ -338,12 +338,12 @@ export default function FitnessTab({ opdId }: FitnessTabProps) {
                     )}
 
                     {isEditing && (
-                        <div className="mt-8 flex justify-center">
+                        <div className="mt-6 flex justify-center">
                             <button
                                 onClick={addItemToPlan}
-                                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                                className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-[11px] font-black uppercase tracking-wider"
                             >
-                                <Plus className="w-5 h-5" /> Add New Item
+                                <Plus className="w-4 h-4" /> Add Item
                             </button>
                         </div>
                     )}
@@ -356,7 +356,7 @@ export default function FitnessTab({ opdId }: FitnessTabProps) {
 // --- Sub Components ---
 
 function SectionLabel({ text }: { text: string }) {
-    return <p className="text-[10px] font-bold text-slate-400 tracking-widest mb-2 ml-1">{text}</p>;
+    return <p className="text-[8px] font-black text-slate-400 tracking-widest mb-1.5 ml-1 uppercase">{text}</p>;
 }
 
 function PlanCard({ plan, isSelected, onClick }: { plan: FitnessPlan, isSelected: boolean, onClick: () => void }) {
@@ -366,34 +366,34 @@ function PlanCard({ plan, isSelected, onClick }: { plan: FitnessPlan, isSelected
         <div
             onClick={onClick}
             className={cn(
-                "flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all",
+                "flex items-center gap-2.5 p-2 rounded-lg border cursor-pointer transition-all",
                 isSelected
                     ? `bg-slate-50 ${accentColor} border-slate-300`
                     : "bg-white border-slate-100 hover:border-slate-200"
             )}
         >
             <div className={cn(
-                "p-2 rounded-full border bg-white",
+                "p-1.5 rounded-full border bg-white",
                 isSelected ? `border-current` : "border-slate-200 text-slate-400"
             )}>
-                {plan.type === 'diet' ? <Utensils className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
+                {plan.type === 'diet' ? <Utensils className="w-2.5 h-2.5" /> : <Activity className="w-2.5 h-2.5" />}
             </div>
             <div className="flex-1 min-w-0">
-                <p className={cn("text-xs font-bold truncate", isSelected ? "text-slate-900" : "text-slate-700")}>{plan.title}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                    {plan.type === 'diet' ? `${plan.dietEntries?.length || 0} meals` : `${plan.exerciseEntries?.length || 0} activities`}
+                <p className={cn("text-[10px] font-bold truncate", isSelected ? "text-slate-900" : "text-slate-700")}>{plan.title}</p>
+                <p className="text-[8px] text-slate-400 mt-0.5 uppercase font-medium">
+                    {plan.type === 'diet' ? `${plan.dietEntries?.length || 0} meals` : `${plan.exerciseEntries?.length || 0} items`}
                 </p>
             </div>
-            {plan.isAssigned && <CheckCircle className="w-4 h-4 text-emerald-500" />}
+            {plan.isAssigned && <CheckCircle className="w-3 h-3 text-emerald-500" />}
         </div>
     );
 }
 
 function EmptyState({ msg }: { msg: string }) {
     return (
-        <div className="flex flex-col items-center justify-center py-12 text-slate-300">
-            <List className="w-12 h-12 mb-3 opacity-20" />
-            <p className="text-sm font-medium">{msg}</p>
+        <div className="flex flex-col items-center justify-center py-8 text-slate-300">
+            <List className="w-8 h-8 mb-2 opacity-20" />
+            <p className="text-[11px] font-bold">{msg}</p>
         </div>
     );
 }
@@ -403,14 +403,14 @@ function EmptyState({ msg }: { msg: string }) {
 function DietRowRead({ entry }: { entry: DietEntry }) {
     return (
         <div className="flex items-stretch">
-            <div className="w-24 text-right pt-1">
-                <span className="text-xs font-bold text-slate-900">{entry.timeSlot}</span>
+            <div className="w-20 text-right pt-0.5">
+                <span className="text-[10px] font-black text-slate-900 uppercase tracking-wider">{entry.timeSlot}</span>
             </div>
-            <div className="w-px bg-slate-200 mx-5 relative">
-                <div className="absolute top-2 -left-[3px] w-[7px] h-[7px] rounded-full bg-slate-300 border border-white"></div>
+            <div className="w-px bg-slate-200 mx-4 relative">
+                <div className="absolute top-1.5 -left-[2.5px] w-[5px] h-[5px] rounded-full bg-slate-300 border border-white"></div>
             </div>
-            <div className="flex-1 pb-8">
-                <p className="text-sm text-slate-600 leading-relaxed">{entry.description}</p>
+            <div className="flex-1 pb-4">
+                <p className="text-[11px] text-slate-600 leading-relaxed font-medium">{entry.description}</p>
             </div>
         </div>
     );
@@ -418,14 +418,14 @@ function DietRowRead({ entry }: { entry: DietEntry }) {
 
 function ExerciseRowRead({ entry }: { entry: ExerciseEntry }) {
     return (
-        <div className="w-[300px] p-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-start gap-4">
-            <div className="p-3 bg-cyan-50 rounded-full text-cyan-600">
-                <Activity className="w-5 h-5" />
+        <div className="w-[240px] p-3 bg-white rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
+            <div className="p-2 bg-cyan-50 rounded-full text-cyan-600">
+                <Activity className="w-4 h-4" />
             </div>
             <div>
-                <p className="font-bold text-sm text-slate-900">{entry.activity}</p>
-                <p className="text-xs font-bold text-slate-500 mt-1">{entry.durationMinutes} mins</p>
-                {entry.note && <p className="text-[10px] text-slate-400 mt-2 leading-tight">{entry.note}</p>}
+                <p className="font-black text-[11px] text-slate-900 leading-tight">{entry.activity}</p>
+                <p className="text-[9px] font-black text-slate-500 mt-1 uppercase tracking-wider">{entry.durationMinutes} mins</p>
+                {entry.note && <p className="text-[9px] text-slate-400 mt-1.5 leading-tight font-medium">{entry.note}</p>}
             </div>
         </div>
     );
@@ -435,27 +435,27 @@ function ExerciseRowRead({ entry }: { entry: ExerciseEntry }) {
 
 function DietRowEditor({ entry, onDelete, onUpdate }: { entry: DietEntry, onDelete: () => void, onUpdate: (f: string, v: any) => void }) {
     return (
-        <div className="flex gap-4 p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div className="w-32">
-                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Time Slot</label>
+        <div className="flex gap-3 p-3 bg-white rounded-lg border border-slate-200 shadow-sm">
+            <div className="w-24">
+                <label className="text-[8px] font-black text-slate-400 uppercase mb-0.5 block tracking-widest">Time</label>
                 <input
                     type="text"
                     value={entry.timeSlot}
                     onChange={(e) => onUpdate('timeSlot', e.target.value)}
-                    className="w-full text-sm font-bold border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1"
+                    className="w-full text-[10px] font-black border-b border-slate-200 focus:border-blue-500 focus:outline-none py-0.5 uppercase"
                 />
             </div>
             <div className="flex-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Food Items</label>
+                <label className="text-[8px] font-black text-slate-400 uppercase mb-0.5 block tracking-widest">Description</label>
                 <input
                     type="text"
                     value={entry.description}
                     onChange={(e) => onUpdate('description', e.target.value)}
-                    className="w-full text-sm border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1"
+                    className="w-full text-[10px] border-b border-slate-200 focus:border-blue-500 focus:outline-none py-0.5 font-medium"
                 />
             </div>
-            <button onClick={onDelete} className="text-red-400 hover:text-red-500">
-                <Trash2 className="w-4 h-4" />
+            <button onClick={onDelete} className="text-red-400 hover:text-red-500 self-end mb-0.5">
+                <Trash2 className="w-3.5 h-3.5" />
             </button>
         </div>
     );
@@ -463,27 +463,27 @@ function DietRowEditor({ entry, onDelete, onUpdate }: { entry: DietEntry, onDele
 
 function ExerciseRowEditor({ entry, onDelete, onUpdate }: { entry: ExerciseEntry, onDelete: () => void, onUpdate: (f: string, v: any) => void }) {
     return (
-        <div className="w-full p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex gap-4 items-start">
-            <div className="flex-1 space-y-3">
-                <div className="flex gap-4">
+        <div className="w-full p-3 bg-white rounded-lg border border-slate-200 shadow-sm flex gap-3 items-start">
+            <div className="flex-1 space-y-2.5">
+                <div className="flex gap-3">
                     <div className="flex-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Activity</label>
+                        <label className="text-[8px] font-black text-slate-400 uppercase mb-0.5 block tracking-widest">Activity</label>
                         <input
                             type="text"
                             value={entry.activity}
                             onChange={(e) => onUpdate('activity', e.target.value)}
-                            className="w-full text-sm font-bold border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1"
+                            className="w-full text-[10px] font-black border-b border-slate-200 focus:border-blue-500 focus:outline-none py-0.5"
                         />
                     </div>
-                    <div className="w-32">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Duration (Min)</label>
+                    <div className="w-28">
+                        <label className="text-[8px] font-black text-slate-400 uppercase mb-0.5 block tracking-widest">Mins</label>
                         <div className="flex gap-1">
                             {[15, 30, 45, 60].map(m => (
                                 <button
                                     key={m}
                                     onClick={() => onUpdate('durationMinutes', m)}
                                     className={cn(
-                                        "px-2 py-1 rounded text-[10px] font-bold border",
+                                        "px-1.5 py-0.5 rounded text-[8px] font-black border",
                                         entry.durationMinutes === m ? "bg-cyan-600 text-white border-cyan-600" : "bg-white text-slate-500 border-slate-200"
                                     )}
                                 >
@@ -494,18 +494,18 @@ function ExerciseRowEditor({ entry, onDelete, onUpdate }: { entry: ExerciseEntry
                     </div>
                 </div>
                 <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Notes</label>
+                    <label className="text-[8px] font-black text-slate-400 uppercase mb-0.5 block tracking-widest">Notes</label>
                     <input
                         type="text"
                         value={entry.note || ""}
                         onChange={(e) => onUpdate('note', e.target.value)}
-                        className="w-full text-xs text-slate-500 border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1"
-                        placeholder="Optional notes..."
+                        className="w-full text-[9px] text-slate-500 border-b border-slate-200 focus:border-blue-500 focus:outline-none py-0.5 font-medium"
+                        placeholder="..."
                     />
                 </div>
             </div>
-            <button onClick={onDelete} className="text-red-400 hover:text-red-500 mt-2">
-                <Trash2 className="w-4 h-4" />
+            <button onClick={onDelete} className="text-red-400 hover:text-red-500 mt-1">
+                <Trash2 className="w-3.5 h-3.5" />
             </button>
         </div>
     );

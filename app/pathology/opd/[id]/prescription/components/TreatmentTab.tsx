@@ -228,19 +228,19 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
     return (
         <div className={`flex h-full ${TxTheme.background}`}>
             {/* --- LEFT PANEL --- */}
-            <div className={`w-[400px] flex flex-col border-r ${TxTheme.border} ${TxTheme.surface}`}>
+            <div className={`w-[280px] flex flex-col border-r ${TxTheme.border} ${TxTheme.surface}`}>
                 {/* Tabs */}
-                <div className="p-4 border-b border-slate-100">
-                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                <div className="p-3 border-b border-slate-100">
+                    <div className="flex bg-slate-100 p-0.5 rounded-lg">
                         <button
                             onClick={() => setActiveTab('current')}
-                            className={cn("flex-1 py-1.5 text-xs font-bold rounded-md transition-all", activeTab === 'current' ? "bg-white shadow-sm text-slate-900" : "text-slate-500")}
+                            className={cn("flex-1 py-1 text-[10px] font-bold rounded transition-all", activeTab === 'current' ? "bg-white shadow-sm text-slate-900" : "text-slate-500")}
                         >
-                            Current Rx
+                            Current
                         </button>
                         <button
                             onClick={() => setActiveTab('history')}
-                            className={cn("flex-1 py-1.5 text-xs font-bold rounded-md transition-all", activeTab === 'history' ? "bg-white shadow-sm text-slate-900" : "text-slate-500")}
+                            className={cn("flex-1 py-1 text-[10px] font-bold rounded transition-all", activeTab === 'history' ? "bg-white shadow-sm text-slate-900" : "text-slate-500")}
                         >
                             History
                         </button>
@@ -252,29 +252,29 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                     {activeTab === 'current' ? (
                         <div className="flex flex-col h-full">
                             {/* --- Active List (Top - Reduced Height) --- */}
-                            <div className="h-[35%] overflow-y-auto p-4 border-b border-slate-200 bg-white">
-                                <div className="flex items-center justify-between mb-3">
-                                    <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Active Prescriptions ({medicines.length})</span>
+                            <div className="h-[35%] overflow-y-auto p-3 border-b border-slate-200 bg-white">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[9px] font-bold text-slate-400 tracking-widest uppercase">Active ({medicines.length})</span>
                                 </div>
 
                                 {medicines.length === 0 ? (
-                                    <div className="text-center py-8 border-2 border-dashed border-slate-100 rounded-xl">
-                                        <p className="text-xs text-slate-400">No medicines added yet.</p>
+                                    <div className="text-center py-4 border-2 border-dashed border-slate-100 rounded-lg">
+                                        <p className="text-[10px] text-slate-400">No medicines.</p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-2">
+                                    <div className="space-y-1.5">
                                         {medicines.map(med => (
                                             <div
                                                 key={med.id}
                                                 onClick={() => setSelectedMedId(med.id)}
                                                 className={cn(
-                                                    "p-3 rounded-xl border cursor-pointer transition-all flex items-center gap-3",
+                                                    "p-2 rounded-lg border cursor-pointer transition-all flex items-center gap-2",
                                                     selectedMedId === med.id ? "bg-blue-50 border-blue-200 shadow-sm" : "bg-white border-slate-200 hover:border-blue-200"
                                                 )}
                                             >
-                                                <div className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-500">{med.type}</div>
-                                                <div className="flex-1 font-medium text-sm text-slate-900 truncate">{med.name}</div>
-                                                {selectedMedId === med.id && <Edit3 className="w-3.5 h-3.5 text-blue-600" />}
+                                                <div className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-500">{med.type}</div>
+                                                <div className="flex-1 font-bold text-[11px] text-slate-900 truncate">{med.name}</div>
+                                                {selectedMedId === med.id && <Edit3 className="w-3 h-3 text-blue-600" />}
                                             </div>
                                         ))}
                                     </div>
@@ -282,43 +282,43 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                             </div>
 
                             {/* --- Add New (Bottom - Expanded) --- */}
-                            <div className="flex-1 p-4 bg-slate-50 flex flex-col min-h-0">
-                                <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-3">Add Medicine</span>
+                            <div className="flex-1 p-3 bg-slate-50 flex flex-col min-h-0">
+                                <span className="text-[9px] font-bold text-slate-400 tracking-widest uppercase mb-2">Add Medicine</span>
 
                                 {/* Search */}
-                                <div className="relative mb-4 shrink-0">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <div className="relative mb-3 shrink-0">
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                                     <input
                                         type="text"
-                                        placeholder="Search brands or generics..."
+                                        placeholder="Search..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter' && searchQuery) addMedicine(searchQuery);
                                         }}
-                                        className="w-full pl-9 pr-3 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
+                                        className="w-full pl-8 pr-2 py-2 bg-white border border-slate-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-100 shadow-sm"
                                     />
                                 </div>
 
                                 {/* Suggestions Grid */}
                                 <div className="flex-1 overflow-y-auto">
-                                    <div className="flex flex-wrap gap-2 content-start">
+                                    <div className="flex flex-wrap gap-1.5 content-start">
                                         {searchResults
                                             .filter(m => !medicines.some(added => added.name === m.name)) // Filter out added
                                             .map((m, i) => (
                                                 <button
                                                     key={i}
                                                     onClick={() => addMedicine(m.name, m.type || 'TAB')}
-                                                    className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm text-left"
+                                                    className="px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[10px] font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm text-left"
                                                 >
-                                                    <span className="block font-bold">{m.name}</span>
-                                                    {m.manufacturer_name && <span className="block text-[10px] text-slate-400 truncate">{m.manufacturer_name}</span>}
+                                                    <span className="block font-bold truncate max-w-[100px]">{m.name}</span>
+                                                    {m.manufacturer_name && <span className="block text-[8px] text-slate-400 truncate max-w-[100px]">{m.manufacturer_name}</span>}
                                                 </button>
                                             ))}
                                         {searchQuery && (
                                             <button
                                                 onClick={() => addMedicine(searchQuery)}
-                                                className="px-3 py-2 bg-blue-100 border border-blue-200 rounded-lg text-xs font-bold text-blue-700 hover:bg-blue-200 transition-colors"
+                                                className="px-2 py-1 bg-blue-100 border border-blue-200 rounded-md text-[10px] font-bold text-blue-700 hover:bg-blue-200 transition-colors"
                                             >
                                                 Add "{searchQuery}"
                                             </button>
@@ -328,34 +328,34 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                             </div>
                         </div>
                     ) : (
-                        <div className="p-4 space-y-4">
+                        <div className="p-3 space-y-3">
                             {loadingHistory ? (
-                                <div className="text-center py-8 text-slate-400 text-xs">Loading history...</div>
+                                <div className="text-center py-4 text-slate-400 text-[10px]">Loading...</div>
                             ) : historyList.length === 0 ? (
-                                <div className="text-center py-8 text-slate-400 text-xs">No history found.</div>
+                                <div className="text-center py-4 text-slate-400 text-[10px]">No history.</div>
                             ) : (
                                 historyList.map(visit => (
-                                    <div key={visit.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                                        <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <History className="w-3.5 h-3.5 text-slate-500" />
-                                                <span className="text-xs font-bold text-slate-700">
+                                    <div key={visit.id} className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                        <div className="bg-slate-50 px-2 py-1.5 border-b border-slate-200 flex items-center justify-between">
+                                            <div className="flex items-center gap-1.5">
+                                                <History className="w-3 h-3 text-slate-500" />
+                                                <span className="text-[10px] font-bold text-slate-700">
                                                     {new Date(visit.created_at).toLocaleDateString()}
                                                 </span>
                                             </div>
                                             <button
                                                 onClick={() => copyFromHistory(visit.rx_list_json)}
-                                                className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100"
+                                                className="flex items-center gap-1 text-[8px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded hover:bg-blue-100"
                                             >
-                                                <Copy className="w-3 h-3" /> Copy All
+                                                <Copy className="w-2.5 h-2.5" /> Copy
                                             </button>
                                         </div>
-                                        <div className="p-3 space-y-2">
+                                        <div className="p-2 space-y-1">
                                             {visit.rx_list_json.map((m: any, i: number) => (
-                                                <div key={i} className="text-xs text-slate-600 flex items-center gap-2">
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
-                                                    <span>{m.name}</span>
-                                                    <span className="text-slate-400">({m.dosage})</span>
+                                                <div key={i} className="text-[10px] text-slate-600 flex items-center gap-1.5">
+                                                    <div className="w-1 h-1 rounded-full bg-slate-300"></div>
+                                                    <span className="truncate">{m.name}</span>
+                                                    <span className="text-slate-400 text-[9px]">({m.dosage})</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -372,35 +372,35 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                 {selectedMed ? (
                     <div className="flex flex-col h-full">
                         {/* Header */}
-                        <div className="px-8 py-6 bg-white border-b border-slate-200 flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 rounded-xl bg-blue-50 text-blue-600">
-                                    <Plus className="w-6 h-6" />
+                        <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
+                                    <Plus className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-[10px] font-bold bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{selectedMed.type}</span>
+                                    <div className="flex items-center gap-1.5 mb-0.5">
+                                        <span className="text-[8px] font-black bg-slate-100 px-1 py-0.5 rounded text-slate-500 uppercase">{selectedMed.type}</span>
                                     </div>
-                                    <h2 className="text-xl font-extrabold text-slate-900">{selectedMed.name}</h2>
+                                    <h2 className="text-lg font-black text-slate-900 leading-tight">{selectedMed.name}</h2>
                                 </div>
                             </div>
-                            <button onClick={() => removeMedicine(selectedMed.id)} className="p-2 text-red-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors">
-                                <Trash2 className="w-5 h-5" />
+                            <button onClick={() => removeMedicine(selectedMed.id)} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-500 rounded-md transition-colors">
+                                <Trash2 className="w-4 h-4" />
                             </button>
                         </div>
 
                         {/* Editor Content */}
-                        <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                        <div className="flex-1 overflow-y-auto p-4 space-y-6">
                             {/* Dosage */}
                             <div>
                                 <SectionHeader title="DOSAGE PER INTAKE" icon={PieChart} />
-                                <div className="mt-3 flex flex-wrap gap-3">
+                                <div className="mt-2 flex flex-wrap gap-2">
                                     {["1/4", "1/2", "1", "1½", "2", "3"].map(d => (
                                         <button
                                             key={d}
                                             onClick={() => updateMedicine(selectedMed.id, { dosage: d })}
                                             className={cn(
-                                                "w-12 h-12 rounded-full border flex items-center justify-center text-sm font-bold transition-all",
+                                                "w-10 h-10 rounded-full border flex items-center justify-center text-[11px] font-black transition-all",
                                                 selectedMed.dosage === d
                                                     ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200"
                                                     : "bg-white text-slate-500 border-slate-200 hover:border-blue-300"
@@ -415,7 +415,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                             {/* Timing */}
                             <div>
                                 <SectionHeader title="TIMING & FREQUENCY" icon={Clock} />
-                                <div className="mt-3 grid grid-cols-3 gap-4">
+                                <div className="mt-2 grid grid-cols-3 gap-3">
                                     <TimingBlock
                                         label="Breakfast"
                                         icon={Clock}
@@ -446,13 +446,13 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                             {/* Duration */}
                             <div>
                                 <SectionHeader title="DURATION" icon={Calendar} />
-                                <div className="mt-3 flex flex-wrap gap-2">
+                                <div className="mt-2 flex flex-wrap gap-1.5">
                                     {["3d", "5d", "7d", "10d", "15d", "1m", "3m"].map(d => (
                                         <button
                                             key={d}
                                             onClick={() => updateMedicine(selectedMed.id, { duration: d })}
                                             className={cn(
-                                                "px-4 py-2 rounded-lg border text-xs font-bold transition-all",
+                                                "px-3 py-1.5 rounded-md text-[10px] font-black border transition-all",
                                                 selectedMed.duration === d
                                                     ? "bg-slate-800 text-white border-slate-800"
                                                     : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
@@ -466,24 +466,24 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
 
                             {/* Notes */}
                             <div>
-                                <label className="text-xs font-bold text-slate-900 mb-2 block">Instructions / Notes</label>
+                                <label className="text-[10px] font-black text-slate-900 mb-1.5 block uppercase tracking-wider">Instructions</label>
                                 <input
                                     type="text"
                                     value={selectedMed.note}
                                     onChange={(e) => updateMedicine(selectedMed.id, { note: e.target.value })}
-                                    placeholder="e.g. Take with warm water..."
-                                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                                    placeholder="..."
+                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-100"
                                 />
                             </div>
                         </div>
                     </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                        <div className="p-6 bg-white rounded-full shadow-sm mb-4">
-                            <Plus className="w-10 h-10 opacity-20" />
+                        <div className="p-4 bg-white rounded-full shadow-sm mb-3">
+                            <Plus className="w-8 h-8 opacity-20" />
                         </div>
-                        <p className="text-lg font-semibold text-slate-600">No Medicine Selected</p>
-                        <p className="text-sm">Select or add a medicine to configure.</p>
+                        <p className="text-base font-bold text-slate-600">No Selection</p>
+                        <p className="text-[11px]">Select or add a medicine.</p>
                     </div>
                 )}
             </div>
@@ -495,29 +495,29 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
 
 function SectionHeader({ title, icon: Icon }: { title: string, icon: any }) {
     return (
-        <div className="flex items-center gap-2 text-slate-400">
-            <Icon className="w-4 h-4" />
-            <span className="text-[10px] font-bold tracking-widest">{title}</span>
+        <div className="flex items-center gap-1.5 text-slate-400">
+            <Icon className="w-3 h-3" />
+            <span className="text-[9px] font-black tracking-widest uppercase">{title}</span>
         </div>
     );
 }
 
 function TimingBlock({ label, icon: Icon, before, after, onToggleBefore, onToggleAfter }: any) {
     return (
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="p-2 flex justify-center border-b border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">{label}</span>
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+            <div className="p-1.5 flex justify-center border-b border-slate-100">
+                <span className="text-[9px] font-black text-slate-400 uppercase">{label}</span>
             </div>
             <div className="flex divide-x divide-slate-100">
                 <button
                     onClick={onToggleBefore}
-                    className={cn("flex-1 py-2 text-[10px] font-bold transition-colors", before ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50")}
+                    className={cn("flex-1 py-1.5 text-[9px] font-black transition-colors", before ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50")}
                 >
                     Before
                 </button>
                 <button
                     onClick={onToggleAfter}
-                    className={cn("flex-1 py-2 text-[10px] font-bold transition-colors", after ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50")}
+                    className={cn("flex-1 py-1.5 text-[9px] font-black transition-colors", after ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50")}
                 >
                     After
                 </button>

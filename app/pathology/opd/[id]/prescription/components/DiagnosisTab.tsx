@@ -234,17 +234,17 @@ export default function DiagnosisTab({ opdId }: DiagnosisTabProps) {
     return (
         <div className={`flex h-full ${AppColors.bg}`}>
             {/* --- LEFT PANEL (List) --- */}
-            <div className={`w-[40%] flex flex-col border-r ${AppColors.border} ${AppColors.surface}`}>
+            <div className={`w-[35%] flex flex-col border-r ${AppColors.border} ${AppColors.surface}`}>
                 {/* Search */}
-                <div className="p-4 space-y-3 border-b border-slate-100">
+                <div className="p-3 border-b border-slate-100">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                         <input
                             type="text"
-                            placeholder="Search Diagnosis"
+                            placeholder="Search..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
+                            className="w-full pl-8 pr-2 py-2 bg-white border border-slate-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-100 shadow-sm"
                         />
                     </div>
                 </div>
@@ -252,12 +252,12 @@ export default function DiagnosisTab({ opdId }: DiagnosisTabProps) {
                 {/* Active Selections */}
                 {Object.keys(selectedDiagnosisDetails).length > 0 && (
                     <div className="border-b border-slate-100">
-                        <div className="px-4 py-2 bg-blue-50/50 flex items-center gap-2">
-                            <div className="bg-blue-100 p-1 rounded-full"><Check className="w-3 h-3 text-blue-600" /></div>
-                            <span className="text-[10px] font-bold text-slate-500 tracking-wider">ACTIVE DIAGNOSES ({Object.keys(selectedDiagnosisDetails).length})</span>
+                        <div className="px-3 py-1.5 bg-blue-50/50 flex items-center gap-1.5">
+                            <div className="bg-blue-100 p-0.5 rounded-full"><Check className="w-2.5 h-2.5 text-blue-600" /></div>
+                            <span className="text-[9px] font-bold text-slate-500 tracking-wider uppercase">Active ({Object.keys(selectedDiagnosisDetails).length})</span>
                         </div>
-                        <div className="p-4 max-h-[180px] overflow-y-auto">
-                            <div className="flex flex-wrap gap-2">
+                        <div className="p-3 max-h-[140px] overflow-y-auto">
+                            <div className="flex flex-wrap gap-1.5">
                                 {Object.values(selectedDiagnosisDetails).map(detail => (
                                     <SelectedChip
                                         key={detail.name}
@@ -273,13 +273,13 @@ export default function DiagnosisTab({ opdId }: DiagnosisTabProps) {
                 )}
 
                 {/* Suggestions List */}
-                <div className="flex-1 overflow-y-auto p-4">
-                    <div className="flex flex-wrap gap-2">
+                <div className="flex-1 overflow-y-auto p-3">
+                    <div className="flex flex-wrap gap-1.5">
                         {currentList.map(s => (
                             <button
                                 key={s}
                                 onClick={() => selectDiagnosis(s)}
-                                className="px-3 py-2 bg-white border border-slate-200 rounded-full text-xs font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm"
+                                className="px-2 py-1.5 bg-white border border-slate-200 rounded-full text-[10px] font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm"
                             >
                                 {s}
                             </button>
@@ -300,11 +300,11 @@ export default function DiagnosisTab({ opdId }: DiagnosisTabProps) {
                     />
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                        <div className="p-6 bg-white rounded-full shadow-sm mb-4">
-                            <Activity className="w-10 h-10 opacity-20" />
+                        <div className="p-4 bg-white rounded-full shadow-sm mb-3">
+                            <Activity className="w-8 h-8 opacity-20" />
                         </div>
-                        <p className="text-lg font-semibold text-slate-600">No Diagnosis Selected</p>
-                        <p className="text-sm">Select a diagnosis to configure details.</p>
+                        <p className="text-base font-bold text-slate-600">No Selection</p>
+                        <p className="text-[11px]">Select a diagnosis to configure.</p>
                     </div>
                 )}
             </div>
@@ -328,13 +328,13 @@ function SelectedChip({ detail, isViewing, onClick, onRemove }: { detail: Diagno
         <div
             onClick={onClick}
             className={cn(
-                "flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full border text-xs font-bold cursor-pointer transition-all shadow-sm",
+                "flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-full border text-[10px] font-bold cursor-pointer transition-all shadow-sm",
                 isViewing ? activeColor : inactiveColor
             )}
         >
-            <span>{detail.name}</span>
+            <span className="truncate max-w-[80px]">{detail.name}</span>
             <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="hover:bg-black/10 rounded-full p-0.5">
-                <X className="w-3 h-3" />
+                <X className="w-2.5 h-2.5" />
             </button>
         </div>
     );
@@ -346,51 +346,53 @@ function DetailPanel({ detail, onUpdate, onRemove, onToggleCustom, onAddGroup }:
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="px-8 py-6 bg-white border-b border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-xl bg-blue-50 text-blue-600">
-                        <Activity className="w-6 h-6" />
+            <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
+                        <Activity className="w-5 h-5" />
                     </div>
                     <div>
-                        <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
-                            DIAGNOSIS DETAILS
+                        <p className="text-[8px] font-black text-slate-400 tracking-widest uppercase">
+                            Diagnosis Details
                         </p>
-                        <h2 className="text-2xl font-extrabold text-slate-900">{detail.name}</h2>
+                        <h2 className="text-lg font-black text-slate-900 leading-tight">{detail.name}</h2>
                     </div>
                 </div>
-                <button onClick={onRemove} className="p-2 text-red-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors">
-                    <Trash2 className="w-5 h-5" />
+                <button onClick={onRemove} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-500 rounded-md transition-colors">
+                    <Trash2 className="w-4 h-4" />
                 </button>
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                {/* Note */}
-                <div>
-                    <label className="text-xs font-bold text-slate-900 mb-2 block">Note</label>
-                    <textarea
-                        value={detail.note}
-                        onChange={(e) => onUpdate('note', e.target.value)}
-                        placeholder="Add notes..."
-                        className="w-full p-4 bg-slate-100 border-none rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none h-24"
-                    />
-                </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                    {/* Note */}
+                    <div>
+                        <label className="text-[10px] font-black text-slate-900 mb-1.5 block uppercase tracking-wider">Note</label>
+                        <textarea
+                            value={detail.note}
+                            onChange={(e) => onUpdate('note', e.target.value)}
+                            placeholder="..."
+                            className="w-full p-3 bg-slate-100 border-none rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-100 resize-none h-20"
+                        />
+                    </div>
 
-                {/* Location */}
-                <div>
-                    <label className="text-xs font-bold text-slate-900 mb-2 block">Location</label>
-                    <textarea
-                        value={detail.location || ''}
-                        onChange={(e) => onUpdate('location', e.target.value)}
-                        placeholder="Add location..."
-                        className="w-full p-4 bg-slate-100 border-none rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none h-24"
-                    />
+                    {/* Location */}
+                    <div>
+                        <label className="text-[10px] font-black text-slate-900 mb-1.5 block uppercase tracking-wider">Location</label>
+                        <textarea
+                            value={detail.location || ''}
+                            onChange={(e) => onUpdate('location', e.target.value)}
+                            placeholder="..."
+                            className="w-full p-3 bg-slate-100 border-none rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-100 resize-none h-20"
+                        />
+                    </div>
                 </div>
 
                 {/* Description / Status */}
                 <div>
-                    <label className="text-xs font-bold text-slate-900 mb-2 block">Description</label>
-                    <div className="bg-slate-100 p-1.5 rounded-xl flex gap-1">
+                    <label className="text-[10px] font-black text-slate-900 mb-1.5 block uppercase tracking-wider">Status</label>
+                    <div className="bg-slate-100 p-0.5 rounded-lg flex gap-0.5">
                         {['To rule out', 'Suspected', 'Follow up', '?'].map(status => {
                             const isSel = detail.status === status;
                             return (
@@ -398,7 +400,7 @@ function DetailPanel({ detail, onUpdate, onRemove, onToggleCustom, onAddGroup }:
                                     key={status}
                                     onClick={() => onUpdate('status', status)}
                                     className={cn(
-                                        "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                                        "flex-1 py-1.5 rounded-md text-[10px] font-bold transition-all",
                                         isSel ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:bg-slate-200/50"
                                     )}
                                 >
@@ -411,22 +413,21 @@ function DetailPanel({ detail, onUpdate, onRemove, onToggleCustom, onAddGroup }:
 
                 {/* Custom Options / History Query */}
                 <div>
-                    <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                            <span className="text-blue-500 font-bold text-sm">+ Add History Query</span>
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-blue-500 font-black text-[10px] uppercase tracking-wider">+ History Query</span>
                         </div>
                         <button
                             onClick={onAddGroup}
-                            className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 transition-colors"
+                            className="flex items-center gap-1 text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded hover:bg-blue-100 transition-colors"
                         >
-                            <Plus className="w-3 h-3" /> New Group
+                            <Plus className="w-2.5 h-2.5" /> New Group
                         </button>
                     </div>
 
-                    {/* Default History Query Group (Mocking the screenshot) */}
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         {/* Duration/Years */}
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1.5">
                             {['6y', '7y', '8y', '9y', '10y', '11y', '12y', '13y', '14y', '15y', '16y', '17y', '18y', '19y', '20y', '>20y'].map(opt => {
                                 const isSel = detail.selectedCustomOptions.has(opt);
                                 return (
@@ -434,7 +435,7 @@ function DetailPanel({ detail, onUpdate, onRemove, onToggleCustom, onAddGroup }:
                                         key={opt}
                                         onClick={() => onToggleCustom(opt)}
                                         className={cn(
-                                            "px-2 py-1 rounded-md text-xs font-medium border transition-all",
+                                            "px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all",
                                             isSel ? "bg-cyan-50 text-cyan-600 border-cyan-200" : "bg-white text-cyan-500 border-cyan-200 hover:bg-cyan-50"
                                         )}
                                     >
@@ -445,7 +446,7 @@ function DetailPanel({ detail, onUpdate, onRemove, onToggleCustom, onAddGroup }:
                         </div>
 
                         {/* Statuses */}
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1.5">
                             {['Recently Diagnosed', 'Uncontrolled', 'Controlled', 'Borderline', 'On treatment', 'Not on treatment'].map(opt => {
                                 const isSel = detail.selectedCustomOptions.has(opt);
                                 return (
@@ -453,7 +454,7 @@ function DetailPanel({ detail, onUpdate, onRemove, onToggleCustom, onAddGroup }:
                                         key={opt}
                                         onClick={() => onToggleCustom(opt)}
                                         className={cn(
-                                            "px-3 py-1.5 rounded-md text-xs font-medium border transition-all",
+                                            "px-2 py-1 rounded-md text-[10px] font-medium border transition-all",
                                             isSel ? "bg-cyan-50 text-cyan-600 border-cyan-200" : "bg-white text-cyan-500 border-cyan-200 hover:bg-cyan-50"
                                         )}
                                     >
@@ -465,9 +466,9 @@ function DetailPanel({ detail, onUpdate, onRemove, onToggleCustom, onAddGroup }:
 
                         {/* User Custom Groups */}
                         {detail.customGroups.map((group, idx) => (
-                            <div key={idx} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-                                <p className="text-xs font-bold text-slate-900 mb-2">{group.title}</p>
-                                <div className="flex flex-wrap gap-2">
+                            <div key={idx} className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                                <p className="text-[10px] font-bold text-slate-900 mb-2">{group.title}</p>
+                                <div className="flex flex-wrap gap-1.5">
                                     {group.options.map(opt => {
                                         const isSel = detail.selectedCustomOptions.has(opt);
                                         return (
@@ -475,9 +476,9 @@ function DetailPanel({ detail, onUpdate, onRemove, onToggleCustom, onAddGroup }:
                                                 key={opt}
                                                 onClick={() => onToggleCustom(opt)}
                                                 className={cn(
-                                                    "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                                                    "px-2 py-1 rounded-md text-[10px] font-medium border transition-all",
                                                     isSel
-                                                        ? "bg-blue-600 text-white border-blue-600 shadow-md"
+                                                        ? "bg-blue-600 text-white border-blue-600 shadow-sm"
                                                         : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
                                                 )}
                                             >

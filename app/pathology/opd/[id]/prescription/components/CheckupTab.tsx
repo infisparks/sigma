@@ -151,9 +151,9 @@ export default function CheckupTab({ opdId }: CheckupTabProps) {
     return (
         <div className={`flex h-full ${CheckupTheme.background}`}>
             {/* --- LEFT SIDEBAR (Timeline) --- */}
-            <div className={`w-[140px] flex flex-col border-r ${CheckupTheme.border} ${CheckupTheme.surface}`}>
-                <div className="p-4 border-b border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 tracking-widest">VISIT STAGES</p>
+            <div className={`w-[100px] flex flex-col border-r ${CheckupTheme.border} ${CheckupTheme.surface}`}>
+                <div className="p-2 border-b border-slate-100">
+                    <p className="text-[9px] font-bold text-slate-400 tracking-widest">STAGES</p>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                     {visits.map(visit => {
@@ -163,14 +163,14 @@ export default function CheckupTab({ opdId }: CheckupTabProps) {
                                 key={visit.id}
                                 onClick={() => setSelectedVisitId(visit.id)}
                                 className={cn(
-                                    "w-full flex items-center gap-3 px-4 py-4 border-l-[3px] transition-all text-left",
+                                    "w-full flex items-center gap-2 px-3 py-3 border-l-[2px] transition-all text-left",
                                     isSelected
                                         ? `border-blue-600 bg-blue-50/50`
                                         : "border-transparent hover:bg-slate-50"
                                 )}
                             >
-                                <Calendar className={cn("w-3.5 h-3.5", isSelected ? "text-blue-600" : "text-slate-400")} />
-                                <span className={cn("text-xs font-bold", isSelected ? "text-blue-600" : "text-slate-700")}>
+                                <Calendar className={cn("w-3 h-3", isSelected ? "text-blue-600" : "text-slate-400")} />
+                                <span className={cn("text-[10px] font-bold", isSelected ? "text-blue-600" : "text-slate-700")}>
                                     {visit.name}
                                 </span>
                             </button>
@@ -180,21 +180,21 @@ export default function CheckupTab({ opdId }: CheckupTabProps) {
             </div>
 
             {/* --- RIGHT CONTENT --- */}
-            <div className="flex-1 overflow-y-auto p-8">
+            <div className="flex-1 overflow-y-auto p-4">
                 {currentQuestions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                        <AlertCircle className="w-12 h-12 mb-3 opacity-20" />
-                        <p className="text-sm font-medium">No template configured for this visit.</p>
+                        <AlertCircle className="w-10 h-10 mb-2 opacity-20" />
+                        <p className="text-xs font-medium">No template configured.</p>
                     </div>
                 ) : (
                     Object.entries(sections).map(([sectionName, questions]) => (
-                        <div key={sectionName} className="mb-10">
-                            <div className="flex items-center gap-2 mb-4">
-                                <div className="w-1 h-4 bg-slate-300 rounded-full"></div>
-                                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">{sectionName}</h3>
+                        <div key={sectionName} className="mb-6">
+                            <div className="flex items-center gap-2 mb-3">
+                                <div className="w-1 h-3 bg-slate-300 rounded-full"></div>
+                                <h3 className="text-[10px] font-bold text-slate-900 uppercase tracking-wider">{sectionName}</h3>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                                 {questions.map((q, idx) => (
                                     <QuestionCard
                                         key={idx}
@@ -217,12 +217,12 @@ function QuestionCard({ config, value, onChange }: { config: CheckupItemConfig, 
 
     return (
         <div className={cn(
-            "p-5 rounded-2xl border bg-white shadow-sm transition-all",
+            "p-3 rounded-xl border bg-white shadow-sm transition-all",
             hasValue ? "border-blue-200 shadow-blue-50" : "border-slate-200"
         )}>
-            <div className="flex items-start justify-between mb-4">
-                <p className="text-xs font-bold text-slate-700 leading-snug pr-2">{config.title}</p>
-                {hasValue && <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
+            <div className="flex items-start justify-between mb-2">
+                <p className="text-[10px] font-bold text-slate-700 leading-tight pr-1">{config.title}</p>
+                {hasValue && <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" />}
             </div>
 
             {config.type === 'text' ? (
@@ -230,11 +230,11 @@ function QuestionCard({ config, value, onChange }: { config: CheckupItemConfig, 
                     type="text"
                     value={value || ''}
                     onChange={(e) => onChange(e.target.value)}
-                    placeholder="Enter value..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-[10px] focus:outline-none focus:border-blue-500 transition-colors"
                 />
             ) : (
-                <div className="flex bg-slate-100 p-1 rounded-lg">
+                <div className="flex bg-slate-100 p-0.5 rounded-md">
                     {config.options.map(opt => {
                         const isSelected = value === opt;
                         let activeClass = "bg-blue-600 text-white shadow-sm";
@@ -249,7 +249,7 @@ function QuestionCard({ config, value, onChange }: { config: CheckupItemConfig, 
                                 key={opt}
                                 onClick={() => onChange(opt)}
                                 className={cn(
-                                    "flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all",
+                                    "flex-1 py-1 text-[9px] font-bold rounded transition-all",
                                     isSelected ? activeClass : "text-slate-500 hover:bg-slate-200/50"
                                 )}
                             >
