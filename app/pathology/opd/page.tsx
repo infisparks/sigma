@@ -103,12 +103,12 @@ export default function OPDDashboard() {
     const [filterType, setFilterType] = useState<DateFilterType>('today');
     const [customStartDate, setCustomStartDate] = useState(getTodayRange().label);
     const [customEndDate, setCustomEndDate] = useState(getTodayRange().label);
-    
+
     // Search States
     const [searchInput, setSearchInput] = useState(''); // What user types
     const [appliedSearch, setAppliedSearch] = useState(''); // What we actually search (for 'All' mode)
     const [selectedDoctorId, setSelectedDoctorId] = useState<string>('0');
-    
+
     // Pagination
     const [page, setPage] = useState(0);
     const pageSize = 10;
@@ -173,36 +173,36 @@ export default function OPDDashboard() {
             // Note: For 'Today'/'Yesterday', we usually fetch all and client-filter, 
             // but if 'All' is selected, we MUST filter server-side.
             if (filterType === 'all' && appliedSearch.length >= 4) {
-                 // Searching across joined tables with OR is tricky in Supabase. 
-                 // We prioritize UHID (Index) and Patient Name.
-                 // Using !inner on patient allows filtering by patient name.
-                 
-                 // Strategy: Text Search logic
-                 // Since Supabase .or() across tables is complex, we use a specific approach:
-                 // We will filter by UHID or Patient Name roughly.
-                 // Ideally, use a Database Function for global search, but here is the JS way:
-                 
-                 // This syntax searches UHID on main table OR Name on joined table is NOT supported easily in one OR string.
-                 // We will search UHID primarily on server if it looks like an ID, or Name if text.
-                 const isNumber = /^\d+$/.test(appliedSearch);
-                 if(isNumber) {
+                // Searching across joined tables with OR is tricky in Supabase. 
+                // We prioritize UHID (Index) and Patient Name.
+                // Using !inner on patient allows filtering by patient name.
+
+                // Strategy: Text Search logic
+                // Since Supabase .or() across tables is complex, we use a specific approach:
+                // We will filter by UHID or Patient Name roughly.
+                // Ideally, use a Database Function for global search, but here is the JS way:
+
+                // This syntax searches UHID on main table OR Name on joined table is NOT supported easily in one OR string.
+                // We will search UHID primarily on server if it looks like an ID, or Name if text.
+                const isNumber = /^\d+$/.test(appliedSearch);
+                if (isNumber) {
                     query = query.ilike('uhid', `%${appliedSearch}%`);
-                 } else {
+                } else {
                     // Assuming name search
                     query = query.ilike('patient_detail.name', `%${appliedSearch}%`);
-                 }
+                }
             } else if (filterType === 'all' && !appliedSearch) {
                 // If All and No Search -> Pagination logic applies heavily
                 query = query.order('created_at', { ascending: false })
-                             .range(page * pageSize, (page + 1) * pageSize - 1);
+                    .range(page * pageSize, (page + 1) * pageSize - 1);
             } else {
                 // For Today/Yesterday/Custom, we order by date
-                 query = query.order('created_at', { ascending: false });
-                 // If it's today/yesterday, we generally want ALL records to allow client filtering
-                 // so we don't limit unless the dataset is huge (e.g. > 500/day)
-                 if(filterType === 'all') {
-                    query = query.limit(pageSize); 
-                 }
+                query = query.order('created_at', { ascending: false });
+                // If it's today/yesterday, we generally want ALL records to allow client filtering
+                // so we don't limit unless the dataset is huge (e.g. > 500/day)
+                if (filterType === 'all') {
+                    query = query.limit(pageSize);
+                }
             }
 
             const { data: opdRecords, error: opdError } = await query;
@@ -238,7 +238,7 @@ export default function OPDDashboard() {
         // Reset page and search when filter type changes
         setPage(0);
         // If switching to 'All', clear search result unless user types again
-        if(filterType !== 'all') {
+        if (filterType !== 'all') {
             fetchDashboardData();
         } else {
             // Initial fetch for 'All' (shows latest 10)
@@ -254,17 +254,17 @@ export default function OPDDashboard() {
         // Logic: 
         // 1. If 'All' mode: The records in state ARE the search results (Server filtered).
         // 2. If 'Today'/'Yesterday': Records are ALL records for that day. We filter Client-side.
-        
+
         if (filterType === 'all') {
             return records; // Server side handled
         }
 
         // Client Side Filter for Today/Yesterday
         if (!searchInput) return records;
-        
+
         const lower = searchInput.toLowerCase();
-        return records.filter(r => 
-            r.uhid.toLowerCase().includes(lower) || 
+        return records.filter(r =>
+            r.uhid.toLowerCase().includes(lower) ||
             r.patient_name?.toLowerCase().includes(lower) ||
             r.doctor_name?.toLowerCase().includes(lower)
         );
@@ -279,7 +279,7 @@ export default function OPDDashboard() {
     }, [displayedRecords]);
 
     // --- Handlers ---
-    
+
     const handleSearchClick = () => {
         if (filterType !== 'all') return; // Should not happen via UI
         if (searchInput.length < 4) {
@@ -293,7 +293,7 @@ export default function OPDDashboard() {
     const handleClearSearch = () => {
         setSearchInput('');
         setAppliedSearch('');
-        if(filterType === 'all') fetchDashboardData();
+        if (filterType === 'all') fetchDashboardData();
     };
 
     const handleFilterChange = (val: string) => {
@@ -312,6 +312,9 @@ export default function OPDDashboard() {
                     <p className="text-slate-500 text-sm mt-1">Manage patient registrations and financials.</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Button variant="outline" className="bg-white border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => router.push('/pathology/pharmacy')}>
+                        <Pill className="w-4 h-4 mr-2" /> Pharmacy
+                    </Button>
                     <Button variant="outline" className="bg-white" onClick={() => fetchDashboardData()}>
                         <Activity className="w-4 h-4 mr-2 text-slate-500" /> Refresh
                     </Button>
@@ -354,39 +357,35 @@ export default function OPDDashboard() {
             {/* --- Advanced Filters & Search --- */}
             <Card className="border shadow-sm bg-white overflow-hidden">
                 <div className="p-4 border-b bg-white flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center sticky top-0 z-10">
-                    
+
                     {/* 1. Date Toggle Buttons */}
                     <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
                         <div className="bg-slate-100 p-1 rounded-lg flex items-center shrink-0">
                             <button
                                 onClick={() => handleFilterChange('today')}
-                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-                                    filterType === 'today' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                                }`}
+                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${filterType === 'today' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                    }`}
                             >
                                 Today
                             </button>
                             <button
                                 onClick={() => handleFilterChange('yesterday')}
-                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-                                    filterType === 'yesterday' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                                }`}
+                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${filterType === 'yesterday' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                    }`}
                             >
                                 Yesterday
                             </button>
                             <button
                                 onClick={() => handleFilterChange('all')}
-                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-                                    filterType === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                                }`}
+                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${filterType === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                    }`}
                             >
                                 All Time
                             </button>
-                             <button
+                            <button
                                 onClick={() => handleFilterChange('custom')}
-                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-                                    filterType === 'custom' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                                }`}
+                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${filterType === 'custom' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                    }`}
                             >
                                 Custom
                             </button>
@@ -401,7 +400,7 @@ export default function OPDDashboard() {
                         )}
 
                         {/* Doctor Filter */}
-                         <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                        <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
                             <SelectTrigger className="w-[180px] h-9 bg-slate-50">
                                 <SelectValue placeholder="All Doctors" />
                             </SelectTrigger>
@@ -429,7 +428,7 @@ export default function OPDDashboard() {
                                 className="pl-9 h-10 bg-slate-50 border-slate-200 focus:bg-white"
                             />
                             {searchInput && (
-                                <button 
+                                <button
                                     onClick={handleClearSearch}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                                 >
@@ -440,7 +439,7 @@ export default function OPDDashboard() {
 
                         {/* Search Button: Only for 'All' view */}
                         {filterType === 'all' && (
-                            <Button 
+                            <Button
                                 onClick={handleSearchClick}
                                 disabled={searchInput.length < 4 || loading}
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -540,12 +539,12 @@ export default function OPDDashboard() {
                 {/* Pagination (Only show if 'All' view and not searching specific matches, or if list is long) */}
                 <div className="border-t bg-slate-50/50 p-4 flex items-center justify-between">
                     <div className="text-xs text-slate-500">
-                        {filterType === 'all' && appliedSearch ? 
-                            `Showing search results for "${appliedSearch}"` : 
+                        {filterType === 'all' && appliedSearch ?
+                            `Showing search results for "${appliedSearch}"` :
                             `Page ${page + 1}`
                         }
                     </div>
-                    
+
                     {/* Only show pagination controls if we are NOT in a specific search result view that returns everything, OR if we want to paginate search results too. 
                         For this specific 'All' logic: Pagination is primarily for the browsing mode. */}
                     {filterType === 'all' && !appliedSearch && (

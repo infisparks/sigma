@@ -4,11 +4,11 @@
 import React, { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { 
-  Menu, 
-  X, 
-  LayoutDashboard, 
-  Users, 
+import {
+  Menu,
+  X,
+  LayoutDashboard,
+  Users,
   LogOut,
   Hospital,
   ChevronRight,
@@ -19,63 +19,70 @@ import {
   ChevronLeft,
   Trash2,
   Receipt,
-  TestTube2
+  TestTube2,
+  Pill
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
-import { useUserRole } from '../userrole' 
+import { useUserRole } from '../userrole'
 
 // Define the menu items with Icons for every route
 const pathologyMenuItems = [
-  { 
-    icon: LayoutDashboard, 
-    label: 'Dashboard', 
-    href: '/pathology/dashboard', 
-    roles: ['admin', 'technician', 'phlebo'] 
+  {
+    icon: LayoutDashboard,
+    label: 'Dashboard',
+    href: '/pathology/dashboard',
+    roles: ['admin', 'technician', 'phlebo']
   },
-  { 
-    icon: UserPlus, 
-    label: 'Patient Entry', 
-    href: '/pathology/patient-entry', 
-    roles: ['admin', 'technician'] 
+  {
+    icon: UserPlus,
+    label: 'Patient Entry',
+    href: '/pathology/patient-entry',
+    roles: ['admin', 'technician']
   },
-  { 
-    icon: UserPlus, 
-    label: 'opd List', 
-    href: '/pathology/opd', 
-    roles: ['admin', 'technician'] 
+  {
+    icon: UserPlus,
+    label: 'opd List',
+    href: '/pathology/opd',
+    roles: ['admin', 'technician']
   },
-  { 
-    icon: Clock, 
-    label: 'Turn Around Time', 
-    href: '/pathology/turnAroundTime', 
-    roles: ['admin'] 
+  {
+    icon: Clock,
+    label: 'Turn Around Time',
+    href: '/pathology/turnAroundTime',
+    roles: ['admin']
   },
-  { 
-    icon: Trash2, 
-    label: 'Deleted Entry', 
-    href: '/pathology/deleted', 
-    roles: ['admin'] 
+  {
+    icon: Trash2,
+    label: 'Deleted Entry',
+    href: '/pathology/deleted',
+    roles: ['admin']
   },
-  { 
-    icon: Receipt, 
-    label: 'Billing', 
-    href: '/pathology/billing', 
-    roles: ['admin'] 
+  {
+    icon: Receipt,
+    label: 'Billing',
+    href: '/pathology/billing',
+    roles: ['admin']
   },
-  { 
-    icon: TestTube2, 
-    label: 'Blood Tests', 
-    href: '/pathology/blood-tests', 
-    roles: ['admin'] 
+  {
+    icon: TestTube2,
+    label: 'Blood Tests',
+    href: '/pathology/blood-tests',
+    roles: ['admin']
   },
-  { 
-    icon: Package, 
-    label: 'Packages', 
-    href: '/pathology/packages', 
-    roles: ['admin'] 
+  {
+    icon: Package,
+    label: 'Packages',
+    href: '/pathology/packages',
+    roles: ['admin']
+  },
+  {
+    icon: Pill,
+    label: 'Pharmacy',
+    href: '/pathology/pharmacy',
+    roles: ['admin', 'technician']
   },
 ];
 
@@ -87,15 +94,15 @@ type MenuItem = {
   submenu: SubMenuItem[];
 };
 
-interface FlyoutState { 
-    title: string; 
-    top: number; 
-    submenu: SubMenuItem[]; 
+interface FlyoutState {
+  title: string;
+  top: number;
+  submenu: SubMenuItem[];
 }
 
 interface SidebarProps {
-    isCollapsed: boolean;
-    onToggleCollapse: () => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
@@ -103,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
   const [isOpen, setIsOpen] = useState(false) // Mobile state
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]) // Expanded state for full sidebar
   const [activeFlyout, setActiveFlyout] = useState<FlyoutState | null>(null); // Flyout state for collapsed sidebar
-  
+
   const pathname = usePathname()
   const router = useRouter()
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -111,7 +118,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
   // Close flyout when collapsing from full view
   useEffect(() => {
     if (!isCollapsed) {
-        setActiveFlyout(null);
+      setActiveFlyout(null);
     }
   }, [isCollapsed]);
 
@@ -133,31 +140,31 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
   }
 
   const toggleMobileSidebar = () => setIsOpen(!isOpen)
-  
+
   const closeFlyout = () => setActiveFlyout(null);
 
   const toggleMenu = (item: MenuItem, buttonRef: React.RefObject<HTMLButtonElement>) => {
     if (isCollapsed) {
-        // Handle Flyout menu
-        if (activeFlyout?.title === item.title) {
-            closeFlyout();
-        } else {
-            const rect = buttonRef.current?.getBoundingClientRect();
-            if (rect) {
-                setActiveFlyout({ 
-                    title: item.title, 
-                    top: rect.top,
-                    submenu: item.submenu 
-                });
-            }
+      // Handle Flyout menu
+      if (activeFlyout?.title === item.title) {
+        closeFlyout();
+      } else {
+        const rect = buttonRef.current?.getBoundingClientRect();
+        if (rect) {
+          setActiveFlyout({
+            title: item.title,
+            top: rect.top,
+            submenu: item.submenu
+          });
         }
+      }
     } else {
-        // Handle standard expanded accordion menu
-        setExpandedMenus(prev => 
-            prev.includes(item.title) 
-              ? prev.filter(name => name !== item.title)
-              : [...prev, item.title]
-        )
+      // Handle standard expanded accordion menu
+      setExpandedMenus(prev =>
+        prev.includes(item.title)
+          ? prev.filter(name => name !== item.title)
+          : [...prev, item.title]
+      )
     }
   }
 
@@ -189,15 +196,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
     <>
       {/* Invisible overlay for flyout menu close mechanism */}
       {activeFlyout && (
-          <div 
-              className="fixed inset-0 z-40 lg:block hidden"
-              onClick={closeFlyout}
-          />
+        <div
+          className="fixed inset-0 z-40 lg:block hidden"
+          onClick={closeFlyout}
+        />
       )}
 
       {/* Mobile overlay */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
           onClick={toggleMobileSidebar}
         />
@@ -214,54 +221,54 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
       </Button>
 
       {/* Sidebar */}
-      <div 
+      <div
         ref={sidebarRef}
         className={cn(
-        "fixed left-0 top-0 h-full bg-white/95 backdrop-blur-sm border-r border-gray-200/80 z-50 transition-all duration-200 ease-out shadow-xl",
-        isOpen ? "translate-x-0" : "-translate-x-full", // Mobile state
-        isCollapsed ? 'w-[5.5rem]' : 'w-64', // Desktop collapse state
-        "lg:translate-x-0" // Always visible on desktop
-      )}>
+          "fixed left-0 top-0 h-full bg-white/95 backdrop-blur-sm border-r border-gray-200/80 z-50 transition-all duration-200 ease-out shadow-xl",
+          isOpen ? "translate-x-0" : "-translate-x-full", // Mobile state
+          isCollapsed ? 'w-[5.5rem]' : 'w-64', // Desktop collapse state
+          "lg:translate-x-0" // Always visible on desktop
+        )}>
         {/* Header and Collapse Button */}
         <div className={cn(
-            "flex items-center p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 transition-all duration-200",
-            isCollapsed ? 'justify-center' : 'justify-between'
+          "flex items-center p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 transition-all duration-200",
+          isCollapsed ? 'justify-center' : 'justify-between'
         )}>
-            <div className={cn(
-                "flex items-center space-x-2 transition-opacity duration-200",
-                isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 w-auto'
-            )}>
-                <div className="p-1.5 bg-blue-500 rounded-lg shadow-sm">
-                    <Hospital className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                    <h2 className="text-sm font-bold text-gray-900">InfiPlus</h2>
-                    <p className="text-xs text-gray-600">Pathology Lab</p>
-                </div>
+          <div className={cn(
+            "flex items-center space-x-2 transition-opacity duration-200",
+            isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 w-auto'
+          )}>
+            <div className="p-1.5 bg-blue-500 rounded-lg shadow-sm">
+              <Hospital className="h-4 w-4 text-white" />
             </div>
-            
-            <div className="flex items-center">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={toggleMobileSidebar}
-                    className="lg:hidden hover:bg-blue-100/50 h-7 w-7 p-0"
-                >
-                    <X className="h-3 w-3" />
-                </Button>
-                {/* Desktop Collapse Toggle */}
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onToggleCollapse}
-                    className={cn(
-                        "hidden lg:flex hover:bg-blue-100/50 h-7 w-7 p-0 transition-transform duration-200",
-                        isCollapsed ? 'rotate-180' : ''
-                    )}
-                >
-                    <ChevronLeft className="h-4 w-4 text-gray-500" />
-                </Button>
+            <div>
+              <h2 className="text-sm font-bold text-gray-900">InfiPlus</h2>
+              <p className="text-xs text-gray-600">Pathology Lab</p>
             </div>
+          </div>
+
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleMobileSidebar}
+              className="lg:hidden hover:bg-blue-100/50 h-7 w-7 p-0"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+            {/* Desktop Collapse Toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleCollapse}
+              className={cn(
+                "hidden lg:flex hover:bg-blue-100/50 h-7 w-7 p-0 transition-transform duration-200",
+                isCollapsed ? 'rotate-180' : ''
+              )}
+            >
+              <ChevronLeft className="h-4 w-4 text-gray-500" />
+            </Button>
+          </div>
         </div>
 
         {/* Navigation */}
@@ -272,59 +279,59 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
                 <li key={item.title}>
                   {item.submenu.length > 0 ? (
                     <div>
-                        {/* Parent Menu Toggle/Link (For Submenus - currently unused but kept for logic) */}
-                        <button
-                          ref={menuRefs.current[item.title]} 
-                          onClick={() => toggleMenu(item, menuRefs.current[item.title]!)}
-                          className={cn(
-                            "w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-all duration-150 group",
-                            "hover:bg-gray-50 text-gray-700 hover:text-gray-900",
-                            isCollapsed ? 'justify-center' : '', 
-                            (isCollapsed && activeFlyout?.title === item.title) ? 'bg-blue-50 text-blue-700' : ''
-                          )}
-                        >
-                            <div className={cn("flex items-center space-x-2 w-full", isCollapsed ? 'justify-center' : '')}>
-                                <item.icon className="h-4 w-4 transition-colors group-hover:text-blue-600" />
-                                {!isCollapsed && <span className="text-xs">{item.title}</span>}
-                            </div>
-                            {!isCollapsed && (
-                                <div className={cn(
-                                    "transition-transform duration-150",
-                                    expandedMenus.includes(item.title) ? "rotate-90" : ""
-                                )}>
-                                    <ChevronRight className="h-3 w-3 text-gray-400" />
-                                </div>
-                            )}
-                        </button>
-                      
-                        {/* Submenu List */}
+                      {/* Parent Menu Toggle/Link (For Submenus - currently unused but kept for logic) */}
+                      <button
+                        ref={menuRefs.current[item.title]}
+                        onClick={() => toggleMenu(item, menuRefs.current[item.title]!)}
+                        className={cn(
+                          "w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-all duration-150 group",
+                          "hover:bg-gray-50 text-gray-700 hover:text-gray-900",
+                          isCollapsed ? 'justify-center' : '',
+                          (isCollapsed && activeFlyout?.title === item.title) ? 'bg-blue-50 text-blue-700' : ''
+                        )}
+                      >
+                        <div className={cn("flex items-center space-x-2 w-full", isCollapsed ? 'justify-center' : '')}>
+                          <item.icon className="h-4 w-4 transition-colors group-hover:text-blue-600" />
+                          {!isCollapsed && <span className="text-xs">{item.title}</span>}
+                        </div>
                         {!isCollapsed && (
                           <div className={cn(
-                            "overflow-hidden transition-all duration-200 ease-out",
-                            expandedMenus.includes(item.title) ? "max-h-96 opacity-100" : "max-h-0 opacity-0" 
+                            "transition-transform duration-150",
+                            expandedMenus.includes(item.title) ? "rotate-90" : ""
                           )}>
-                            {Array.isArray(item.submenu) && (
-                              <ul className="mt-1 space-y-0.5 ml-4 border-l border-gray-100">
-                                {(item.submenu as SubMenuItem[]).map((subItem) => (
-                                  <li key={subItem.title}>
-                                    <Link
-                                      href={subItem.href}
-                                      className={cn(
-                                        "block px-3 py-1.5 text-xs rounded-md transition-all duration-150 ml-2",
-                                        pathname === subItem.href
-                                          ? "bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-500 ml-0"
-                                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                                      )}
-                                      onClick={() => { setIsOpen(false); closeFlyout(); }}
-                                    >
-                                      {subItem.title}
-                                    </Link>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
+                            <ChevronRight className="h-3 w-3 text-gray-400" />
                           </div>
                         )}
+                      </button>
+
+                      {/* Submenu List */}
+                      {!isCollapsed && (
+                        <div className={cn(
+                          "overflow-hidden transition-all duration-200 ease-out",
+                          expandedMenus.includes(item.title) ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                        )}>
+                          {Array.isArray(item.submenu) && (
+                            <ul className="mt-1 space-y-0.5 ml-4 border-l border-gray-100">
+                              {(item.submenu as SubMenuItem[]).map((subItem) => (
+                                <li key={subItem.title}>
+                                  <Link
+                                    href={subItem.href}
+                                    className={cn(
+                                      "block px-3 py-1.5 text-xs rounded-md transition-all duration-150 ml-2",
+                                      pathname === subItem.href
+                                        ? "bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-500 ml-0"
+                                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                    )}
+                                    onClick={() => { setIsOpen(false); closeFlyout(); }}
+                                  >
+                                    {subItem.title}
+                                  </Link>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     // Single-level Link (Main Pathology Items)
@@ -362,8 +369,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
             variant="ghost"
             size="sm"
             className={cn(
-                "w-full text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-150 h-8",
-                isCollapsed ? 'justify-center' : 'justify-start'
+              "w-full text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-150 h-8",
+              isCollapsed ? 'justify-center' : 'justify-start'
             )}
           >
             <LogOut className="h-3 w-3 mr-2" />
@@ -371,44 +378,44 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
           </Button>
         </div>
       </div>
-      
+
       {/* Flyout Menu (Only renders if items have submenus - kept for scalability) */}
       {isCollapsed && activeFlyout && (
-          <div 
-              style={{ top: activeFlyout.top }}
-              className={cn(
-                "absolute left-[5.5rem] mt-[-3px] w-48 bg-white border border-gray-200 rounded-lg shadow-2xl z-50 transition-all duration-100 ease-out p-1",
-                "hidden lg:block"
-              )}
-          >
-              <p className="text-xs font-semibold text-gray-800 px-2 py-1 mb-1 border-b border-gray-100">
-                  {activeFlyout.title}
-              </p>
-              <ul className="space-y-0.5">
-                  {activeFlyout.submenu.map((subItem) => (
-                      <li key={subItem.title}>
-                          <Link
-                              href={subItem.href}
-                              className={cn(
-                                  "block px-3 py-1.5 text-xs rounded-md transition-all duration-150",
-                                  pathname === subItem.href
-                                      ? "bg-blue-50 text-blue-700 font-medium"
-                                      : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                              )}
-                              onClick={closeFlyout}
-                          >
-                              {subItem.title}
-                          </Link>
-                      </li>
-                  ))}
-              </ul>
-          </div>
+        <div
+          style={{ top: activeFlyout.top }}
+          className={cn(
+            "absolute left-[5.5rem] mt-[-3px] w-48 bg-white border border-gray-200 rounded-lg shadow-2xl z-50 transition-all duration-100 ease-out p-1",
+            "hidden lg:block"
+          )}
+        >
+          <p className="text-xs font-semibold text-gray-800 px-2 py-1 mb-1 border-b border-gray-100">
+            {activeFlyout.title}
+          </p>
+          <ul className="space-y-0.5">
+            {activeFlyout.submenu.map((subItem) => (
+              <li key={subItem.title}>
+                <Link
+                  href={subItem.href}
+                  className={cn(
+                    "block px-3 py-1.5 text-xs rounded-md transition-all duration-150",
+                    pathname === subItem.href
+                      ? "bg-blue-50 text-blue-700 font-medium"
+                      : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                  )}
+                  onClick={closeFlyout}
+                >
+                  {subItem.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* Main content spacer for desktop */}
       <div className={cn(
-          "hidden lg:block flex-shrink-0 transition-all duration-200",
-          isCollapsed ? 'w-[5.5rem]' : 'w-64'
+        "hidden lg:block flex-shrink-0 transition-all duration-200",
+        isCollapsed ? 'w-[5.5rem]' : 'w-64'
       )} />
     </>
   )
