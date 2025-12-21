@@ -22,14 +22,14 @@ import { Checkbox } from "@/components/ui/checkbox"
  */
 
 const TABLE = {
-  PATIENT: "patient_detail", 
+  PATIENT: "patient_detail",
   REGISTRATION: "zregistration",
   DOCTOR: "zdoctorlist",
   PACKAGE: "zpackages",
   BLOOD: "zblood_test",
-  OPD_REGISTRATION: "opd_registration", 
-  IPD_REGISTRATION: "ipd_registration", 
-  BED_MANAGEMENT: "bed_management", 
+  OPD_REGISTRATION: "opd_registration",
+  IPD_REGISTRATION: "ipd_registration",
+  BED_MANAGEMENT: "bed_management",
 } as const
 
 function throwIfError(error: any) {
@@ -74,19 +74,19 @@ function isoToDate(isoString: string) {
  * Helper to calculate DOB based on age and age unit
  */
 function calculateDOB(age: number, unit: 'year' | 'month' | 'day'): string {
-    const today = new Date();
-    const dob = new Date(today);
-    dob.setHours(0, 0, 0, 0); 
+  const today = new Date();
+  const dob = new Date(today);
+  dob.setHours(0, 0, 0, 0);
 
-    if (unit === 'year') {
-        dob.setFullYear(dob.getFullYear() - age);
-    } else if (unit === 'month') {
-        dob.setMonth(dob.getMonth() - age);
-    } else if (unit === 'day') {
-        dob.setDate(dob.getDate() - age);
-    }
+  if (unit === 'year') {
+    dob.setFullYear(dob.getFullYear() - age);
+  } else if (unit === 'month') {
+    dob.setMonth(dob.getMonth() - age);
+  } else if (unit === 'day') {
+    dob.setDate(dob.getDate() - age);
+  }
 
-    return dob.toISOString().split('T')[0];
+  return dob.toISOString().split('T')[0];
 }
 
 // Helper to format ISO date string to a readable date/time (for OPD)
@@ -141,12 +141,12 @@ interface PaymentHistory {
 
 interface IFormInput {
   hospitalName: string
-  visitType: "direct" | "opd" | "ipd" 
+  visitType: "direct" | "opd" | "ipd"
   title: string
   name: string
   contact: string
   age: number
-  dayType: "year" | "month" | "day" 
+  dayType: "year" | "month" | "day"
   gender: string
   address?: string
   email?: string
@@ -155,30 +155,30 @@ interface IFormInput {
   bloodTests: BloodTestSelection[]
   discountAmount: number
   paymentEntries: PaymentEntry[]
-  patientId?: string 
+  patientId?: string
   registrationDate: string
   registrationTime: string
-  tpa: boolean 
-  originalSampleCollectedTime?: string 
-  sendWhatsApp: boolean 
-  sourceOpdId: number | null 
-  sourceIpdId: number | null 
+  tpa: boolean
+  originalSampleCollectedTime?: string
+  sendWhatsApp: boolean
+  sourceOpdId: number | null
+  sourceIpdId: number | null
 }
 
 interface OpdRegistration {
   opd_id: number;
-  date: string; 
+  date: string;
   refer_by: string;
 }
 
 interface IpdRegistration {
   ipd_id: number;
-  admission_date: string; 
-  admission_time: string; 
+  admission_date: string;
+  admission_time: string;
   under_care_of_doctor: string;
   bed_id: number;
-  discharge_date: string | null; 
-  bed_management: { bed_number: string | null; room_type: string | null; } | null; 
+  discharge_date: string | null;
+  bed_management: { bed_number: string | null; room_type: string | null; } | null;
 }
 
 
@@ -214,7 +214,7 @@ export default function EditPatientPage() {
   } = useForm<IFormInput>({
     defaultValues: {
       hospitalName: "Cigma Clinic",
-      visitType: "direct", 
+      visitType: "direct",
       title: "",
       name: "",
       contact: "",
@@ -231,11 +231,11 @@ export default function EditPatientPage() {
       registrationTime: defaultTime,
       discountAmount: 0,
       paymentEntries: [],
-      tpa: false, 
+      tpa: false,
       originalSampleCollectedTime: undefined,
-      sendWhatsApp: false, 
-      sourceOpdId: null, 
-      sourceIpdId: null, 
+      sendWhatsApp: false,
+      sourceOpdId: null,
+      sourceIpdId: null,
     },
   })
 
@@ -247,10 +247,10 @@ export default function EditPatientPage() {
   const [selectedTestId, setSelectedTestId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [patientDbId, setPatientDbId] = useState<number | null>(null) 
-  const [opdRecords, setOpdRecords] = useState<OpdRegistration[]>([]) 
-  const [ipdRecords, setIpdRecords] = useState<IpdRegistration[]>([]) 
-  const [showSourceSelection, setShowSourceSelection] = useState(false) 
+  const [patientDbId, setPatientDbId] = useState<number | null>(null)
+  const [opdRecords, setOpdRecords] = useState<OpdRegistration[]>([])
+  const [ipdRecords, setIpdRecords] = useState<IpdRegistration[]>([])
+  const [showSourceSelection, setShowSourceSelection] = useState(false)
 
   const doctorHintsRef = useRef<HTMLDivElement | null>(null)
   const sourceSelectionRef = useRef<HTMLDivElement | null>(null)
@@ -284,11 +284,11 @@ export default function EditPatientPage() {
     setValue("visitType", newVisitType as any);
     setValue("sourceOpdId", null);
     setValue("sourceIpdId", null);
-    
+
     setShowSourceSelection(false);
-    
+
     if (watchUhid && newVisitType !== 'direct') {
-      fetchSourceRecords(watchUhid, newVisitType, true); 
+      fetchSourceRecords(watchUhid, newVisitType, true);
     }
   };
 
@@ -301,9 +301,9 @@ export default function EditPatientPage() {
       if (visitType === 'opd') {
         const { data, error } = await supabase
           .from(TABLE.OPD_REGISTRATION)
-          .select("opd_id, date, refer_by")
+          .select("opd_id:id, date:created_at, refer_by:referring_doctor_name")
           .eq("uhid", uhid)
-          .order("date", { ascending: false })
+          .order("created_at", { ascending: false })
           .limit(10);
         throwIfError(error);
         setOpdRecords(data || []);
@@ -324,19 +324,19 @@ export default function EditPatientPage() {
             discharge_date,
             bed_management (bed_number, room_type)
           `)
-          .eq("uhid", uhid) 
+          .eq("uhid", uhid)
           .order("admission_date", { ascending: false })
           .limit(10);
-        
+
         throwIfError(error);
-        
+
         // FIX APPLIED: Map the data to correctly format the bed_management object
         const formattedData = (data || []).map(record => ({
           ...record,
           // Extract the first element from the bed_management array or set to null
           bed_management: record.bed_management?.[0] || null,
         }));
-        
+
         setIpdRecords(formattedData);
 
         if (formattedData.length > 0 && autoOpen) {
@@ -425,7 +425,7 @@ export default function EditPatientPage() {
           name: patient.name || "",
           contact: patient.number?.toString() || "",
           age: patient.age || 0,
-          dayType: patient.age_unit || "year", 
+          dayType: patient.age_unit || "year",
           gender: patient.gender || "",
           address: patient.address || "",
           email: "",
@@ -433,7 +433,7 @@ export default function EditPatientPage() {
           bloodTests: bloodTests,
           discountAmount: discountAmount,
           paymentEntries: paymentEntries,
-          patientId: patient.uhid || "", 
+          patientId: patient.uhid || "",
           registrationDate: registrationData.registration_time
             ? isoToDate(registrationData.registration_time)
             : defaultDate,
@@ -442,18 +442,18 @@ export default function EditPatientPage() {
             : defaultTime,
           tpa: registrationData.tpa ?? false,
           originalSampleCollectedTime: registrationData.samplecollected_time,
-          sendWhatsApp: false, 
+          sendWhatsApp: false,
           doctorId: null,
-          sourceOpdId: registrationData.source_opd_id, 
-          sourceIpdId: registrationData.source_ipd_id, 
+          sourceOpdId: registrationData.source_opd_id,
+          sourceIpdId: registrationData.source_ipd_id,
         }
 
         reset(formData)
         replaceBloodTests(bloodTests)
         replacePayments(paymentEntries)
-        setPatientDbId(patient.patient_id) 
-        
-        setShowSourceSelection(false); 
+        setPatientDbId(patient.patient_id)
+
+        setShowSourceSelection(false);
 
       } catch (err: any) {
         console.error("Error fetching patient data:", err)
@@ -468,19 +468,19 @@ export default function EditPatientPage() {
 
   /** fetch look‑ups */
   useEffect(() => {
-    ;(async () => {
+    ; (async () => {
       const { data, error } = await supabase.from(TABLE.DOCTOR).select("id, doctor_name").order("doctor_name")
       throwIfError(error)
       setDoctorList(data ?? [])
     })()
-    ;(async () => {
-      const { data, error } = await supabase
-        .from(TABLE.BLOOD)
-        .select("id, test_name, price, outsource")
-        .order("test_name")
-      throwIfError(error)
-      setBloodRows(data ?? [])
-    })()
+      ; (async () => {
+        const { data, error } = await supabase
+          .from(TABLE.BLOOD)
+          .select("id, test_name, price, outsource")
+          .order("test_name")
+        throwIfError(error)
+        setBloodRows(data ?? [])
+      })()
   }, [])
 
   // Click outside handlers
@@ -567,7 +567,7 @@ export default function EditPatientPage() {
       alert("Patient ID not found. Cannot update.")
       return
     }
-    
+
     if (data.visitType === 'opd' && data.sourceOpdId === null) {
       alert("Please select a source OPD registration.")
       return
@@ -581,24 +581,24 @@ export default function EditPatientPage() {
     try {
       const mult = data.dayType === "year" ? 360 : data.dayType === "month" ? 30 : 1
       const totalDay = data.age * mult
-      const dob = calculateDOB(data.age, data.dayType); 
+      const dob = calculateDOB(data.age, data.dayType);
 
       /* UPDATE PATIENT ROW (Patient details can change) */
       const { error: patientErr } = await supabase
-          .from(TABLE.PATIENT)
-          .update({
-            name: data.name.toUpperCase(),
-            number: Number(data.contact),
-            address: data.address || "",
-            age: data.age,
-            age_unit: data.dayType, 
-            gender: data.gender,
-            uhid: data.patientId, 
-            total_day: totalDay,
-            title: data.title,
-            dob: dob, 
-          })
-          .eq("patient_id", patientDbId) 
+        .from(TABLE.PATIENT)
+        .update({
+          name: data.name.toUpperCase(),
+          number: Number(data.contact),
+          address: data.address || "",
+          age: data.age,
+          age_unit: data.dayType,
+          gender: data.gender,
+          uhid: data.patientId,
+          total_day: totalDay,
+          title: data.title,
+          dob: dob,
+        })
+        .eq("patient_id", patientDbId)
 
       throwIfError(patientErr)
 
@@ -619,7 +619,7 @@ export default function EditPatientPage() {
           amount_paid: totalAmountPaid,
           visit_type: data.visitType,
           registration_time: isoTime,
-          samplecollected_time: data.originalSampleCollectedTime || isoTime, 
+          samplecollected_time: data.originalSampleCollectedTime || isoTime,
           discount_amount: discountAmount,
           hospital_name: data.hospitalName,
           payment_mode: data.paymentEntries.length > 0 ? data.paymentEntries[0].paymentMode : "online",
@@ -647,14 +647,14 @@ export default function EditPatientPage() {
       if (data.sendWhatsApp) {
         // 1. Get API Key
         const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
-        
+
         if (!apiKey) {
           console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
           // Don't block the submission, just log the error
         } else {
           // 2. Create Message
           const whatsappMessage = `Dear *${patientName}*,\n\nYour registration has been UPDATED: *${registrationDate}* at *${registrationTime}* \n\n*Patient ID*: ${data.patientId}\n*Registration ID*: ${registrationId}\n*Tests Booked*: ${bloodTestNames}\n\n*Summary*:\n*Total Amount*: ₹${totalAmountFormatted}\n*Amount Paid*: ₹${totalPaidFormatted}\n*Remaining Balance*: ₹${remainingAmountFormatted}\n\nThank you for choosing us!`;
-          
+
           // 3. Create new payload
           const whatsappPayload = {
             number: `91${patientContact}`,
@@ -670,17 +670,17 @@ export default function EditPatientPage() {
             },
             body: JSON.stringify(whatsappPayload),
           })
-          .then(async (response) => {
-            if (!response.ok) {
-              const errorData = await response.json();
-              console.warn(`Failed to send WhatsApp message: ${errorData.message || 'Unknown error'}`);
-            } else {
-              console.log("WhatsApp update sent successfully.");
-            }
-          })
-          .catch((whatsappError) => {
-            console.error("Error sending WhatsApp message:", whatsappError);
-          });
+            .then(async (response) => {
+              if (!response.ok) {
+                const errorData = await response.json();
+                console.warn(`Failed to send WhatsApp message: ${errorData.message || 'Unknown error'}`);
+              } else {
+                console.log("WhatsApp update sent successfully.");
+              }
+            })
+            .catch((whatsappError) => {
+              console.error("Error sending WhatsApp message:", whatsappError);
+            });
         }
       }
 
@@ -715,10 +715,10 @@ export default function EditPatientPage() {
     const clearSelection = () => {
       setValue("sourceOpdId", null);
       setValue("sourceIpdId", null);
-      handleVisitTypeChange("direct"); 
+      handleVisitTypeChange("direct");
     };
 
-    if (records.length === 0) return null; 
+    if (records.length === 0) return null;
 
     return (
       <div
@@ -744,7 +744,7 @@ export default function EditPatientPage() {
               <TableRow>
                 <TableHead className="py-1 px-2 w-[10%]">ID</TableHead>
                 <TableHead className="py-1 px-2 w-[25%]">{isOpd ? "Date/Time" : "Admission Date"}</TableHead>
-                <TableHead className="py-1 px-2 w-[45%]">{isOpd ? "Referred By" : "Doctor / Room Info"}</TableHead> 
+                <TableHead className="py-1 px-2 w-[45%]">{isOpd ? "Referred By" : "Doctor / Room Info"}</TableHead>
                 {!isOpd && <TableHead className="py-1 px-2 w-[10%]">Status</TableHead>}
                 <TableHead className="py-1 px-2 w-[10%] text-center">Select</TableHead>
               </TableRow>
@@ -752,46 +752,46 @@ export default function EditPatientPage() {
             <TableBody>
               {isOpd
                 ? (records as OpdRegistration[]).map((r) => (
-                    <TableRow key={r.opd_id} className={r.opd_id === selectedId ? 'bg-blue-50' : ''}>
-                      <TableCell className="py-1 px-2 text-xs">{r.opd_id}</TableCell>
-                      <TableCell className="py-1 px-2 text-xs">{formatOpdDate(r.date)}</TableCell>
-                      <TableCell className="py-1 px-2 text-xs">{r.refer_by}</TableCell>
+                  <TableRow key={r.opd_id} className={r.opd_id === selectedId ? 'bg-blue-50' : ''}>
+                    <TableCell className="py-1 px-2 text-xs">{r.opd_id}</TableCell>
+                    <TableCell className="py-1 px-2 text-xs">{formatOpdDate(r.date)}</TableCell>
+                    <TableCell className="py-1 px-2 text-xs">{r.refer_by}</TableCell>
+                    <TableCell className="py-1 px-2 text-center">
+                      <Checkbox
+                        checked={r.opd_id === selectedId}
+                        onCheckedChange={() => handleSelect(r.opd_id, r.refer_by)}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))
+                : (records as IpdRegistration[]).map((r) => {
+                  const status = r.discharge_date ? 'Discharged' : 'Active';
+                  const bedNumber = r.bed_management?.bed_number ?? 'N/A';
+                  const roomType = r.bed_management?.room_type ?? 'N/A';
+                  return (
+                    <TableRow key={r.ipd_id} className={r.ipd_id === selectedId ? 'bg-blue-50' : ''}>
+                      <TableCell className="py-1 px-2 text-xs">{r.ipd_id}</TableCell>
+                      <TableCell className="py-1 px-2 text-xs">{`${r.admission_date} @ ${r.admission_time}`}</TableCell>
+                      <TableCell className="py-1 px-2 text-xs">
+                        <div className="font-medium truncate" title={r.under_care_of_doctor}>{r.under_care_of_doctor}</div>
+                        <div className="text-gray-500 text-[10px]">
+                          Bed: **{bedNumber}** / Room: {roomType}
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-1 px-2 text-xs">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {status}
+                        </span>
+                      </TableCell>
                       <TableCell className="py-1 px-2 text-center">
                         <Checkbox
-                          checked={r.opd_id === selectedId}
-                          onCheckedChange={() => handleSelect(r.opd_id, r.refer_by)}
+                          checked={r.ipd_id === selectedId}
+                          onCheckedChange={() => handleSelect(r.ipd_id, r.under_care_of_doctor)}
                         />
                       </TableCell>
                     </TableRow>
-                  ))
-                : (records as IpdRegistration[]).map((r) => {
-                    const status = r.discharge_date ? 'Discharged' : 'Active';
-                    const bedNumber = r.bed_management?.bed_number ?? 'N/A';
-                    const roomType = r.bed_management?.room_type ?? 'N/A'; 
-                    return (
-                      <TableRow key={r.ipd_id} className={r.ipd_id === selectedId ? 'bg-blue-50' : ''}>
-                        <TableCell className="py-1 px-2 text-xs">{r.ipd_id}</TableCell>
-                        <TableCell className="py-1 px-2 text-xs">{`${r.admission_date} @ ${r.admission_time}`}</TableCell>
-                        <TableCell className="py-1 px-2 text-xs">
-                          <div className="font-medium truncate" title={r.under_care_of_doctor}>{r.under_care_of_doctor}</div>
-                          <div className="text-gray-500 text-[10px]">
-                            Bed: **{bedNumber}** / Room: {roomType}
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-1 px-2 text-xs">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                            {status}
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-1 px-2 text-center">
-                          <Checkbox
-                            checked={r.ipd_id === selectedId}
-                            onCheckedChange={() => handleSelect(r.ipd_id, r.under_care_of_doctor)}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  );
+                })}
             </TableBody>
           </Table>
         </div>
@@ -809,7 +809,7 @@ export default function EditPatientPage() {
   if (loading) {
     return (
       <div className="flex h-screen bg-gray-50">
-        
+
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600 mx-auto"></div>
@@ -824,7 +824,7 @@ export default function EditPatientPage() {
   if (error) {
     return (
       <div className="flex h-screen bg-gray-50">
-      
+
         <div className="flex-1 flex items-center justify-center">
           <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
             <div className="text-red-500 mb-4">
@@ -863,7 +863,7 @@ export default function EditPatientPage() {
           <SourceSelectionPopover />
         </div>
       )}
-      
+
       <div className="flex-1 overflow-auto">
         <Card className="h-full rounded-none">
           <CardContent className="p-6 h-full">
@@ -1005,7 +1005,7 @@ export default function EditPatientPage() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
-                         
+
                         </SelectContent>
                       </Select>
                     </div>

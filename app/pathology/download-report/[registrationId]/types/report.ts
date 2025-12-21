@@ -44,6 +44,7 @@ export interface BloodTestData {
 
 export interface PatientData {
   id: number
+  key?: string
   name: string
   age: string | number
   gender: string

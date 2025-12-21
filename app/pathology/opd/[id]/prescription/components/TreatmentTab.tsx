@@ -273,8 +273,8 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                                 )}
                                             >
                                                 <div className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-500">{med.type}</div>
-                                                <div className="flex-1 font-bold text-[11px] text-slate-900 truncate">{med.name}</div>
-                                                {selectedMedId === med.id && <Edit3 className="w-3 h-3 text-blue-600" />}
+                                                <div className="flex-1 font-bold text-[11px] text-slate-900 leading-tight">{med.name}</div>
+                                                {selectedMedId === med.id && <Edit3 className="w-3 h-3 text-blue-600 shrink-0" />}
                                             </div>
                                         ))}
                                     </div>
@@ -309,10 +309,10 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                                 <button
                                                     key={i}
                                                     onClick={() => addMedicine(m.name, m.type || 'TAB')}
-                                                    className="px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[10px] font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm text-left"
+                                                    className="px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[10px] font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm text-left max-w-full"
                                                 >
-                                                    <span className="block font-bold truncate max-w-[100px]">{m.name}</span>
-                                                    {m.manufacturer_name && <span className="block text-[8px] text-slate-400 truncate max-w-[100px]">{m.manufacturer_name}</span>}
+                                                    <span className="block font-bold leading-tight">{m.name}</span>
+                                                    {m.manufacturer_name && <span className="block text-[8px] text-slate-400 leading-tight">{m.manufacturer_name}</span>}
                                                 </button>
                                             ))}
                                         {searchQuery && (

@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import {
     ArrowLeft, Monitor, FileText, History, StickyNote,
     CheckCircle, Search, Check, List, Activity,
-    FileOutput, Heart, Printer, Power, User, Stethoscope
+    FileOutput, Heart, Printer, Power, User, Stethoscope, FlaskConical
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,7 @@ import TreatmentTab from './components/TreatmentTab';
 import PreviewTab from './components/PreviewTab';
 import PreviousVisitsTab from './components/PreviousVisitsTab';
 import DiagnosisTab from './components/DiagnosisTab';
+import BloodTestTab from './components/BloodTestTab';
 import PatientVitalsTrend from './components/PatientVitalsTrend';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Patient, OPDRecord } from './types';
@@ -79,6 +80,7 @@ export default function PrescriptionPage() {
             case 5: return <PreviewTab opdId={opdId} patient={record!.patient_detail} />;
             case 6: return <PreviousVisitsTab currentOpdId={opdId} patientUhid={record!.patient_detail.uhid} />;
             case 7: return <DiagnosisTab opdId={opdId} />;
+            case 8: return <BloodTestTab patientUhid={record!.patient_detail.uhid} />;
             default: return <div className="flex items-center justify-center h-full text-slate-400">Select a tab</div>;
         }
     };
@@ -104,7 +106,8 @@ export default function PrescriptionPage() {
                     <HeaderAction icon={Activity} label="Vitals" onClick={() => setShowVitalsDialog(true)} />
                     <HeaderAction icon={FileText} label="Reports" onClick={() => setCurrentTabIndex(2)} />
                     <HeaderAction icon={History} label="Previous" onClick={() => setCurrentTabIndex(6)} />
-                    <HeaderAction icon={StickyNote} label="Notes" onClick={() => { }} />
+                    <HeaderAction icon={FlaskConical} label="Blood Test" onClick={() => setCurrentTabIndex(8)} />
+                    {/* <HeaderAction icon={StickyNote} label="Notes" onClick={() => { }} /> */}
 
                     <div className="h-5 w-px bg-slate-200 mx-1"></div>
 

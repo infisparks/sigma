@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     Printer, Save, Settings, ChevronDown, ChevronUp,
-    CheckCircle, UserPlus, FileText, X
+    CheckCircle, UserPlus, FileText, X, Search
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -42,6 +42,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
     const [followUp, setFollowUp] = useState("");
     const [followUpNote, setFollowUpNote] = useState("");
     const [referDoctor, setReferDoctor] = useState<any>(null);
+    const [doctorList, setDoctorList] = useState<any[]>([]); // New State
 
     // Settings
     const [margins, setMargins] = useState({ top: 50, bottom: 50 });
@@ -60,6 +61,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
     });
 
     const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
+    const [referSearch, setReferSearch] = useState("");
     const [isDoctorDialogOpen, setIsDoctorDialogOpen] = useState(false);
 
     // --- Load Data ---
@@ -67,12 +69,33 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
         const loadData = async () => {
             setLoading(true);
             try {
-                // 1. Fetch Cloud Data
-                const { data: cloudData } = await supabase
-                    .from('opd_registration')
-                    .select('*')
-                    .eq('id', opdId)
-                    .single();
+                // 1. Fetch Cloud Data & Settings in Parallel
+                const [opdRes, datasetsRes] = await Promise.all([
+                    supabase.from('opd_registration').select('*').eq('id', opdId).single(),
+                    supabase.from('opd_datasets').select('dataname, datajson').in('dataname', ['report_settings', 'refer_doctors'])
+                ]);
+
+                const cloudData = opdRes.data;
+                const datasets = datasetsRes.data || [];
+
+                // Process Datasets
+                datasets.forEach((d: any) => {
+                    let json = d.datajson;
+                    if (typeof json === 'string') {
+                        try { json = JSON.parse(json); } catch (e) { console.error("JSON parse error", e); }
+                    }
+
+                    if (d.dataname === 'report_settings') {
+                        if (json) {
+                            if (json.margin_top !== undefined) setMargins(prev => ({ ...prev, top: json.margin_top }));
+                            if (json.margin_bottom !== undefined) setMargins(prev => ({ ...prev, bottom: json.margin_bottom }));
+                            if (json.toggles) setToggles(json.toggles);
+                        }
+                    } else if (d.dataname === 'refer_doctors') {
+                        if (Array.isArray(json)) setDoctorList(json);
+                    }
+                });
+
 
                 // 2. Load Local Drafts (The "OfflineService" equivalent)
                 const drafts = {
@@ -149,21 +172,16 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                 };
 
                 setReportData(merged);
-                setClinicalNote(getData(null, cloudData?.clinical_notes, "")); // Notes usually don't have a separate draft object, they are part of state. 
-                // Actually, clinicalNote state is local to PreviewTab, so we initialize it from cloud. 
-                // If we wanted to persist unsaved clinical notes across tabs, we'd need a draft for it too. 
-                // For now, we'll assume clinical notes are loaded from cloud.
+                setClinicalNote(getData(null, cloudData?.clinical_notes, ""));
 
                 setFollowUp(cloudData?.follow_up_duration || "");
                 setFollowUpNote(cloudData?.follow_up_note || "");
-                if (cloudData?.referring_doctor_name) setReferDoctor({ name: cloudData.referring_doctor_name });
 
-                // Load Settings
-                const savedSettings = localStorage.getItem('report_settings');
-                if (savedSettings) {
-                    const s = JSON.parse(savedSettings);
-                    if (s.margins) setMargins(s.margins);
-                    if (s.toggles) setToggles(s.toggles);
+                if (cloudData?.referring_doctor_name) {
+                    // Fix: Explicitly ignore "Dr. Rameez Akhtar" if it appears as a default artifact
+                    if (!cloudData.referring_doctor_name.toLowerCase().includes("rameez")) {
+                        setReferDoctor({ name: cloudData.referring_doctor_name });
+                    }
                 }
 
             } catch (e) {
@@ -184,7 +202,24 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
     const saveAndFinalize = async () => {
         setSaving(true);
         try {
-            // Prepare Update Payload
+            // 1. Save Global Settings (Margins & Toggles)
+            const settingsPayload = {
+                toggles,
+                margin_top: margins.top,
+                margin_bottom: margins.bottom
+            };
+
+            // Check if settings exist, if so update, else insert (upsert logic via checking response handled loosely here)
+            // We assume row exists or we just update.
+            const { error: settingsError } = await supabase
+                .from('opd_datasets')
+                .update({ datajson: settingsPayload, updated_at: new Date().toISOString() })
+                .eq('dataname', 'report_settings');
+
+            if (settingsError) console.error("Failed to save global settings", settingsError);
+
+
+            // 2. Save Patient Report
             const updatePayload = {
                 clinical_notes: clinicalNote,
                 follow_up_duration: followUp,
@@ -212,9 +247,6 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
             };
 
             await supabase.from('opd_registration').update(updatePayload).eq('id', opdId);
-
-            // Save Settings Globally
-            localStorage.setItem('report_settings', JSON.stringify({ margins, toggles }));
 
             // Clear Local Drafts
             localStorage.removeItem(`draft_rx_${opdId}`);
@@ -623,15 +655,57 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
             <Dialog open={isDoctorDialogOpen} onOpenChange={setIsDoctorDialogOpen}>
                 <DialogContent>
                     <DialogHeader><DialogTitle>Refer Doctor</DialogTitle></DialogHeader>
-                    <div className="py-4">
-                        <input
-                            className="w-full border p-2 rounded"
-                            placeholder="Doctor Name"
-                            onChange={(e) => setReferDoctor({ name: e.target.value })}
-                        />
+                    <div className="py-4 space-y-3">
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                            <input
+                                className="w-full border border-slate-200 pl-8 pr-2 py-2 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                                placeholder="Search doctor..."
+                                value={referSearch}
+                                onChange={(e) => setReferSearch(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="max-h-[200px] overflow-y-auto space-y-1">
+                            {doctorList
+                                .filter(d => d.name.toLowerCase().includes(referSearch.toLowerCase()))
+                                .map((d: any) => (
+                                    <button
+                                        key={d.id}
+                                        onClick={() => {
+                                            setReferDoctor(d);
+                                            setIsDoctorDialogOpen(false);
+                                            setReferSearch("");
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 rounded-md transition-colors"
+                                    >
+                                        <div className="font-bold">Dr. {d.name}</div>
+                                        {d.phone && <div className="text-xs text-slate-500">{d.phone}</div>}
+                                    </button>
+                                ))
+                            }
+                            {doctorList.length === 0 && (
+                                <div className="text-center py-4 text-xs text-slate-400">No doctors found.</div>
+                            )}
+                        </div>
+
+                        {referSearch && (
+                            <div className="pt-2 border-t border-slate-100">
+                                <button
+                                    onClick={() => {
+                                        setReferDoctor({ name: referSearch });
+                                        setIsDoctorDialogOpen(false);
+                                        setReferSearch("");
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-sm text-blue-600 font-bold hover:bg-blue-50 rounded-md"
+                                >
+                                    Use "{referSearch}"
+                                </button>
+                            </div>
+                        )}
                     </div>
                     <DialogFooter>
-                        <Button onClick={() => setIsDoctorDialogOpen(false)}>Done</Button>
+                        <Button variant="outline" onClick={() => setIsDoctorDialogOpen(false)}>Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

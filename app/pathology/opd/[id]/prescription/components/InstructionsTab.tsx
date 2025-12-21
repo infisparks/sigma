@@ -20,10 +20,19 @@ interface InstructionsTabProps {
 }
 
 export default function InstructionsTab({ opdId }: InstructionsTabProps) {
-    // Instructions Tab State
+    // --- State ---
     const [selectedSubTab, setSelectedSubTab] = useState(0); // 0: Instructions, 1: Investigations, 2: Procedures
     const [searchQuery, setSearchQuery] = useState("");
+
+    // Master Data (from DB)
     const [masterData, setMasterData] = useState<{
+        instructions: string[];
+        investigations: string[];
+        procedures: string[];
+    }>({ instructions: [], investigations: [], procedures: [] });
+
+    // Custom Items (User added or from saved state that aren't in master)
+    const [customItems, setCustomItems] = useState<{
         instructions: string[];
         investigations: string[];
         procedures: string[];
@@ -52,8 +61,8 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
                     .from('opd_datasets')
                     .select('dataname, datajson');
 
+                const newMasterData: { instructions: string[]; investigations: string[]; procedures: string[]; } = { instructions: [], investigations: [], procedures: [] };
                 if (masterDataRes) {
-                    const newMasterData = { instructions: [], investigations: [], procedures: [] };
                     masterDataRes.forEach((row: any) => {
                         let list: string[] = [];
                         try {
@@ -85,30 +94,25 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
                 };
                 setIsFinalized(finalized);
 
-                // 3. Decide Source
-                if (finalized) {
-                    // Finalized: Strictly load from server
-                    setSelections(serverLists);
-                } else {
+                let initialSelections = serverLists;
+
+                // 3. Decide Source (Draft vs Finalized)
+                if (!finalized) {
                     // Draft: Prioritize Local Storage
                     const saved = localStorage.getItem(`draft_instructions_${opdId}`);
-
                     if (saved) {
                         try {
                             const parsed = JSON.parse(saved);
-                            setSelections({
+                            initialSelections = {
                                 instructions: new Set(parsed.instructions),
                                 investigations: new Set(parsed.investigations),
                                 procedures: new Set(parsed.procedures),
-                            });
+                            };
                         } catch (e) {
                             console.error("Local draft corrupt", e);
-                            setSelections(serverLists);
                         }
                     } else {
-                        // No local draft? Initialize from server (sync)
-                        setSelections(serverLists);
-                        // Sync to local
+                        // Sync to local if no draft
                         const serializable = {
                             instructions: Array.from(serverLists.instructions),
                             investigations: Array.from(serverLists.investigations),
@@ -117,6 +121,27 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
                         localStorage.setItem(`draft_instructions_${opdId}`, JSON.stringify(serializable));
                     }
                 }
+
+                setSelections(initialSelections);
+
+                // 4. Populate Custom Items (Items in Selections but not in MasterData)
+                const newCustomItems = { ...customItems };
+
+                // Helper to diff
+                const updateCustomFor = (key: 'instructions' | 'investigations' | 'procedures') => {
+                    const masterSet = new Set(newMasterData[key]);
+                    const selectedList = Array.from(initialSelections[key]);
+                    const custom = selectedList.filter(item => !masterSet.has(item));
+                    if (custom.length > 0) {
+                        newCustomItems[key] = custom;
+                    }
+                };
+
+                updateCustomFor('instructions');
+                updateCustomFor('investigations');
+                updateCustomFor('procedures');
+
+                setCustomItems(newCustomItems);
                 setIsLoaded(true);
 
             } catch (err) {
@@ -143,17 +168,45 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
     }, [selections, opdId, isLoaded]);
 
     // --- Helpers ---
+    const addCustomItem = () => {
+        if (!searchQuery.trim()) return;
+        const key = selectedSubTab === 0 ? 'instructions' : selectedSubTab === 1 ? 'investigations' : 'procedures';
+
+        // Add to selections
+        toggleSelection(searchQuery.trim());
+
+        // Add to custom items list so it stays visible
+        setCustomItems(prev => ({
+            ...prev,
+            [key]: [...prev[key], searchQuery.trim()]
+        }));
+
+        setSearchQuery("");
+    };
+
     const currentList = useMemo(() => {
-        let source: string[] = [];
-        if (selectedSubTab === 0) source = masterData.instructions;
-        else if (selectedSubTab === 1) source = masterData.investigations;
-        else source = masterData.procedures;
+        let master: string[] = [];
+        let custom: string[] = [];
+
+        if (selectedSubTab === 0) {
+            master = masterData.instructions;
+            custom = customItems.instructions;
+        } else if (selectedSubTab === 1) {
+            master = masterData.investigations;
+            custom = customItems.investigations;
+        } else {
+            master = masterData.procedures;
+            custom = customItems.procedures;
+        }
+
+        // Merge and unique
+        const combined = Array.from(new Set([...master, ...custom]));
 
         if (searchQuery) {
-            return source.filter(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
+            return combined.filter(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
         }
-        return source;
-    }, [selectedSubTab, masterData, searchQuery]);
+        return combined;
+    }, [selectedSubTab, masterData, customItems, searchQuery]);
 
     const currentSelectedSet = useMemo(() => {
         if (selectedSubTab === 0) return selections.instructions;
@@ -190,10 +243,13 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-600" />
                     <input
                         type="text"
-                        placeholder={`Search...`}
-                        className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-100 text-[11px]"
+                        placeholder={`Search or add new...`}
+                        className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-100 text-[11px] font-bold text-slate-700"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') addCustomItem();
+                        }}
                     />
                 </div>
             </div>
@@ -211,7 +267,18 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
 
             {/* List Content */}
             <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-                {currentList.length === 0 ? (
+                {/* Add Custom Item Button - Show if searching and no exact match or just always facilitate adding */}
+                {searchQuery && !currentList.some(item => item.toLowerCase() === searchQuery.trim().toLowerCase()) && (
+                    <button
+                        onClick={addCustomItem}
+                        className="w-full flex items-center gap-2.5 p-2.5 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 hover:bg-blue-50 text-blue-600 transition-all mb-2"
+                    >
+                        <div className="w-4 h-4 rounded-full border-2 border-blue-300 flex items-center justify-center font-bold text-lg leading-none pb-0.5">+</div>
+                        <span className="text-[11px] font-bold">Add "{searchQuery}"</span>
+                    </button>
+                )}
+
+                {currentList.length === 0 && !searchQuery ? (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
                         <List className="w-10 h-10 mb-3 opacity-20" />
                         <p className="text-[11px] font-bold">No items found</p>

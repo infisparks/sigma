@@ -31,22 +31,22 @@ import { useUserRole } from '../userrole'
 // Define the menu items with Icons for every route
 const pathologyMenuItems = [
   {
-    icon: LayoutDashboard,
-    label: 'Dashboard',
-    href: '/pathology/dashboard',
-    roles: ['admin', 'technician', 'phlebo']
-  },
-  {
     icon: UserPlus,
     label: 'Patient Entry',
     href: '/pathology/patient-entry',
-    roles: ['admin', 'technician']
+    roles: ['admin', 'staff']
+  },
+  {
+    icon: LayoutDashboard,
+    label: 'Pathology Dashboard',
+    href: '/pathology/dashboard',
+    roles: ['admin', 'technician', 'phlebo', 'staff']
   },
   {
     icon: UserPlus,
-    label: 'opd List',
+    label: 'opd Dashboard',
     href: '/pathology/opd',
-    roles: ['admin', 'technician']
+    roles: ['admin', 'staff', 'doctor']
   },
   {
     icon: Clock,
@@ -82,7 +82,13 @@ const pathologyMenuItems = [
     icon: Pill,
     label: 'Pharmacy',
     href: '/pathology/pharmacy',
-    roles: ['admin', 'technician']
+    roles: ['admin']
+  },
+  {
+    icon: LogOut,
+    label: 'Logout',
+    href: 'logout-action',
+    roles: ['admin', 'technician', 'phlebo', 'staff', 'doctor']
   },
 ];
 
@@ -121,6 +127,36 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
       setActiveFlyout(null);
     }
   }, [isCollapsed]);
+
+  // Strict access control for 'staff' role
+  useEffect(() => {
+    if (!loading && role === 'staff') {
+      const allowedPaths = [
+        '/pathology/patient-entry',
+        '/pathology/dashboard',
+        '/pathology/opd'
+      ];
+
+      // Allow exact matches or sub-routes for edit-patient
+      const isAllowed = allowedPaths.includes(pathname) || pathname.startsWith('/pathology/edit-patient/');
+
+      if (!isAllowed) {
+        router.push('/pathology/patient-entry');
+      }
+    }
+  }, [role, loading, pathname, router]);
+
+  // Strict access control for 'doctor' role
+  useEffect(() => {
+    if (!loading && role === 'doctor') {
+      // Allow exact match for opd or any sub-route of opd (e.g., prescription)
+      const isAllowed = pathname === '/pathology/opd' || pathname.startsWith('/pathology/opd/');
+
+      if (!isAllowed) {
+        router.push('/pathology/opd');
+      }
+    }
+  }, [role, loading, pathname, router]);
 
 
   if (loading) {
@@ -335,20 +371,35 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
                     </div>
                   ) : (
                     // Single-level Link (Main Pathology Items)
-                    <Link
-                      href={item.href ?? '/'}
-                      className={cn(
-                        "flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-150",
-                        pathname === item.href
-                          ? "bg-blue-50 text-blue-700 border-l-2 border-blue-500"
-                          : "text-gray-700 hover:bg-gray-50 hover:text-gray-900",
-                        isCollapsed ? 'justify-center' : ''
-                      )}
-                      onClick={() => { setIsOpen(false); closeFlyout(); }}
-                    >
-                      <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span className="text-xs">{item.title}</span>}
-                    </Link>
+                    // Single-level Link (Main Pathology Items)
+                    item.href === 'logout-action' ? (
+                      <button
+                        onClick={handleLogout}
+                        className={cn(
+                          "w-full flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-150",
+                          "text-red-600 hover:bg-red-50 hover:text-red-700 group",
+                          isCollapsed ? 'justify-center' : ''
+                        )}
+                      >
+                        <item.icon className="h-4 w-4 text-red-600 group-hover:text-red-700 transition-colors" />
+                        {!isCollapsed && <span className="text-xs">{item.title}</span>}
+                      </button>
+                    ) : (
+                      <Link
+                        href={item.href ?? '/'}
+                        className={cn(
+                          "flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-150",
+                          pathname === item.href
+                            ? "bg-blue-50 text-blue-700 border-l-2 border-blue-500"
+                            : "text-gray-700 hover:bg-gray-50 hover:text-gray-900",
+                          isCollapsed ? 'justify-center' : ''
+                        )}
+                        onClick={() => { setIsOpen(false); closeFlyout(); }}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {!isCollapsed && <span className="text-xs">{item.title}</span>}
+                      </Link>
+                    )
                   )}
                 </li>
               ))}

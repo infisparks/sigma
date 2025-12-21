@@ -16,7 +16,7 @@ import {
 } from "lucide-react"
 import { isTestFullyEntered, isAllTestsComplete, calculateAmounts, formatCurrency } from "../lib/dashboard-utils"
 import type { Registration, PaymentHistory } from "../types/dashboard"
-import { useUserRole } from "@/hooks/useUserRole"
+import { useUserRole } from "@/components/userrole"
 import { Badge } from "@/components/ui/badge"
 
 interface RegistrationListProps {
@@ -60,7 +60,7 @@ export function RegistrationList({
   handleDeleteRegistration,
   formatLocalDateTime,
 }: RegistrationListProps) {
-  const { role, loading: roleLoading, error: roleError } = useUserRole()
+  const { role, loading: roleLoading } = useUserRole()
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -252,17 +252,41 @@ export function RegistrationList({
                       >
                         <td colSpan={showCheckboxes ? 9 : 8} className="bg-gray-100 p-4">
                           <div className="flex flex-wrap gap-2">
-                            {role === "phlebo" ? (
-                              sampleCollected ? (
-                                <Link
-                                  href={`/pathology/download-report/${r.id}`}
-                                  className="inline-flex items-center px-3.5 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 shadow-sm"
+                            {/* --- STAFF VIEW --- */}
+                            {role === "staff" && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setSelectedRegistration(r)
+                                    setNewAmountPaid("")
+                                    if (
+                                      r.paymentHistory &&
+                                      typeof r.paymentHistory === "object" &&
+                                      "discount" in r.paymentHistory
+                                    ) {
+                                      setTempDiscount((r.paymentHistory as PaymentHistory).discount.toString())
+                                    } else {
+                                      setTempDiscount(r.discountAmount.toString())
+                                    }
+                                  }}
+                                  className="inline-flex items-center px-3.5 py-2 bg-purple-600 text-white rounded-md text-sm font-medium hover:bg-purple-700 shadow-sm"
                                 >
-                                  <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
-                                  Download Report
+                                  <BanknotesIcon className="h-4 w-4 mr-2" />
+                                  Update Payment
+                                </button>
+
+                                <Link
+                                  href={`/pathology/edit-patient/${r.id}`}
+                                  className="inline-flex items-center px-3.5 py-2 bg-amber-600 text-white rounded-md text-sm font-medium hover:bg-amber-700 shadow-sm"
+                                >
+                                  <PencilIcon className="h-4 w-4 mr-2" />
+                                  Edit Details
                                 </Link>
-                              ) : null
-                            ) : (
+                              </>
+                            )}
+
+                            {/* --- TECHNICIAN VIEW --- */}
+                            {role === "technician" && (
                               <>
                                 <button
                                   onClick={() => {
@@ -278,6 +302,71 @@ export function RegistrationList({
                                   <DocumentTextIcon className="h-4 w-4 mr-2" />
                                   {sampleCollected ? "Sample Collected On" : "Collect Sample"}
                                 </button>
+
+                                {sampleCollected && (
+                                  <Link
+                                    href={`/pathology/download-report/${r.id}`}
+                                    className="inline-flex items-center px-3.5 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 shadow-sm"
+                                  >
+                                    <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
+                                    Download Report
+                                  </Link>
+                                )}
+
+                                <Link
+                                  href={`/pathology/blood-values/${r.id}`}
+                                  className="inline-flex items-center px-3.5 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 shadow-sm"
+                                >
+                                  <DocumentPlusIcon className="h-4 w-4 mr-2" />
+                                  Add/Edit Values
+                                </Link>
+
+                                <button
+                                  onClick={() => {
+                                    const tpa = r.tpa === true
+                                    setFakeBillRegistration({
+                                      ...r,
+                                      bloodTests: (r.bloodTests || []).map((t: any) => ({
+                                        ...t,
+                                        price: tpa && typeof t.tpa_price === "number" ? t.tpa_price : t.price,
+                                      })),
+                                      tpa,
+                                    })
+                                  }}
+                                  className="inline-flex items-center px-3.5 py-2 bg-pink-600 text-white rounded-md text-sm font-medium hover:bg-pink-700 shadow-sm"
+                                >
+                                  <DocumentTextIcon className="h-4 w-4 mr-2" />
+                                  Generate Bill
+                                </button>
+
+                                <Link
+                                  href={`/pathology/edit-patient/${r.id}`}
+                                  className="inline-flex items-center px-3.5 py-2 bg-amber-600 text-white rounded-md text-sm font-medium hover:bg-amber-700 shadow-sm"
+                                >
+                                  <PencilIcon className="h-4 w-4 mr-2" />
+                                  Edit Details
+                                </Link>
+                              </>
+                            )}
+
+                            {/* --- ADMIN / DEFAULT VIEW (Keep explicit admin check if strict, but prompt says 'admin all route') --- */}
+                            {role === "admin" && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setSampleModalRegistration(r)
+                                    setSampleDateTime(
+                                      r.sampleCollectedAt
+                                        ? new Date(r.sampleCollectedAt).toISOString().slice(0, 16)
+                                        : formatLocalDateTime(),
+                                    )
+                                  }}
+                                  className={`inline-flex items-center px-3.5 py-2 ${sampleCollected ? "bg-blue-600 hover:bg-blue-700" : "bg-orange-600 hover:bg-orange-700"} text-white rounded-md text-sm font-medium shadow-sm`}
+                                >
+                                  <DocumentTextIcon className="h-4 w-4 mr-2" />
+                                  {sampleCollected ? "Sample Collected On" : "Collect Sample"}
+                                </button>
+
                                 {sampleCollected && (
                                   <Link
                                     href={`/pathology/download-report/${r.id}`}
@@ -352,15 +441,28 @@ export function RegistrationList({
                                   Edit Details
                                 </Link>
 
-                                {role === "admin" && (
-                                  <button
-                                    onClick={() => handleDeleteRegistration(r)}
-                                    className="inline-flex items-center px-3.5 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 shadow-sm"
+                                <button
+                                  onClick={() => handleDeleteRegistration(r)}
+                                  className="inline-flex items-center px-3.5 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 shadow-sm"
+                                >
+                                  <TrashIcon className="h-4 w-4 mr-2" />
+                                  Delete Registration
+                                </button>
+                              </>
+                            )}
+
+                            {/* --- FALLBACK FOR PHLEBO OR OTHER ROLES (Re-implement existing phlebo logic if needed, or leave blank if strict) --- */}
+                            {role === "phlebo" && (
+                              <>
+                                {sampleCollected ? (
+                                  <Link
+                                    href={`/pathology/download-report/${r.id}`}
+                                    className="inline-flex items-center px-3.5 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 shadow-sm"
                                   >
-                                    <TrashIcon className="h-4 w-4 mr-2" />
-                                    Delete Registration
-                                  </button>
-                                )}
+                                    <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
+                                    Download Report
+                                  </Link>
+                                ) : null}
                               </>
                             )}
                           </div>

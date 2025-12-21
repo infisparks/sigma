@@ -62,8 +62,8 @@ const slugifyTestName = (name: string) =>
 
 // --- TABLE CONSTANTS FOR CONDITIONAL FETCH ---
 const TABLE = {
-  IPD_REGISTRATION: "ipd_registration", 
-  BED_MANAGEMENT: "bed_management", 
+  IPD_REGISTRATION: "ipd_registration",
+  BED_MANAGEMENT: "bed_management",
 } as const
 
 
@@ -148,7 +148,7 @@ function DownloadReport() {
       try {
         setLoading(true)
         setError(null)
-        
+
         // --- UPDATED FETCH: Include visit_type, source_opd_id, source_ipd_id ---
         const { data: registrationData, error: registrationError } = await supabase
           .from("zregistration")
@@ -177,7 +177,7 @@ function DownloadReport() {
         if (!patientdetial) {
           throw new Error("Patient details not found")
         }
-        
+
         // --- CONDITIONAL FETCH FOR IPD DETAILS ---
         let ipdDetails: { bedNumber: string | null; roomType: string | null } | undefined;
 
@@ -195,7 +195,7 @@ function DownloadReport() {
           } else if (ipdRegData) {
             // Supabase returns the nested object in an array (or sometimes directly if single)
             const bed = Array.isArray(ipdRegData.bed_management) ? ipdRegData.bed_management[0] : ipdRegData.bed_management;
-            
+
             ipdDetails = {
               bedNumber: bed?.bed_number || 'N/A',
               roomType: bed?.room_type || 'N/A',
@@ -248,14 +248,14 @@ function DownloadReport() {
         }
 
         const mappedPatientData: CustomPatientData = {
-          id: patientdetial.patient_id, 
+          id: patientdetial.patient_id,
           name: patientdetial.name,
           age: patientdetial.age,
           gender: patientdetial.gender,
-          patientId: patientdetial.uhid, 
+          patientId: patientdetial.uhid,
           contact: patientdetial.number,
           total_day: patientdetial.total_day,
-          day_type: patientdetial.age_unit, 
+          day_type: patientdetial.age_unit,
           title: patientdetial.title,
           hospitalName: registrationData.hospital_name,
           registration_id: registrationData.id,
@@ -264,6 +264,7 @@ function DownloadReport() {
           bloodtest_data: parsedBloodtestData || [],
           bloodtest_detail: parsedBloodtestDetail || {},
           doctorName: registrationData.doctor_name,
+          key: registrationData.key,
           // --- NEW FIELDS ---
           visitType: registrationData.visit_type || 'direct',
           sourceOpdId: registrationData.source_opd_id,
@@ -274,13 +275,13 @@ function DownloadReport() {
         const bloodtestFromDetail: Record<string, BloodTestData> = {}
         if (parsedBloodtestDetail && typeof parsedBloodtestDetail === "object") {
           const detailKeyToOriginalTestName: Record<string, string> = {}
-          ;(parsedBloodtestData || []).forEach((test: any) => {
-            const detailKey = slugifyTestName(test.testName)
-            detailKeyToOriginalTestName[detailKey] = test.testName
-            if (test.testName === "Complete Blood Count (CBC)") {
-              detailKeyToOriginalTestName["complete_blood_count_(cbc)"] = test.testName
-            }
-          })
+            ; (parsedBloodtestData || []).forEach((test: any) => {
+              const detailKey = slugifyTestName(test.testName)
+              detailKeyToOriginalTestName[detailKey] = test.testName
+              if (test.testName === "Complete Blood Count (CBC)") {
+                detailKeyToOriginalTestName["complete_blood_count_(cbc)"] = test.testName
+              }
+            })
 
           for (const [testKeyFromDetail, testData] of Object.entries(parsedBloodtestDetail)) {
             const testInfo = testData as any
@@ -312,7 +313,7 @@ function DownloadReport() {
         const { data: historicalRegistrations, error: historicalError } = await supabase
           .from("zregistration")
           .select(`id, registration_time, bloodtest_detail, bloodtest_data`)
-          .eq("UHID", patientdetial.uhid) 
+          .eq("UHID", patientdetial.uhid)
           .order("registration_time", { ascending: true })
 
         if (historicalError) {
@@ -434,13 +435,13 @@ function DownloadReport() {
       if (t.type === "outsource") continue
       const keptParams = Array.isArray(t.parameters)
         ? t.parameters
-            .filter((p) => p.visibility !== "hidden")
-            .map((p) => ({
-              ...p,
-              subparameters: Array.isArray(p.subparameters)
-                ? p.subparameters.filter((sp) => sp.visibility !== "hidden")
-                : [],
-            }))
+          .filter((p) => p.visibility !== "hidden")
+          .map((p) => ({
+            ...p,
+            subparameters: Array.isArray(p.subparameters)
+              ? p.subparameters.filter((sp) => sp.visibility !== "hidden")
+              : [],
+          }))
         : []
       out[k] = {
         ...t,
@@ -485,12 +486,12 @@ function DownloadReport() {
           bloodtest_detail: updatedBloodtestDetail,
           bloodtest: prev.bloodtest
             ? {
-                ...prev.bloodtest,
-                [updateTimeModal.testKey]: {
-                  ...prev.bloodtest[updateTimeModal.testKey],
-                  reportedOn: newReportedOn,
-                },
-              }
+              ...prev.bloodtest,
+              [updateTimeModal.testKey]: {
+                ...prev.bloodtest[updateTimeModal.testKey],
+                reportedOn: newReportedOn,
+              },
+            }
             : undefined,
         }
       })
@@ -615,14 +616,13 @@ function DownloadReport() {
         skipCoverForDownload,
         undefined,
         false,
-        testDisplayOptions, 
+        testDisplayOptions,
       )
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `report-${patientData.name.replace(/\s+/g, "-").toLowerCase()}-${reportType}${
-        includeLetterhead ? "" : "-no-letterhead"
-      }.pdf`
+      a.download = `report-${patientData.name.replace(/\s+/g, "-").toLowerCase()}-${reportType}${includeLetterhead ? "" : "-no-letterhead"
+        }.pdf`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -646,10 +646,10 @@ function DownloadReport() {
         comparisonSelections,
         reportType,
         withLetter,
-        true, 
+        true,
         undefined,
         false,
-        testDisplayOptions, 
+        testDisplayOptions,
       )
       const url = URL.createObjectURL(blob)
       window.open(url, "_blank")
@@ -678,7 +678,7 @@ function DownloadReport() {
         false,
         aiSuggestions,
         true,
-        testDisplayOptions, 
+        testDisplayOptions,
       )
 
       // Get API Key
@@ -714,11 +714,11 @@ function DownloadReport() {
         media: url, // This is the public Supabase URL
         fileName: friendlyFileName,
       }
-      
+
       // Send with new endpoint and headers
       const res = await fetch("https://evo.infispark.in/message/sendMedia/Cigma", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "apikey": apiKey
         },
@@ -753,9 +753,9 @@ function DownloadReport() {
         false,
         undefined,
         false,
-        testDisplayOptions, 
+        testDisplayOptions,
       )
-      
+
       // Get API Key
       const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
       if (!apiKey) {
@@ -789,11 +789,11 @@ function DownloadReport() {
         media: url,
         fileName: friendlyFileName,
       }
-      
+
       // Send with new endpoint and headers
       const res = await fetch("https://evo.infispark.in/message/sendMedia/Cigma", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "apikey": apiKey
         },
@@ -812,106 +812,105 @@ function DownloadReport() {
       setIsSending(false)
     }
   }
-  
+
   // Function to send report to the lab group
- // Function to send report to the lab group
- const sendReportToGroup = async () => {
-  if (!patientData || selectedTests.length === 0) {
-    alert("Please select at least one test to send.")
-    return
+  // Function to send report to the lab group
+  const sendReportToGroup = async () => {
+    if (!patientData || selectedTests.length === 0) {
+      alert("Please select at least one test to send.")
+      return
+    }
+
+    setIsSending(true)
+    try {
+      // 1. Generate the PDF blob
+      const blob = await generateReportPdf(
+        patientData,
+        selectedTests,
+        combinedGroups,
+        historicalTestsData,
+        comparisonSelections,
+        "normal",
+        true, // includeLetterhead
+        true, // skipCover 
+        undefined, // no AI suggestions
+        false,
+        testDisplayOptions,
+      )
+
+      // Get API Key
+      const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
+      if (!apiKey) {
+        console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
+        alert("WhatsApp configuration error. Cannot send message.");
+        setIsSending(false);
+        return;
+      }
+
+      // 2. Upload the PDF to Supabase storage
+      const friendlyFileName = `group-report-${patientData.name.replace(/\s+/g, "_")}.pdf`
+      const filename = `group_reports/${patientData.registration_id}_${Date.now()}.pdf`
+      const { error: uploadError } = await supabase.storage.from("reports").upload(filename, blob, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: "application/pdf",
+      })
+
+      if (uploadError) {
+        throw new Error(`Failed to upload file to Supabase: ${uploadError.message}`)
+      }
+
+      // 3. Get the public URL for the uploaded file
+      const { data: publicUrlData } = supabase.storage.from("reports").getPublicUrl(filename)
+      const url = publicUrlData.publicUrl
+
+      // 4. Construct the message caption
+      const formattedTestNames = selectedTests
+        .map((testKey) => `- ${testKey.replace(/_/g, " ")}`)
+        .join("\n")
+
+      const caption = `Report for ${patientData.name}\nRegistration Time: ${patientData.createdAt ? format12Hour(patientData.createdAt) : "Not set"
+        }\n\nTest(s) included:\n${formattedTestNames}`
+
+      // 5. Create the new WhatsApp payload for the group
+      const payload = {
+        number: "120363404060783775@g.us", // The target group ID
+        mediatype: "document",
+        mimetype: "application/pdf",
+        caption: caption,
+        media: url,
+        fileName: friendlyFileName,
+      }
+
+      // 6. Send the message with new endpoint and headers
+      const res = await fetch("https://evo.infispark.in/message/sendMedia/Cigma", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": apiKey
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        alert(`Failed to send to group. Status: ${res.status}`)
+      } else {
+        alert("Report sent to the lab group!")
+      }
+    } catch (e) {
+      console.error("Error sending to lab group:", e)
+      alert("Error sending report to the lab group.")
+    } finally {
+      setIsSending(false)
+    }
   }
-  
-  setIsSending(true)
-  try {
-    // 1. Generate the PDF blob
-    const blob = await generateReportPdf(
-      patientData,
-      selectedTests,
-      combinedGroups,
-      historicalTestsData,
-      comparisonSelections,
-      "normal",
-      true, // includeLetterhead
-      true, // skipCover 
-      undefined, // no AI suggestions
-      false, 
-      testDisplayOptions,
-    )
-
-    // Get API Key
-    const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
-    if (!apiKey) {
-      console.error("WhatsApp API Key is missing. Check NEXT_PUBLIC_WHATSAPP_API_KEY environment variable.");
-      alert("WhatsApp configuration error. Cannot send message.");
-      setIsSending(false);
-      return;
-    }
-
-    // 2. Upload the PDF to Supabase storage
-    const friendlyFileName = `group-report-${patientData.name.replace(/\s+/g, "_")}.pdf`
-    const filename = `group_reports/${patientData.registration_id}_${Date.now()}.pdf`
-    const { error: uploadError } = await supabase.storage.from("reports").upload(filename, blob, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: "application/pdf",
-    })
-
-    if (uploadError) {
-      throw new Error(`Failed to upload file to Supabase: ${uploadError.message}`)
-    }
-
-    // 3. Get the public URL for the uploaded file
-    const { data: publicUrlData } = supabase.storage.from("reports").getPublicUrl(filename)
-    const url = publicUrlData.publicUrl
-
-    // 4. Construct the message caption
-    const formattedTestNames = selectedTests
-      .map((testKey) => `- ${testKey.replace(/_/g, " ")}`)
-      .join("\n")
-
-    const caption = `Report for ${patientData.name}\nRegistration Time: ${
-      patientData.createdAt ? format12Hour(patientData.createdAt) : "Not set"
-    }\n\nTest(s) included:\n${formattedTestNames}`
-
-    // 5. Create the new WhatsApp payload for the group
-    const payload = {
-      number: "120363404060783775@g.us", // The target group ID
-      mediatype: "document",
-      mimetype: "application/pdf",
-      caption: caption,
-      media: url,
-      fileName: friendlyFileName,
-    }
-
-    // 6. Send the message with new endpoint and headers
-    const res = await fetch("https://evo.infispark.in/message/sendMedia/Cigma", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "apikey": apiKey
-      },
-      body: JSON.stringify(payload),
-    })
-
-    if (!res.ok) {
-      alert(`Failed to send to group. Status: ${res.status}`)
-    } else {
-      alert("Report sent to the lab group!")
-    }
-  } catch (e) {
-    console.error("Error sending to lab group:", e)
-    alert("Error sending report to the lab group.")
-  } finally {
-    setIsSending(false)
-  }
-}
 
   // --- NEW: Visit Details component ---
   const VisitDetails = () => {
     if (!patientData) return null;
 
     const { visitType, sourceOpdId, sourceIpdId, ipdDetails } = patientData;
-    
+
     let visitText: string;
     let details: string | JSX.Element | null = null;
     let icon: JSX.Element;
@@ -1245,9 +1244,8 @@ function DownloadReport() {
               <button
                 onClick={sendWhatsApp}
                 disabled={isSending}
-                className={`flex-1 flex items-center justify-center space-x-3 px-6 py-3 rounded-xl font-medium transition duration-150 ease-in-out ${
-                  isSending ? "bg-gray-400 cursor-not-allowed" : "bg-[#25D366] hover:bg-[#128C7E] text-white"
-                }`}
+                className={`flex-1 flex items-center justify-center space-x-3 px-6 py-3 rounded-xl font-medium transition duration-150 ease-in-out ${isSending ? "bg-gray-400 cursor-not-allowed" : "bg-[#25D366] hover:bg-[#128C7E] text-white"
+                  }`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.709.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c0-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884" />
@@ -1257,9 +1255,8 @@ function DownloadReport() {
               <button
                 onClick={sendWhatsAppWithoutAI}
                 disabled={isSending}
-                className={`flex-1 flex items-center justify-center space-x-3 px-6 py-3 rounded-xl font-medium transition duration-150 ease-in-out ${
-                  isSending ? "bg-gray-400 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600 text-white"
-                }`}
+                className={`flex-1 flex items-center justify-center space-x-3 px-6 py-3 rounded-xl font-medium transition duration-150 ease-in-out ${isSending ? "bg-gray-400 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600 text-white"
+                  }`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.709.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c0-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884" />
@@ -1272,9 +1269,8 @@ function DownloadReport() {
               <button
                 onClick={sendReportToGroup}
                 disabled={isSending}
-                className={`flex-1 flex items-center justify-center space-x-3 px-6 py-3 rounded-xl font-medium transition duration-150 ease-in-out ${
-                  isSending ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"
-                }`}
+                className={`flex-1 flex items-center justify-center space-x-3 px-6 py-3 rounded-xl font-medium transition duration-150 ease-in-out ${isSending ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"
+                  }`}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1410,8 +1406,8 @@ function DownloadReport() {
                                 const newSelectedDates = e.target.checked
                                   ? [...prev[selection.slugifiedTestName].selectedDates, dateEntry.date]
                                   : prev[selection.slugifiedTestName].selectedDates.filter(
-                                      (d) => d !== dateEntry.date,
-                                    )
+                                    (d) => d !== dateEntry.date,
+                                  )
                                 return {
                                   ...prev,
                                   [selection.slugifiedTestName]: {
@@ -1454,9 +1450,8 @@ function DownloadReport() {
                     {combinedGroups.map((group) => (
                       <div
                         key={group.id}
-                        className={`border-2 rounded-xl p-4 ${
-                          activeGroupId === group.id ? "border-blue-500" : "border-gray-300"
-                        }`}
+                        className={`border-2 rounded-xl p-4 ${activeGroupId === group.id ? "border-blue-500" : "border-gray-300"
+                          }`}
                         onDragOver={(e) => handleDragOver(e, group.id)}
                         onDragLeave={handleDragLeave}
                         onDrop={(e) => handleDrop(e, group.id)}

@@ -16,7 +16,13 @@ interface UserRoleProviderProps {
 }
 
 // Define allowed routes for technicians
-const TECHNICIAN_ALLOWED_ROUTES = ['/pathology/dashboard', '/pathology/patient-entry'];
+// Define allowed routes for technicians
+const TECHNICIAN_ALLOWED_ROUTES = [
+  '/pathology/dashboard',
+  '/pathology/download-report',
+  '/pathology/edit-patient',
+  '/pathology/blood-values'
+];
 
 export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
   const [role, setRole] = useState<string | null>(null);
@@ -28,7 +34,7 @@ export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
     const fetchRoleAndProtectRoutes = async () => {
       // 1. Get Auth User
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
+
       if (userError || !user) {
         router.replace('/login');
         setLoading(false);
@@ -37,7 +43,7 @@ export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
 
       // 2. Fetch User Role
       let userRole: string | null = null;
-      
+
       // Try fetching by ID
       let { data, error } = await supabase
         .from('user')
@@ -55,7 +61,7 @@ export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
             .select('role')
             .eq('email', user.email)
             .single();
-          
+
           if (emailData) {
             userRole = emailData.role;
           }
@@ -65,7 +71,7 @@ export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
       // 3. Enforce Role-Based Access Control
       if (userRole === 'technician') {
         // Check if the current path starts with any allowed route
-        const isAllowed = TECHNICIAN_ALLOWED_ROUTES.some(route => 
+        const isAllowed = TECHNICIAN_ALLOWED_ROUTES.some(route =>
           pathname.startsWith(route)
         );
 
@@ -81,9 +87,9 @@ export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
     };
 
     fetchRoleAndProtectRoutes();
-    
+
     // Re-run this check if the path changes (to prevent manual URL entry)
-  }, [router, pathname]); 
+  }, [router, pathname]);
 
   if (loading) {
     return (

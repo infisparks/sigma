@@ -62,7 +62,7 @@ export default function FitnessTab({ opdId }: FitnessTabProps) {
     // Default Templates (Mock Data)
     const defaultPlans: FitnessPlan[] = [
         {
-            id: "d1", title: "Standard 1500 kcal", type: 'diet', isAssigned: false,
+            id: "d1", title: "Standard 15000 kcal", type: 'diet', isAssigned: false,
             dietEntries: [
                 { timeSlot: "Pre-Breakfast", description: "Warm water + Lemon, 5 Soaked Almonds" },
                 { timeSlot: "Breakfast", description: "2 Idli / 1 Dosa with Sambhar (No chutney)" },

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
+import { useUserRole } from "@/components/userrole"
 
 import { DashboardHeader } from "./components/dashboard-header"
 import { RegistrationList } from "./components/registration-list"
@@ -112,17 +113,25 @@ export default function Dashboard() {
 
   const filterContentRef = useRef<HTMLDivElement>(null)
 
-  const [role, setRole] = useState<string>("admin")
+
+
+  const { role, loading: roleLoading } = useUserRole();
 
   const [dbSearchResults, setDbSearchResults] = useState<Registration[] | null>(null)
   const [isDbSearchLoading, setIsDbSearchLoading] = useState(false)
 
   const router = useRouter()
   useEffect(() => {
-    if (role === "xray") {
+    if (!roleLoading && role === "xray") {
       router.replace("/x-rayDashboard")
     }
-  }, [role, router])
+  }, [role, roleLoading, router])
+
+  if (roleLoading) {
+    return <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500" />
+    </div>;
+  }
 
   if (role === "xray") {
     return null
@@ -584,12 +593,12 @@ export default function Dashboard() {
           paymentHistory:
             selectedRegistration.amountPaid > 0
               ? [
-                  {
-                    amount: selectedRegistration.amountPaid,
-                    paymentMode: "cash",
-                    time: new Date().toISOString(),
-                  },
-                ]
+                {
+                  amount: selectedRegistration.amountPaid,
+                  paymentMode: "cash",
+                  time: new Date().toISOString(),
+                },
+              ]
               : [],
         }
       }
@@ -600,15 +609,15 @@ export default function Dashboard() {
         paymentHistory:
           additionalPayment > 0
             ? [
-                ...currentPaymentHistory.paymentHistory,
-                {
-                  amount: additionalPayment,
-                  paymentMode: paymentMode,
-                  time: new Date().toISOString(),
-                  ...(amountId ? { amountId } : {}),
-                  ...(billNo ? { billNo } : {}),
-                },
-              ]
+              ...currentPaymentHistory.paymentHistory,
+              {
+                amount: additionalPayment,
+                paymentMode: paymentMode,
+                time: new Date().toISOString(),
+                ...(amountId ? { amountId } : {}),
+                ...(billNo ? { billNo } : {}),
+              },
+            ]
             : currentPaymentHistory.paymentHistory,
       }
 
