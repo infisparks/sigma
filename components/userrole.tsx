@@ -24,6 +24,16 @@ const TECHNICIAN_ALLOWED_ROUTES = [
   '/pathology/blood-values'
 ];
 
+// Define allowed routes for pharmacy
+const PHARMACY_ALLOWED_ROUTES = [
+  '/pharmacy/dashboard',
+  '/pharmacy/billing',
+  '/pharmacy/sales',
+  '/pharmacy/inventory',
+  '/pharmacy/vendors',
+  '/pharmacy/purchases'
+];
+
 export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,6 +89,16 @@ export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
           // If they are on a forbidden page, kick them to dashboard
           router.replace('/pathology/dashboard');
           // Note: We don't return here, we still set the role so the UI loads
+        }
+      }
+
+      if (userRole === 'pharmacy') {
+        const isAllowed = PHARMACY_ALLOWED_ROUTES.some(route =>
+          pathname.startsWith(route)
+        );
+
+        if (!isAllowed) {
+          router.replace('/pharmacy/dashboard');
         }
       }
 

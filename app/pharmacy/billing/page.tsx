@@ -61,7 +61,22 @@ export default function PharmacyBillingPage() {
     const [patientSearch, setPatientSearch] = useState('')
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
     const [patientHints, setPatientHints] = useState<Patient[]>([])
+
     const [isPatientSearchOpen, setIsPatientSearchOpen] = useState(false)
+
+    // Doctors
+    const [doctors, setDoctors] = useState<{ id: string, name: string }[]>([])
+    const [selectedDoctor, setSelectedDoctor] = useState<string>('')
+
+    useEffect(() => {
+        const fetchDoctors = async () => {
+            const { data } = await supabase.from('opd_datasets').select('datajson').eq('dataname', 'refer_doctors').single()
+            if (data?.datajson) {
+                setDoctors(Array.isArray(data.datajson) ? data.datajson : [])
+            }
+        }
+        fetchDoctors()
+    }, [])
 
     // New Patient
     const [isRegisterMode, setIsRegisterMode] = useState(false)
@@ -165,22 +180,15 @@ export default function PharmacyBillingPage() {
 
         setCheckoutLoading(true)
         try {
-            // Validate UUID for patient_id to prevent 22P02 invalid input syntax
-            // The patient_detail table likely uses text-based UHID (e.g. MF-171125-00024) instead of UUID
-            // But pharmacy_sales.patient_id expects a UUID.
-            // We should store the linked ID only if it's a valid UUID, otherwise just store the string UHID in a metadata column or just rely on name/phone.
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            const validPatientUUID = selectedPatient && uuidRegex.test(selectedPatient.uhid) ? selectedPatient.uhid : null;
-
             // 1. Create Sale
             const { data: sale, error: saleError } = await supabase
                 .from('pharmacy_sales')
                 .insert({
                     customer_name: selectedPatient ? selectedPatient.name : 'Walk-in Customer',
                     customer_phone: selectedPatient ? selectedPatient.number.toString() : null,
-                    patient_id: validPatientUUID,
-                    // Store the actual UHID string in notes if it's not a UUID and can't be stored in patient_id
-                    notes: selectedPatient && !validPatientUUID ? `UHID: ${selectedPatient.uhid}` : null,
+                    patient_id: selectedPatient?.uhid || null,
+                    doctor_name: selectedDoctor,
+                    notes: null,
                     subtotal: calculateSubtotal(),
                     discount_amount: discountAmount,
                     curr_total: calculateFinalTotal(),
@@ -221,6 +229,10 @@ export default function PharmacyBillingPage() {
             setSelectedPatient(null)
             setPatientSearch('')
             setDiscountAmount(0)
+            setSelectedDoctor('') // Reset doctor
+
+            // Open Bill
+            window.open(`/pharmacy/bill/${sale.id}`, '_blank')
 
         } catch (error) {
             console.error('Checkout failed', error)
@@ -516,6 +528,28 @@ export default function PharmacyBillingPage() {
                                 <div className="text-sm text-gray-600">{selectedPatient.age} Y / {selectedPatient.gender}</div>
                             </div>
                         )}
+                    </CardContent>
+                </Card>
+
+                {/* Doctor Selection */}
+                <Card className="border-0 shadow-sm">
+                    <CardHeader className="py-2 px-3 bg-purple-50 rounded-t-lg">
+                        <CardTitle className="text-sm flex items-center text-purple-800">
+                            Referral Doctor
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3">
+                        <Select value={selectedDoctor} onValueChange={setSelectedDoctor}>
+                            <SelectTrigger className="h-9">
+                                <SelectValue placeholder="Select Doctor" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Self">Self / None</SelectItem>
+                                {doctors.map(doc => (
+                                    <SelectItem key={doc.id} value={doc.name}>{doc.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </CardContent>
                 </Card>
 

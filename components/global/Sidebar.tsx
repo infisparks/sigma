@@ -81,10 +81,11 @@ const pathologyMenuItems = [
   {
     icon: Pill,
     label: 'Pharmacy',
-    roles: ['admin', 'staff'],
+    roles: ['admin', 'staff', 'pharmacy'],
     submenu: [
       { title: 'Dashboard', href: '/pharmacy/dashboard' },
       { title: 'Billing / POS', href: '/pharmacy/billing' },
+      { title: 'Sales History', href: '/pharmacy/sales' },
       { title: 'Inventory', href: '/pharmacy/inventory' },
       { title: 'Vendors', href: '/pharmacy/vendors' },
       { title: 'Purchases', href: '/pharmacy/purchases' },
@@ -94,7 +95,7 @@ const pathologyMenuItems = [
     icon: LogOut,
     label: 'Logout',
     href: 'logout-action',
-    roles: ['admin', 'technician', 'phlebo', 'staff', 'doctor']
+    roles: ['admin', 'technician', 'phlebo', "pharmacy", 'staff', 'doctor']
   },
 ];
 

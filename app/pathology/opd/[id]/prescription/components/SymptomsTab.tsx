@@ -92,6 +92,7 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
                     list.forEach((item: any) => {
                         record[item.name] = {
                             ...item,
+                            customGroups: item.customGroups || [],
                             selectedCustomOptions: new Set(item.selectedCustomOptions || [])
                         };
                     });
@@ -102,6 +103,7 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
                 const parseLocalJSON = (jsonStr: string) => {
                     const parsed = JSON.parse(jsonStr);
                     for (const key in parsed) {
+                        parsed[key].customGroups = parsed[key].customGroups || [];
                         parsed[key].selectedCustomOptions = new Set(parsed[key].selectedCustomOptions || []);
                     }
                     return parsed;
@@ -203,7 +205,7 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
 
     const addCustomGroup = (group: CustomOptionGroup) => {
         if (!selectedSymptomForDetail) return;
-        const currentGroups = [...selectedSymptomDetails[selectedSymptomForDetail].customGroups, group];
+        const currentGroups = [...(selectedSymptomDetails[selectedSymptomForDetail].customGroups || []), group];
         updateDetail(selectedSymptomForDetail, 'customGroups', currentGroups);
     };
 
@@ -450,7 +452,7 @@ function DetailPanel({ detail, isSym, onUpdate, onRemove, onToggleCustom, onAddG
                         </button>
                     </div>
 
-                    {detail.customGroups.length === 0 ? (
+                    {(detail.customGroups || []).length === 0 ? (
                         <div className="p-4 border border-dashed border-slate-300 rounded-lg text-center">
                             <p className="text-[10px] text-slate-400 italic">No custom parameters.</p>
                         </div>
