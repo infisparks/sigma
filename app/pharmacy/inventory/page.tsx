@@ -123,11 +123,16 @@ export default function InventoryPage() {
             const { data, error } = await supabase
                 .from('medicine')
                 .select('*')
-                .ilike('name', `%${masterSearch}%`)
+                .ilike('name', `${masterSearch}%`)
                 .limit(20)
 
             if (error) throw error
-            setMasterResults(data || [])
+
+            const sortedData = (data || []).sort((a: MasterMedicine, b: MasterMedicine) => {
+                return a.name.length - b.name.length
+            })
+
+            setMasterResults(sortedData)
         } catch (error) {
             console.error('Search failed:', error)
         } finally {

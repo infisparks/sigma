@@ -16,11 +16,11 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import {
-    Search, Plus, User, ShoppingCart, Trash2, CreditCard, Printer, UserPlus
+    Search, Plus, User, ShoppingCart, Trash2, CreditCard, UserPlus
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { format } from 'date-fns'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { format, subYears, subMonths, subDays } from 'date-fns'
 
 // Types
 interface InventoryItem {
@@ -55,7 +55,7 @@ export default function PharmacyBillingPage() {
 
     // Cart
     const [cart, setCart] = useState<CartItem[]>([])
-    const [discountPercent, setDiscountPercent] = useState(0)
+    const [discountAmount, setDiscountAmount] = useState(0)
 
     // Patient
     const [patientSearch, setPatientSearch] = useState('')
@@ -64,8 +64,16 @@ export default function PharmacyBillingPage() {
     const [isPatientSearchOpen, setIsPatientSearchOpen] = useState(false)
 
     // New Patient
-    const [newPatientOpen, setNewPatientOpen] = useState(false)
-    const [newPatientData, setNewPatientData] = useState({ name: '', number: '', age: '', gender: 'male', title: 'MR' })
+    const [isRegisterMode, setIsRegisterMode] = useState(false)
+    const [newPatientData, setNewPatientData] = useState({
+        title: 'MR',
+        name: '',
+        number: '',
+        age: '',
+        age_unit: 'year',
+        gender: 'Male',
+        address: ''
+    })
 
     // Checkout
     const [checkoutLoading, setCheckoutLoading] = useState(false)
@@ -147,8 +155,7 @@ export default function PharmacyBillingPage() {
     }
 
     const calculateSubtotal = () => cart.reduce((acc, item) => acc + item.total, 0)
-    const calculateDiscount = () => (calculateSubtotal() * discountPercent) / 100
-    const calculateFinalTotal = () => calculateSubtotal() - calculateDiscount()
+    const calculateFinalTotal = () => Math.max(0, calculateSubtotal() - discountAmount)
 
     const handleCheckout = async () => {
         if (cart.length === 0) {
@@ -175,7 +182,7 @@ export default function PharmacyBillingPage() {
                     // Store the actual UHID string in notes if it's not a UUID and can't be stored in patient_id
                     notes: selectedPatient && !validPatientUUID ? `UHID: ${selectedPatient.uhid}` : null,
                     subtotal: calculateSubtotal(),
-                    discount_amount: calculateDiscount(),
+                    discount_amount: discountAmount,
                     curr_total: calculateFinalTotal(),
                     payment_method: 'cash',
                     status: 'completed'
@@ -213,7 +220,7 @@ export default function PharmacyBillingPage() {
             setCart([])
             setSelectedPatient(null)
             setPatientSearch('')
-            setDiscountPercent(0)
+            setDiscountAmount(0)
 
         } catch (error) {
             console.error('Checkout failed', error)
@@ -224,19 +231,64 @@ export default function PharmacyBillingPage() {
     }
 
     const handleCreatePatient = async () => {
-        // Quick register logic similiar to patient-entry
-        // Assuming simple insert to patient_detail or minimal requirements
-        // For demo/simplicity, I will just set selectedPatient locally as "New User" 
-        // real implementation requires generating UHID.
-        alert('For full registration, please use the Patient Entry module. Using Walk-in mode with name.')
-        setSelectedPatient({
-            uhid: 'WALKIN-' + Date.now(),
-            name: newPatientData.name.toUpperCase(),
-            number: Number(newPatientData.number),
-            age: Number(newPatientData.age),
-            gender: newPatientData.gender
-        })
-        setNewPatientOpen(false)
+        // Validation
+        if (!newPatientData.name || !newPatientData.number || !newPatientData.age) {
+            alert('Please fill Name, Number, and Age')
+            return
+        }
+
+        try {
+            // Calculate DOB
+            const ageVal = parseInt(newPatientData.age)
+            let dobDate = new Date()
+            if (newPatientData.age_unit === 'year') dobDate = subYears(new Date(), ageVal)
+            else if (newPatientData.age_unit === 'month') dobDate = subMonths(new Date(), ageVal)
+            else if (newPatientData.age_unit === 'day') dobDate = subDays(new Date(), ageVal)
+
+            const payload = {
+                title: newPatientData.title,
+                name: newPatientData.name,
+                number: parseInt(newPatientData.number),
+                age: ageVal,
+                age_unit: newPatientData.age_unit,
+                gender: newPatientData.gender,
+                dob: format(dobDate, 'yyyy-MM-dd'),
+                address: newPatientData.address,
+                // created_at, uhid, total_day handled by DB/Triggers
+            }
+
+            const { data, error } = await supabase
+                .from('patient_detail')
+                .insert([payload])
+                .select()
+                .single()
+
+            if (error) throw error
+
+            setSelectedPatient({
+                uhid: data.uhid,
+                name: data.name,
+                number: data.number,
+                age: data.age,
+                gender: data.gender
+            })
+            setIsRegisterMode(false)
+            // Reset form
+            setNewPatientData({
+                title: 'MR',
+                name: '',
+                number: '',
+                age: '',
+                age_unit: 'Years',
+                gender: 'Male',
+                address: ''
+            })
+            alert(`Patient Registered Successfully! UHID: ${data.uhid}`)
+
+        } catch (error: any) {
+            console.error('Error creating patient:', error)
+            alert('Failed to register patient: ' + error.message)
+        }
     }
 
     return (
@@ -244,7 +296,7 @@ export default function PharmacyBillingPage() {
             {/* Left Column: POS Interface */}
             <div className="flex-1 flex flex-col gap-2">
                 {/* Search Bar */}
-                <Card className="p-3 bg-white border-0 shadow-sm">
+                <Card className="p-3 bg-white border-0 shadow-sm overflow-visible z-50">
                     <div className="relative">
                         <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                         <Input
@@ -253,37 +305,40 @@ export default function PharmacyBillingPage() {
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                         />
-                    </div>
-                    {searchResults.length > 0 && (
-                        <div className="absolute top-16 left-2 right-2 md:right-1/3 bg-white shadow-xl border rounded-md z-20 max-h-60 overflow-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Batch</TableHead>
-                                        <TableHead>Stock</TableHead>
-                                        <TableHead>MRP</TableHead>
-                                        <TableHead></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {searchResults.map(item => (
-                                        <TableRow key={item.id} className="hover:bg-blue-50 cursor-pointer" onClick={() => addToCart(item)}>
-                                            <TableCell className="font-medium">{item.name}</TableCell>
-                                            <TableCell>{item.batch_number}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={item.current_stock < 5 ? 'destructive' : 'outline'}>
-                                                    {item.current_stock}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>₹{item.mrp}</TableCell>
-                                            <TableCell><Plus className="h-4 w-4 text-blue-600" /></TableCell>
+                        {searchResults.length > 0 && (
+                            <div className="absolute top-12 left-0 w-full bg-white shadow-2xl border rounded-md z-50 max-h-[300px] overflow-auto">
+                                <Table>
+                                    <TableHeader className="bg-gray-50 sticky top-0 z-10">
+                                        <TableRow>
+                                            <TableHead>Name</TableHead>
+                                            <TableHead className="w-[100px]">Batch</TableHead>
+                                            <TableHead className="w-[80px]">Stock</TableHead>
+                                            <TableHead className="w-[80px]">MRP</TableHead>
+                                            <TableHead className="w-[50px]"></TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
+                                    </TableHeader>
+                                    <TableBody>
+                                        {searchResults.map(item => (
+                                            <TableRow key={item.id} className="hover:bg-blue-50 cursor-pointer" onClick={() => addToCart(item)}>
+                                                <TableCell className="font-medium max-w-[200px] truncate" title={item.name}>
+                                                    {item.name}
+                                                    <div className="text-xs text-gray-500 truncate">{item.pack_size_label}</div>
+                                                </TableCell>
+                                                <TableCell className="whitespace-nowrap">{item.batch_number}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={item.current_stock < 5 ? 'destructive' : 'outline'}>
+                                                        {item.current_stock}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>₹{item.mrp}</TableCell>
+                                                <TableCell><Plus className="h-4 w-4 text-blue-600" /></TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </div>
                 </Card>
 
                 {/* Cart List */}
@@ -357,53 +412,101 @@ export default function PharmacyBillingPage() {
                     </CardHeader>
                     <CardContent className="pt-4 space-y-4">
                         {!selectedPatient ? (
-                            <div className="relative">
-                                <Label className="mb-1 block">Search Patient</Label>
-                                <div className="flex gap-2">
-                                    <Input
-                                        placeholder="Name / Phone / UHID"
-                                        value={patientSearch}
-                                        onChange={e => setPatientSearch(e.target.value)}
-                                    />
-                                    <Dialog open={newPatientOpen} onOpenChange={setNewPatientOpen}>
-                                        <DialogTrigger asChild>
-                                            <Button size="icon" variant="outline"><UserPlus className="h-4 w-4" /></Button>
-                                        </DialogTrigger>
-                                        <DialogContent>
-                                            <DialogHeader><DialogTitle>New Patient (Quick)</DialogTitle></DialogHeader>
-                                            <div className="grid gap-4 py-4">
-                                                <div className="grid grid-cols-4 gap-4 items-center">
-                                                    <Label className="text-right">Name</Label>
-                                                    <Input className="col-span-3" value={newPatientData.name} onChange={e => setNewPatientData({ ...newPatientData, name: e.target.value })} />
-                                                </div>
-                                                <div className="grid grid-cols-4 gap-4 items-center">
-                                                    <Label className="text-right">Phone</Label>
-                                                    <Input className="col-span-3" value={newPatientData.number} onChange={e => setNewPatientData({ ...newPatientData, number: e.target.value })} />
-                                                </div>
-                                                <div className="grid grid-cols-4 gap-4 items-center">
-                                                    <Label className="text-right">Age</Label>
-                                                    <Input className="col-span-3" value={newPatientData.age} onChange={e => setNewPatientData({ ...newPatientData, age: e.target.value })} />
-                                                </div>
-                                            </div>
-                                            <Button onClick={handleCreatePatient}>Add Temporary</Button>
-                                        </DialogContent>
-                                    </Dialog>
-                                </div>
-                                {isPatientSearchOpen && patientHints.length > 0 && (
-                                    <div className="absolute w-full bg-white border rounded shadow-lg z-20 mt-1 max-h-40 overflow-auto">
-                                        {patientHints.map(p => (
-                                            <div
-                                                key={p.uhid}
-                                                className="p-2 hover:bg-gray-50 cursor-pointer border-b text-sm"
-                                                onClick={() => { setSelectedPatient(p); setPatientSearch(''); setIsPatientSearchOpen(false); }}
-                                            >
-                                                <div className="font-bold text-blue-600">{p.name}</div>
-                                                <div className="text-gray-500 text-xs">{p.number} • {p.age}/{p.gender}</div>
-                                            </div>
-                                        ))}
+                            isRegisterMode ? (
+                                <div className="space-y-3 animate-in fade-in slide-in-from-right-5 duration-300">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h3 className="font-semibold text-sm">New Registration</h3>
+                                        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setIsRegisterMode(false)}>Cancel</Button>
                                     </div>
-                                )}
-                            </div>
+
+                                    <div className="grid grid-cols-4 gap-2">
+                                        <div className="col-span-1">
+                                            <Label className="text-xs">Title</Label>
+                                            <Select value={newPatientData.title} onValueChange={(val) => setNewPatientData({ ...newPatientData, title: val })}>
+                                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    {['MR', 'MRS', 'MS', 'BABY', 'MASTER', 'DR'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="col-span-3">
+                                            <Label className="text-xs">Name</Label>
+                                            <Input className="h-8 text-xs" placeholder="Full Name" value={newPatientData.name} onChange={e => setNewPatientData({ ...newPatientData, name: e.target.value })} />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <Label className="text-xs">Phone</Label>
+                                            <Input className="h-8 text-xs" type="number" placeholder="Mobile" value={newPatientData.number} onChange={e => setNewPatientData({ ...newPatientData, number: e.target.value })} />
+                                        </div>
+                                        <div>
+                                            <Label className="text-xs">Gender</Label>
+                                            <Select value={newPatientData.gender} onValueChange={(val) => setNewPatientData({ ...newPatientData, gender: val })}>
+                                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Male">Male</SelectItem>
+                                                    <SelectItem value="Female">Female</SelectItem>
+                                                    <SelectItem value="Other">Other</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <div className="w-1/3">
+                                            <Label className="text-xs">Age</Label>
+                                            <Input className="h-8 text-xs" type="number" placeholder="Age" value={newPatientData.age} onChange={e => setNewPatientData({ ...newPatientData, age: e.target.value })} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <Label className="text-xs">Unit</Label>
+                                            <Select value={newPatientData.age_unit} onValueChange={(val) => setNewPatientData({ ...newPatientData, age_unit: val })}>
+                                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="year">Year</SelectItem>
+                                                    <SelectItem value="month">Month</SelectItem>
+                                                    <SelectItem value="day">Day</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <Label className="text-xs">Address</Label>
+                                        <Input className="h-8 text-xs" placeholder="City / Area" value={newPatientData.address} onChange={e => setNewPatientData({ ...newPatientData, address: e.target.value })} />
+                                    </div>
+
+                                    <Button className="w-full h-8 mt-2" size="sm" onClick={handleCreatePatient}>Register & Add</Button>
+                                </div>
+                            ) : (
+                                <div className="relative">
+                                    <Label className="mb-1 block">Search Patient</Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            placeholder="Name / Phone / UHID"
+                                            value={patientSearch}
+                                            onChange={e => setPatientSearch(e.target.value)}
+                                        />
+                                        <Button size="icon" variant="outline" onClick={() => setIsRegisterMode(true)}>
+                                            <UserPlus className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    {isPatientSearchOpen && patientHints.length > 0 && (
+                                        <div className="absolute w-full bg-white border rounded shadow-lg z-20 mt-1 max-h-40 overflow-auto">
+                                            {patientHints.map(p => (
+                                                <div
+                                                    key={p.uhid}
+                                                    className="p-2 hover:bg-gray-50 cursor-pointer border-b text-sm"
+                                                    onClick={() => { setSelectedPatient(p); setPatientSearch(''); setIsPatientSearchOpen(false); }}
+                                                >
+                                                    <div className="font-bold text-blue-600">{p.name}</div>
+                                                    <div className="text-gray-500 text-xs">{p.number} • {p.age}/{p.gender}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )
                         ) : (
                             <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 relative">
                                 <div className="absolute top-2 right-2 cursor-pointer text-gray-400" onClick={() => setSelectedPatient(null)}><Trash2 className="h-4 w-4" /></div>
@@ -427,17 +530,17 @@ export default function PharmacyBillingPage() {
                             <span className="font-medium">₹{calculateSubtotal()}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm">
-                            <span className="text-gray-500">Discount (%)</span>
+                            <span className="text-gray-500">Discount (₹)</span>
                             <Input
                                 type="number"
                                 className="w-20 h-8 text-right"
-                                value={discountPercent}
-                                onChange={e => setDiscountPercent(Number(e.target.value))}
+                                value={discountAmount}
+                                onChange={e => setDiscountAmount(Number(e.target.value))}
                             />
                         </div>
                         <div className="flex justify-between text-sm text-green-600">
                             <span>Discount Amount</span>
-                            <span>- ₹{calculateDiscount().toFixed(2)}</span>
+                            <span>- ₹{discountAmount.toFixed(2)}</span>
                         </div>
                         <Separator />
                         <div className="flex justify-between text-2xl font-bold text-gray-900">
@@ -457,9 +560,7 @@ export default function PharmacyBillingPage() {
                                 </>
                             )}
                         </Button>
-                        <Button variant="outline" className="w-full">
-                            <Printer className="mr-2 h-4 w-4" /> Print Last Bill
-                        </Button>
+
                     </CardFooter>
                 </Card>
             </div>
