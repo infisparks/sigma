@@ -127,7 +127,7 @@ export function DashboardModals({
       };
 
       // 7. Send using the new endpoint and headers
-      const res = await fetch("https://evo.infispark.in/message/sendMedia/Cigma", { // <-- NEW URL
+      const res = await fetch("https://evo.infispark.in/message/sendMedia/cigma", { // <-- NEW URL
         method: "POST",
         headers: {
           "Content-Type": "application/json",

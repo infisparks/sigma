@@ -662,7 +662,7 @@ export default function EditPatientPage() {
           };
 
           // 4. Send asynchronously (using fetch, no need to await in a way that blocks UI)
-          fetch("https://evo.infispark.in/message/sendText/Cigma", {
+          fetch("https://evo.infispark.in/message/sendText/cigma", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

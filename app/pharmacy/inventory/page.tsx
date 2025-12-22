@@ -14,7 +14,7 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import {
-    Plus, Search, ArrowLeft, Trash2, Save, BatteryLow, Package, RefreshCw
+    Plus, Search, ArrowLeft, Trash2, Save, BatteryLow, Package, RefreshCw, Edit
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -84,6 +84,10 @@ export default function InventoryPage() {
         batch_number: '',
         expiry_date: ''
     })
+
+    // Price Update State
+    const [editPriceItem, setEditPriceItem] = useState<InventoryItem | null>(null)
+    const [newMrp, setNewMrp] = useState('')
 
     useEffect(() => {
         fetchInventory()
@@ -268,6 +272,32 @@ export default function InventoryPage() {
         } catch (error) {
             console.error('Stock update failed:', error)
             alert('Failed to update stock')
+        }
+    }
+
+    // --- Price Update Logic ---
+    const openEditPrice = (item: InventoryItem) => {
+        setEditPriceItem(item)
+        setNewMrp(item.mrp.toString())
+    }
+
+    const handleUpdateMrp = async () => {
+        if (!editPriceItem || !newMrp) return
+
+        try {
+            const { error } = await supabase
+                .from('pharmacy_inventory')
+                .update({ mrp: parseFloat(newMrp) })
+                .eq('id', editPriceItem.id)
+
+            if (error) throw error
+
+            alert('MRP Updated Successfully')
+            setEditPriceItem(null)
+            fetchInventory()
+        } catch (error) {
+            console.error('Error updating MRP:', error)
+            alert('Failed to update MRP')
         }
     }
 
@@ -558,14 +588,25 @@ export default function InventoryPage() {
                                             </TableCell>
                                             <TableCell className="text-right font-medium">₹{item.mrp}</TableCell>
                                             <TableCell className="text-right">
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    onClick={() => openStockUpdate(item)}
-                                                >
-                                                    <RefreshCw className="mr-2 h-3 w-3" /> Update Stock
-                                                </Button>
+                                                <div className="flex justify-end gap-2">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        onClick={() => openEditPrice(item)}
+                                                        title="Update MRP"
+                                                    >
+                                                        <Edit className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        onClick={() => openStockUpdate(item)}
+                                                    >
+                                                        <RefreshCw className="mr-2 h-3 w-3" /> Update Stock
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -660,6 +701,34 @@ export default function InventoryPage() {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setStockUpdateItem(null)}>Cancel</Button>
                         <Button onClick={handleStockUpdateSubmit} className="bg-blue-600 hover:bg-blue-700">Confirm Update</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            {/* MRP Update Dialog */}
+            <Dialog open={!!editPriceItem} onOpenChange={(open) => !open && setEditPriceItem(null)}>
+                <DialogContent className="sm:max-w-[400px]">
+                    <DialogHeader>
+                        <DialogTitle>Update MRP Price</DialogTitle>
+                        <DialogDescription>
+                            Update the selling price (MRP) for <strong>{editPriceItem?.name}</strong>.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {editPriceItem && (
+                        <div className="grid gap-4 py-4">
+                            <div className="space-y-2">
+                                <Label>New MRP</Label>
+                                <Input
+                                    type="number"
+                                    placeholder="Enter new MRP"
+                                    value={newMrp}
+                                    onChange={e => setNewMrp(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditPriceItem(null)}>Cancel</Button>
+                        <Button onClick={handleUpdateMrp} className="bg-blue-600 hover:bg-blue-700">Update MRP</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
