@@ -81,8 +81,14 @@ const pathologyMenuItems = [
   {
     icon: Pill,
     label: 'Pharmacy',
-    href: '/pathology/pharmacy',
-    roles: ['admin']
+    roles: ['admin', 'staff'],
+    submenu: [
+      { title: 'Dashboard', href: '/pharmacy/dashboard' },
+      { title: 'Billing / POS', href: '/pharmacy/billing' },
+      { title: 'Inventory', href: '/pharmacy/inventory' },
+      { title: 'Vendors', href: '/pharmacy/vendors' },
+      { title: 'Purchases', href: '/pharmacy/purchases' },
+    ]
   },
   {
     icon: LogOut,
@@ -217,7 +223,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
       title: item.label,
       icon: item.icon,
       href: item.href,
-      submenu: [] // Flattened structure for cleaner UI
+      submenu: (item as any).submenu || [] // Preserve submenu if exists
     }));
 
   // Create refs for menu buttons (kept for compatibility if you add submenus later)
