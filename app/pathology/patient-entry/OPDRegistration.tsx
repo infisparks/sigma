@@ -19,7 +19,7 @@ import { openUniversalBillInNewTabProgrammatically, type UniversalBillData, type
 // --- Component Types & Constants ---
 
 const TABLE = {
-  OPD_REGISTRATION: "opd_registration", 
+    OPD_REGISTRATION: "opd_registration",
 } as const;
 
 interface DoctorFee extends DoctorLite {
@@ -38,22 +38,22 @@ interface OPDData {
     paymentEntries: any[];
 }
 
-interface CommonRegDetails { 
-    hospitalName: string; visitType: any; doctorName: string; tpa: any; 
-    registrationDate: string; registrationTime: string; sendWhatsApp: any; 
-    sourceOpdId: number | null; sourceIpdId: number | null; 
+interface CommonRegDetails {
+    hospitalName: string; visitType: any; doctorName: string; tpa: any;
+    registrationDate: string; registrationTime: string; sendWhatsApp: any;
+    sourceOpdId: number | null; sourceIpdId: number | null;
 }
-interface PatientData { 
-    uhid: string; name: string; contact: string; age: number; 
-    dayType: "year" | "month" | "day"; title: string; address?: string; gender: string; 
+interface PatientData {
+    uhid: string; name: string; contact: string; age: number;
+    dayType: "year" | "month" | "day"; title: string; address?: string; gender: string;
 }
 
-interface OPDRegFormFields extends CommonRegDetails, OPDData {}
+interface OPDRegFormFields extends CommonRegDetails, OPDData { }
 
 interface OPDProps {
     patientData: PatientData;
     isExistingPatient: boolean;
-    doctorList: DoctorFee[]; 
+    doctorList: DoctorFee[];
     opdData: OPDData;
     setOpdData: (data: OPDData) => void;
     commonRegDetails: CommonRegDetails;
@@ -63,15 +63,15 @@ interface OPDProps {
 
 // --- Helper Functions (DB interaction) ---
 function throwIfError(error: any) { if (error) throw error; }
-const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => { 
+const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => {
     // Simplified retry logic, returns the function execution result
-    return fn() 
+    return fn()
 }
 
 // 🟢 REAL SUPABASE INSERTION FUNCTION
 const insertOPDRegistration = async (data: any): Promise<number> => {
     // We use withRetry helper for robustness
-    const { data: newP, error: insertErr } = await withRetry(async () => 
+    const { data: newP, error: insertErr } = await withRetry(async () =>
         supabase
             .from(TABLE.OPD_REGISTRATION)
             .insert(data)
@@ -83,7 +83,7 @@ const insertOPDRegistration = async (data: any): Promise<number> => {
         console.error("Supabase Error during OPD insert:", insertErr);
         throw new Error(insertErr.message || "Failed to save OPD registration to database.");
     }
-    
+
     const registrationId = newP?.id;
     if (!registrationId) {
         throw new Error("Database failed to return the new registration ID.");
@@ -99,7 +99,7 @@ function safeTime12ToISO(dateString: string, time12String: string): string {
         let [hh, mm] = time.split(":").map(Number);
         if (mer === "PM" && hh < 12) hh += 12;
         if (mer === "AM" && hh === 12) hh = 0;
-        
+
         if (isNaN(hh) || isNaN(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) {
             console.warn("Invalid time input, falling back to current time.");
             return new Date().toISOString();
@@ -115,19 +115,63 @@ function safeTime12ToISO(dateString: string, time12String: string): string {
 }
 
 
+
+// 🟢 UPDATED: WhatsApp Sender Function
+const sendWhatsAppNotification = async (
+    contactNumber: string,
+    patientName: string,
+    regId: number,
+    estTimeDuration: string,
+    testNames: string,
+    financials: { total: number, paid: number, balance: number }
+): Promise<void> => {
+    const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || "";
+
+    if (!apiKey) {
+        console.warn("⚠️ WhatsApp API Key missing. Notification skipped.");
+        return;
+    }
+
+    const messageText = `Dear *${patientName}*,\n\nThank you for visiting Cigma Clinic.\n\n*OPD Registration Confirmed*\n🆔 Reg ID: *${regId}*\n👨‍⚕️ Service: ${testNames}\n\n*Payment Summary:*\n💰 Total: ₹${financials.total.toFixed(2)}\n✅ Paid: ₹${financials.paid.toFixed(2)}\n⚠️ Balance: ₹${financials.balance.toFixed(2)}\n\nThank you!`;
+
+    try {
+        const response = await fetch("https://evo.infispark.in/message/sendText/cigma", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "apikey": apiKey
+            },
+            body: JSON.stringify({
+                number: `91${contactNumber}`,
+                text: messageText
+            }),
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            console.error("❌ WhatsApp API Error:", errData);
+        } else {
+            console.log(`✅ WhatsApp sent to ${contactNumber}`);
+        }
+    } catch (error) {
+        console.error("❌ WhatsApp Network Error:", error);
+    }
+};
+
+
 const OPDRegistration: React.FC<OPDProps> = ({
     patientData, isExistingPatient, doctorList,
     opdData, setOpdData,
     commonRegDetails, setCommonRegDetails,
     onSuccess,
 }) => {
-    
+
     const defaultRHFValues: OPDRegFormFields = useMemo(() => ({
         ...commonRegDetails,
         ...opdData,
     }), [commonRegDetails, opdData]);
 
-    const { 
+    const {
         control, watch, setValue, handleSubmit, reset,
         formState: { isSubmitting, errors },
     } = useForm<OPDRegFormFields>({ defaultValues: defaultRHFValues });
@@ -139,40 +183,40 @@ const OPDRegistration: React.FC<OPDProps> = ({
     React.useEffect(() => {
         const { treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, discountAmount, paymentEntries, ...regDetails } = watchFields;
         setOpdData({ treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, discountAmount, paymentEntries });
-        
+
         // Sync CommonRegDetails (DoctorName here refers to the treating doctor's name)
         const doctor = doctorList.find(d => String(d.id) === String(treatingDoctorId));
-        setCommonRegDetails("doctorName", doctor?.doctor_name || ""); 
-        
+        setCommonRegDetails("doctorName", doctor?.doctor_name || "");
+
         (Object.keys(regDetails) as Array<keyof CommonRegDetails>).forEach((key) => {
-             // @ts-ignore
-             setCommonRegDetails(key, regDetails[key]); 
+            // @ts-ignore
+            setCommonRegDetails(key, regDetails[key]);
         });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [JSON.stringify(watchFields), setOpdData, setCommonRegDetails]);
 
     const watchTreatingDoctorId = watch("treatingDoctorId");
     const watchVisitCategory = watch("visitCategory");
-    const watchVisitType = watch("visitType"); 
+    const watchVisitType = watch("visitType");
     const discountAmount = watch("discountAmount") || 0;
     const paymentEntries = watch("paymentEntries") || [];
 
     // --- Pricing Logic ---
-    const treatingDoctor = useMemo(() => 
+    const treatingDoctor = useMemo(() =>
         doctorList.find(d => String(d.id) === String(watchTreatingDoctorId)),
         [doctorList, watchTreatingDoctorId]
     );
 
     const totalFees = useMemo(() => {
         if (!treatingDoctor) return 0;
-        return watchVisitCategory === 'Follow Up' 
-            ? treatingDoctor.follow_up_fee || 0 
+        return watchVisitCategory === 'Follow Up'
+            ? treatingDoctor.follow_up_fee || 0
             : treatingDoctor.first_visit_fee || 0;
     }, [treatingDoctor, watchVisitCategory]);
 
     const totalPaid = paymentEntries.reduce((s: number, p: any) => s + (p.amount || 0), 0);
     const remainingAmount = totalFees - discountAmount - totalPaid;
-    
+
     const addPaymentEntry = () => {
         // Set default amount to null/undefined so the input box is visually empty
         appendPayment({ amount: null, paymentMode: "cash", time: new Date().toISOString() });
@@ -181,12 +225,12 @@ const OPDRegistration: React.FC<OPDProps> = ({
     // --- ON SUBMIT HANDLER ---
     const onSubmit: SubmitHandler<OPDRegFormFields> = async (data) => {
         if (!isExistingPatient || !patientData.uhid) {
-             alert("Please select or register the patient first."); 
-             return; 
+            alert("Please select or register the patient first.");
+            return;
         }
         if (!data.treatingDoctorId) { alert("Please select the Treating Doctor."); return; }
         if (!data.visitCategory) { alert("Please select the Visit Type (First Visit/Follow Up)."); return; }
-        
+
         // Use safe time conversion
         const isoTime = safeTime12ToISO(data.registrationDate, data.registrationTime);
         const finalPaymentEntries = data.paymentEntries.filter(p => p.amount > 0);
@@ -194,7 +238,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
         const doctorName = treatingDoctor?.doctor_name || data.doctorName;
 
         try {
-            
+
             // 1. Prepare Insertion Data
             const dataToInsert = {
                 uhid: patientData.uhid,
@@ -205,23 +249,23 @@ const OPDRegistration: React.FC<OPDProps> = ({
                 source_opd_id: data.sourceOpdId,
                 source_ipd_id: data.sourceIpdId,
                 treating_doctor_id: Number(data.treatingDoctorId),
-                referring_doctor_name: data.referringDoctorName || doctorName, 
+                referring_doctor_name: data.referringDoctorName || doctorName,
                 visit_category: data.visitCategory,
                 total_fees: totalFees,
                 bp: data.bp || null,
                 pulse: data.pulse || null,
                 weight: data.weight || null,
                 discount_amount: data.discountAmount,
-                amount_paid: finalTotalPaid, 
+                amount_paid: finalTotalPaid,
                 payment_entries: finalPaymentEntries,
                 created_at: isoTime,
             };
 
             // 2. 🚨 ACTUAL SUPABASE INSERTION
-            const registrationId = await insertOPDRegistration(dataToInsert); 
-            
+            const registrationId = await insertOPDRegistration(dataToInsert);
+
             // 3. GENERATE AND OPEN BILL
-            
+
             const serviceItems: BillServiceItem[] = [{
                 type: 'OPD',
                 name: `${doctorName} Consultation (${data.visitCategory})`,
@@ -238,18 +282,34 @@ const OPDRegistration: React.FC<OPDProps> = ({
                 referredBy: data.referringDoctorName || doctorName,
                 discount: data.discountAmount,
                 services: serviceItems,
-                paymentEntries: finalPaymentEntries.map(p => ({ 
-                    amount: p.amount, 
-                    paymentMode: p.paymentMode.toLowerCase() as 'online' | 'cash' | 'card', 
-                    time: new Date().toISOString() 
+                paymentEntries: finalPaymentEntries.map(p => ({
+                    amount: p.amount,
+                    paymentMode: p.paymentMode.toLowerCase() as 'online' | 'cash' | 'card',
+                    time: new Date().toISOString()
                 })),
                 sendWhatsApp: data.sendWhatsApp
             };
 
             await openUniversalBillInNewTabProgrammatically(billData, doctorList.map(d => ({ id: d.id, doctor_name: d.doctor_name } as DoctorLite)));
-            
+
+            // 4. 🟢 SEND WHATSAPP
+            if (data.sendWhatsApp && patientData.contact) {
+                const contactNumber = String(patientData.contact);
+                const estTimeDuration = "30 Minutes"; // Default for OPD
+                const testNameList = `${doctorName} Consultation (${data.visitCategory})`;
+
+                await sendWhatsAppNotification(
+                    contactNumber,
+                    patientData.name,
+                    registrationId,
+                    estTimeDuration,
+                    testNameList,
+                    { total: totalFees, paid: finalTotalPaid, balance: remainingAmount }
+                );
+            }
+
             alert(`OPD Registration successful (ID: ${registrationId}) ✅`);
-            
+
             // 4. CLEAR FORM: Reset component-specific fields
             reset({
                 ...defaultRHFValues,
@@ -257,8 +317,8 @@ const OPDRegistration: React.FC<OPDProps> = ({
                 discountAmount: 0,
                 paymentEntries: [],
             });
-            
-            onSuccess(); 
+
+            onSuccess();
 
         } catch (err: any) {
             console.error("Unexpected error:", err);
@@ -282,8 +342,8 @@ const OPDRegistration: React.FC<OPDProps> = ({
                         {/* 1. Treating Doctor (for fees) */}
                         <div className="col-span-4">
                             <Label className="text-sm">Treating Doctor *</Label>
-                            <Select 
-                                value={String(watchTreatingDoctorId || '')} 
+                            <Select
+                                value={String(watchTreatingDoctorId || '')}
                                 onValueChange={(v) => setValue("treatingDoctorId", Number(v) || null)}
                                 disabled={!isExistingPatient}
                             >
@@ -298,12 +358,12 @@ const OPDRegistration: React.FC<OPDProps> = ({
                             </Select>
                             {errors.treatingDoctorId && <p className="text-red-500 text-xs mt-1">Required</p>}
                         </div>
-                        
+
                         {/* 2. Visit Category (for fees) */}
                         <div className="col-span-3">
                             <Label className="text-sm">Visit Type *</Label>
-                            <Select 
-                                value={watchVisitCategory} 
+                            <Select
+                                value={watchVisitCategory}
                                 onValueChange={(v) => setValue("visitCategory", v as 'First Visit' | 'Follow Up')}
                                 disabled={!isExistingPatient}
                             >
@@ -314,20 +374,20 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                 </SelectContent>
                             </Select>
                         </div>
-                        
+
                         {/* 3. Fee Display */}
                         <div className="col-span-2">
                             <Label className="text-sm">Fee (Total)</Label>
                             <Input type="text" value={`₹${totalFees.toFixed(2)}`} readOnly className="h-8 font-bold bg-blue-100 cursor-not-allowed" />
                         </div>
-                        
+
                         {/* 4. Referring Doctor (Text input) */}
                         <div className="col-span-3">
                             <Label className="text-sm">Referring Doctor (Suggested by)</Label>
-                            <Input 
-                                {...control.register("referringDoctorName")} 
-                                className="h-8" 
-                                placeholder="External/Internal Referral" 
+                            <Input
+                                {...control.register("referringDoctorName")}
+                                className="h-8"
+                                placeholder="External/Internal Referral"
                                 disabled={!isExistingPatient}
                             />
                         </div>
@@ -339,38 +399,38 @@ const OPDRegistration: React.FC<OPDProps> = ({
                     <h2 className="text-lg font-bold text-gray-700 mb-3">Vitals</h2>
                     <div className="grid grid-cols-12 gap-2">
                         <div className="col-span-3">
-                            <Label className="text-sm flex items-center"><Heart className="h-3 w-3 mr-1"/> BP (Systolic/Diastolic)</Label>
-                            <Input {...control.register("bp")} className="h-8" placeholder="e.g., 120/80" disabled={!isExistingPatient}/>
+                            <Label className="text-sm flex items-center"><Heart className="h-3 w-3 mr-1" /> BP (Systolic/Diastolic)</Label>
+                            <Input {...control.register("bp")} className="h-8" placeholder="e.g., 120/80" disabled={!isExistingPatient} />
                         </div>
                         <div className="col-span-3">
-                            <Label className="text-sm flex items-center"><Stethoscope className="h-3 w-3 mr-1"/> Pulse (BPM)</Label>
-                            <Input 
-                                type="number" 
-                                {...control.register("pulse", { valueAsNumber: true })} 
-                                className="h-8" 
-                                placeholder="e.g., 72" 
+                            <Label className="text-sm flex items-center"><Stethoscope className="h-3 w-3 mr-1" /> Pulse (BPM)</Label>
+                            <Input
+                                type="number"
+                                {...control.register("pulse", { valueAsNumber: true })}
+                                className="h-8"
+                                placeholder="e.g., 72"
                                 disabled={!isExistingPatient}
                                 onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
                             />
                         </div>
                         <div className="col-span-3">
-                            <Label className="text-sm flex items-center"><Scale className="h-3 w-3 mr-1"/> Weight (Kg)</Label>
-                            <Input 
-                                type="number" 
+                            <Label className="text-sm flex items-center"><Scale className="h-3 w-3 mr-1" /> Weight (Kg)</Label>
+                            <Input
+                                type="number"
                                 step="0.1"
-                                {...control.register("weight", { valueAsNumber: true })} 
-                                className="h-8" 
-                                placeholder="e.g., 65.5" 
+                                {...control.register("weight", { valueAsNumber: true })}
+                                className="h-8"
+                                placeholder="e.g., 65.5"
                                 disabled={!isExistingPatient}
                                 onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
                             />
                         </div>
                         <div className="col-span-3">
                             <Label className="text-sm">Source Visit Type</Label>
-                            <Input 
-                                type="text" 
-                                value={watchVisitType?.toUpperCase() ?? ""} 
-                                readOnly 
+                            <Input
+                                type="text"
+                                value={watchVisitType?.toUpperCase() ?? ""}
+                                readOnly
                                 className="h-8 bg-gray-100 cursor-not-allowed"
                             />
                         </div>
@@ -386,12 +446,12 @@ const OPDRegistration: React.FC<OPDProps> = ({
                         </div>
                         <div className="mb-3">
                             <Label className="text-sm">Discount (₹)</Label>
-                            <Input 
-                                type="number" 
-                                step="0.01" 
-                                {...control.register("discountAmount", { valueAsNumber: true })} 
-                                placeholder="0" 
-                                className="h-8" 
+                            <Input
+                                type="number"
+                                step="0.01"
+                                {...control.register("discountAmount", { valueAsNumber: true })}
+                                placeholder="0"
+                                className="h-8"
                                 disabled={!isExistingPatient}
                                 onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
                             />
@@ -404,37 +464,37 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                     <div key={field.id} className="border rounded-lg p-2 bg-gray-50">
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="text-sm font-medium">Payment {idx + 1}</span>
-                                            <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removePayment(idx)} disabled={!isExistingPatient}> 
-                                                <X className="h-3 w-3 text-red-500" /> 
+                                            <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removePayment(idx)} disabled={!isExistingPatient}>
+                                                <X className="h-3 w-3 text-red-500" />
                                             </Button>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <div> 
-                                                <Label className="text-xs">Amount (₹)</Label> 
-                                                <Input 
-                                                    type="number" 
-                                                    step="0.01" 
-                                                    {...control.register(`paymentEntries.${idx}.amount` as `paymentEntries.${number}.amount`, { 
-                                                        valueAsNumber: true, 
+                                            <div>
+                                                <Label className="text-xs">Amount (₹)</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    {...control.register(`paymentEntries.${idx}.amount` as `paymentEntries.${number}.amount`, {
+                                                        valueAsNumber: true,
                                                         required: false // Not strictly required for RHF validation if we filter amounts later
-                                                    })} 
-                                                    className="h-8" 
-                                                    placeholder="Enter amount" 
+                                                    })}
+                                                    className="h-8"
+                                                    placeholder="Enter amount"
                                                     disabled={!isExistingPatient}
                                                     onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
                                                     value={watch(`paymentEntries.${idx}.amount`) === 0 ? "" : watch(`paymentEntries.${idx}.amount`)} // Display empty string if value is 0
-                                                /> 
+                                                />
                                             </div>
-                                            <div> 
+                                            <div>
                                                 <Label className="xs">Mode</Label>
-                                                <Select 
-                                                    value={watch(`paymentEntries.${idx}.paymentMode`)} 
-                                                    onValueChange={(v) => setValue(`paymentEntries.${idx}.paymentMode` as `paymentEntries.${number}.paymentMode`, v as any)} 
+                                                <Select
+                                                    value={watch(`paymentEntries.${idx}.paymentMode`)}
+                                                    onValueChange={(v) => setValue(`paymentEntries.${idx}.paymentMode` as `paymentEntries.${number}.paymentMode`, v as any)}
                                                     disabled={!isExistingPatient}
                                                 >
                                                     <SelectTrigger className="h-8"> <SelectValue /> </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="online">Online</SelectItem> 
+                                                        <SelectItem value="online">Online</SelectItem>
                                                         <SelectItem value="cash">Cash</SelectItem>
                                                     </SelectContent>
                                                 </Select>
@@ -445,7 +505,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                             )}
                         </div>
                     </div>
-                    
+
                     <div className="bg-white p-3 rounded-lg border">
                         <h3 className="text-lg font-semibold text-gray-700">Payment Summary</h3>
                         <div className="space-y-2 mb-3">

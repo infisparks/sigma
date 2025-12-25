@@ -44,7 +44,7 @@ export default function CheckupTab({ opdId }: CheckupTabProps) {
     const [isLoaded, setIsLoaded] = useState(false);
 
     const visits: VisitType[] = [
-        { id: "nb", name: "Newborn Visit" },
+
         { id: "1m", name: "1 Months" },
         { id: "3m", name: "3 Months" },
         { id: "6m", name: "6 Months" },
@@ -55,7 +55,7 @@ export default function CheckupTab({ opdId }: CheckupTabProps) {
         { id: "36m", name: "36 Months" },
         { id: "48m", name: "48 Months" },
         { id: "60m", name: "60 Months" },
-        { id: "mchat", name: "M-CHAT" },
+        { id: "M-CHAT", name: "M-CHAT" },
     ];
 
     const [isFinalized, setIsFinalized] = useState(false);

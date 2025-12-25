@@ -81,7 +81,7 @@ const pathologyMenuItems = [
   {
     icon: Pill,
     label: 'Pharmacy',
-    roles: ['admin', 'staff', 'pharmacy'],
+    roles: ['admin', 'pharmacy'],
     submenu: [
       { title: 'Dashboard', href: '/pharmacy/dashboard' },
       { title: 'Billing / POS', href: '/pharmacy/billing' },

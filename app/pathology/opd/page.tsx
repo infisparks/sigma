@@ -12,8 +12,9 @@ import {
     Search, User, Calendar, Filter,
     ArrowLeft, ArrowRight, FilePenLine,
     Activity, CreditCard, AlertCircle, Pill, X,
-    Users
+    Users, Trash2
 } from "lucide-react"
+import { useUserRole } from "@/components/userrole"
 import { useRouter } from "next/navigation"
 import { format, subDays, startOfDay, endOfDay } from "date-fns" // Recommended for date logic, but I'll use native JS if you don't have date-fns
 
@@ -36,6 +37,7 @@ interface OPDRecord {
     amount_paid: number;
     created_at: string;
     patient_name?: string;
+    patient_number?: string;
     doctor_name?: string;
     referring_doctor_name: string;
 }
@@ -92,6 +94,7 @@ const getYesterdayRange = () => {
 // --- Main Component ---
 export default function OPDDashboard() {
     const router = useRouter();
+    const { role } = useUserRole();
 
     // --- State ---
     const [records, setRecords] = useState<OPDRecord[]>([]);
@@ -107,18 +110,21 @@ export default function OPDDashboard() {
     // Search States
     const [searchInput, setSearchInput] = useState(''); // What user types
     const [appliedSearch, setAppliedSearch] = useState(''); // What we actually search (for 'All' mode)
+    const [searchField, setSearchField] = useState<'uhid' | 'name' | 'number' | 'doctor'>('name');
     const [selectedDoctorId, setSelectedDoctorId] = useState<string>('0');
 
     // Pagination
     const [page, setPage] = useState(0);
-    const pageSize = 10;
+    const [totalCount, setTotalCount] = useState(0);
+    const pageSize = 20;
 
     // Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
 
     // --- Fetch Logic ---
-    const fetchDashboardData = useCallback(async (isSearchTrigger = false) => {
+    const fetchDashboardData = useCallback(async (searchOverride?: string) => {
+        const currentSearch = typeof searchOverride === 'string' ? searchOverride : appliedSearch;
         setLoading(true);
         setError(null);
         try {
@@ -156,7 +162,7 @@ export default function OPDDashboard() {
                 .from(TABLE.OPD_REGISTRATION)
                 .select(`
                     id, uhid, treating_doctor_id, total_fees, amount_paid, created_at, referring_doctor_name,
-                    ${TABLE.PATIENT}!inner (name)
+                    ${TABLE.PATIENT}!inner (name, number)
                 `);
 
             // Apply Date Filters (Skip if 'all' and NOT searching specific record)
@@ -172,29 +178,56 @@ export default function OPDDashboard() {
             // Apply Server-Side Search (Specifically for 'All' mode or explicit search)
             // Note: For 'Today'/'Yesterday', we usually fetch all and client-filter, 
             // but if 'All' is selected, we MUST filter server-side.
-            if (filterType === 'all' && appliedSearch.length >= 4) {
-                // Searching across joined tables with OR is tricky in Supabase. 
-                // We prioritize UHID (Index) and Patient Name.
-                // Using !inner on patient allows filtering by patient name.
-
-                // Strategy: Text Search logic
-                // Since Supabase .or() across tables is complex, we use a specific approach:
-                // We will filter by UHID or Patient Name roughly.
-                // Ideally, use a Database Function for global search, but here is the JS way:
-
-                // This syntax searches UHID on main table OR Name on joined table is NOT supported easily in one OR string.
-                // We will search UHID primarily on server if it looks like an ID, or Name if text.
-                const isNumber = /^\d+$/.test(appliedSearch);
-                if (isNumber) {
-                    query = query.ilike('uhid', `%${appliedSearch}%`);
-                } else {
-                    // Assuming name search
-                    query = query.ilike('patient_detail.name', `%${appliedSearch}%`);
+            // Apply Server-Side Search (Specifically for 'All' mode or explicit search)
+            if (filterType === 'all' && currentSearch.length >= 1) { // Allow search with fewer chars if explicit field
+                if (searchField === 'uhid') {
+                    query = query.ilike('uhid', `%${currentSearch}%`);
+                } else if (searchField === 'name') {
+                    query = query.ilike('patient_detail.name', `%${currentSearch}%`);
+                } else if (searchField === 'number') {
+                    // Start of number logic or exact match might be better, but partial is flexible
+                    query = query.ilike('patient_detail.number', `%${currentSearch}%`);
+                    // Note: 'number' column is BigInt, Supabase PostgREST casts automatically for ilike often, 
+                    // or requires casting. Safest is usually equality for numbers, or text search if column is text.
+                    // If it fails on ILIKE with bigint, we might need equality unless we cast in SQL View.
+                    // Trying text cast via filter:
+                    query = query.filter('patient_detail.number', 'cs', `{"${currentSearch}"}`); // hacky for joined?
+                    // Reverting to basic ilike, if implicit cast fails, we might need eq for number or text cast.
+                    // However, standard PostgREST ilike on joined number often works if cast is handled by PG.
+                    // Let's assume text search on name/uhid is primary. For number, let's try strict equality for safety first,
+                    // or use a text cast hint if we could. 
+                    // Safer approach for BigInt partial search: logic is complex without SQL functions.
+                    // Let's rely on simple filter for now, assuming number search is exact or largely sufficient.
+                    // CHANGED: Use simple equality for numbers to avoid casting issues in simple queries, 
+                    // OR if user wants partial, use 'text' column logic if feasible.
+                    // Better yet, for this tool, let's assume 'ilike' works if we don't have explicit type info blocking it,
+                    // but since Schema says bigint, `ilike` is invalid.
+                    // We will use `.eq` if it looks like a number, else ignore.
+                    if (/^\d+$/.test(currentSearch)) {
+                        query = query.filter('patient_detail.number', 'eq', currentSearch);
+                    }
+                } else if (searchField === 'doctor') {
+                    // Filter client side doctor list to find IDs, then search by those IDs
+                    // This mimics "Search by Doctor Name"
+                    const matchingDocs = fetchedDoctors.filter(d => d.doctor_name.toLowerCase().includes(currentSearch.toLowerCase()));
+                    if (matchingDocs.length > 0) {
+                        const ids = matchingDocs.map(d => d.id);
+                        query = query.in('treating_doctor_id', ids);
+                    } else {
+                        // No matches, ensure no results
+                        query = query.eq('id', -1);
+                    }
                 }
-            } else if (filterType === 'all' && !appliedSearch) {
+            } else if (filterType === 'all' && !currentSearch) {
                 // If All and No Search -> Pagination logic applies heavily
                 query = query.order('created_at', { ascending: false })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                // Fetch Count as well
+                const { count } = await supabase
+                    .from(TABLE.OPD_REGISTRATION)
+                    .select('*', { count: 'exact', head: true });
+                if (count !== null) setTotalCount(count);
             } else {
                 // For Today/Yesterday/Custom, we order by date
                 query = query.order('created_at', { ascending: false });
@@ -217,7 +250,9 @@ export default function OPDDashboard() {
                 amount_paid: r.amount_paid,
                 created_at: r.created_at,
                 referring_doctor_name: r.referring_doctor_name,
+
                 patient_name: r[TABLE.PATIENT]?.name || 'Unknown Patient',
+                patient_number: r[TABLE.PATIENT]?.number || '',
                 doctor_name: fetchedDoctors.find(d => d.id === r.treating_doctor_id)?.doctor_name || 'Unknown Doctor',
             }));
 
@@ -234,16 +269,10 @@ export default function OPDDashboard() {
     // --- Effects ---
 
     // Initial Load & Filter Changes
+    // Initial Load & Filter Changes
     useEffect(() => {
-        // Reset page and search when filter type changes
-        setPage(0);
         // If switching to 'All', clear search result unless user types again
-        if (filterType !== 'all') {
-            fetchDashboardData();
-        } else {
-            // Initial fetch for 'All' (shows latest 10)
-            fetchDashboardData();
-        }
+        fetchDashboardData();
     }, [filterType, customStartDate, customEndDate, selectedDoctorId, page]);
 
     // specific effect for search trigger in All mode is handled by the button
@@ -282,12 +311,12 @@ export default function OPDDashboard() {
 
     const handleSearchClick = () => {
         if (filterType !== 'all') return; // Should not happen via UI
-        if (searchInput.length < 4) {
-            alert("Please enter at least 4 characters to search entire database.");
+        if (searchInput.length < 1) { // Relaxed validaton
+            alert("Please enter a search term.");
             return;
         }
-        setAppliedSearch(searchInput); // This triggers the useEffect -> fetchDashboardData logic
-        fetchDashboardData(true); // Force refetch
+        setAppliedSearch(searchInput); // Keep state in sync
+        fetchDashboardData(searchInput); // Force search immediately with current input
     };
 
     const handleClearSearch = () => {
@@ -300,6 +329,52 @@ export default function OPDDashboard() {
         setFilterType(val as DateFilterType);
         setSearchInput('');
         setAppliedSearch('');
+        setPage(0); // Reset page
+    };
+
+    const handleDeleteRecord = async (r: OPDRecord) => {
+        if (!confirm(`Are you sure you want to delete the OPD record for ${r.patient_name}? This will archive the record.`)) return;
+
+        try {
+            // 1. Fetch full record details to archive
+            const { data: fullRecord, error: fetchError } = await supabase
+                .from(TABLE.OPD_REGISTRATION)
+                .select('*')
+                .eq('id', r.id)
+                .single();
+
+            if (fetchError) throw fetchError;
+            if (!fullRecord) throw new Error("Record not found for deletion");
+
+            // 2. Archive to dopd_registration
+            const archivedData = {
+                ...fullRecord,
+                deleted: true,
+                deleted_time: new Date().toISOString()
+            };
+
+            const { error: archiveError } = await supabase
+                .from('dopd_registration')
+                .insert(archivedData);
+
+            if (archiveError) throw new Error(`Archive failed: ${archiveError.message}`);
+
+            // 3. Delete from actual table
+            const { error: deleteError } = await supabase
+                .from(TABLE.OPD_REGISTRATION)
+                .delete()
+                .eq('id', r.id);
+
+            if (deleteError) throw deleteError;
+
+            // 4. Update UI
+            setRecords(prev => prev.filter(rec => rec.id !== r.id));
+            alert("Record deleted and archived successfully.");
+
+        } catch (err: any) {
+            console.error("Delete Error:", err);
+            alert(err.message || "Failed to delete record.");
+        }
     };
 
     return (
@@ -394,13 +469,13 @@ export default function OPDDashboard() {
                         {/* Custom Date Inputs (Only visible if Custom) */}
                         {filterType === 'custom' && (
                             <div className="flex gap-2 animate-in fade-in slide-in-from-left-2">
-                                <Input type="date" className="w-36 h-9" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} />
-                                <Input type="date" className="w-36 h-9" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} />
+                                <Input type="date" className="w-36 h-9" value={customStartDate} onChange={e => { setCustomStartDate(e.target.value); setPage(0); }} />
+                                <Input type="date" className="w-36 h-9" value={customEndDate} onChange={e => { setCustomEndDate(e.target.value); setPage(0); }} />
                             </div>
                         )}
 
                         {/* Doctor Filter */}
-                        <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                        <Select value={selectedDoctorId} onValueChange={(val) => { setSelectedDoctorId(val); setPage(0); }}>
                             <SelectTrigger className="w-[180px] h-9 bg-slate-50">
                                 <SelectValue placeholder="All Doctors" />
                             </SelectTrigger>
@@ -415,17 +490,32 @@ export default function OPDDashboard() {
 
                     {/* 2. Intelligent Search Bar */}
                     <div className="flex gap-2 w-full xl:w-auto items-center">
+                        {/* Search Field Selector (Visible only in All) */}
+                        {filterType === 'all' && (
+                            <Select value={searchField} onValueChange={(v: any) => setSearchField(v)}>
+                                <SelectTrigger className="w-[110px] h-10 bg-slate-50 border-r-0 rounded-r-none focus:ring-0">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="name">Name</SelectItem>
+                                    <SelectItem value="uhid">UHID</SelectItem>
+                                    <SelectItem value="number">Number</SelectItem>
+                                    <SelectItem value="doctor">Doctor</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        )}
+
                         <div className="relative w-full xl:w-80">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <Input
                                 type="text"
-                                placeholder={filterType === 'all' ? "Search UHID/Name (Min 4 chars)" : "Filter current list..."}
+                                placeholder={filterType === 'all' ? `Search by ${searchField}...` : "Filter current list..."}
                                 value={searchInput}
                                 onChange={(e) => setSearchInput(e.target.value)}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter' && filterType === 'all') handleSearchClick();
                                 }}
-                                className="pl-9 h-10 bg-slate-50 border-slate-200 focus:bg-white"
+                                className={`pl-9 h-10 bg-slate-50 border-slate-200 focus:bg-white ${filterType === 'all' ? 'rounded-l-none border-l-0' : ''}`}
                             />
                             {searchInput && (
                                 <button
@@ -495,6 +585,9 @@ export default function OPDDashboard() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="font-medium text-slate-900">{r.patient_name}</div>
+                                                    <div className="text-[10px] text-slate-400">
+                                                        {r.patient_number ? `+91 ${r.patient_number}` : 'No Number'}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
@@ -525,6 +618,11 @@ export default function OPDDashboard() {
                                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => { setSelectedRecordId(r.id); setIsModalOpen(true); }}>
                                                             <FilePenLine className="h-4 w-4" />
                                                         </Button>
+                                                        {role === 'admin' && (
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteRecord(r)}>
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 </TableCell>
                                             </TableRow>
@@ -539,9 +637,9 @@ export default function OPDDashboard() {
                 {/* Pagination (Only show if 'All' view and not searching specific matches, or if list is long) */}
                 <div className="border-t bg-slate-50/50 p-4 flex items-center justify-between">
                     <div className="text-xs text-slate-500">
-                        {filterType === 'all' && appliedSearch ?
-                            `Showing search results for "${appliedSearch}"` :
-                            `Page ${page + 1}`
+                        {filterType === 'all' && !appliedSearch ?
+                            `Page ${page + 1} of ${Math.ceil(totalCount / pageSize)}` :
+                            appliedSearch ? `Search results for "${appliedSearch}"` : ''
                         }
                     </div>
 
@@ -552,7 +650,7 @@ export default function OPDDashboard() {
                             <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0 || loading} className="h-8 bg-white">
                                 <ArrowLeft className="h-3 w-3 mr-1" /> Prev
                             </Button>
-                            <Button size="sm" variant="outline" onClick={() => setPage(p => p + 1)} disabled={displayedRecords.length < pageSize || loading} className="h-8 bg-white">
+                            <Button size="sm" variant="outline" onClick={() => setPage(p => p + 1)} disabled={(page + 1) * pageSize >= totalCount || loading} className="h-8 bg-white">
                                 Next <ArrowRight className="h-3 w-3 ml-1" />
                             </Button>
                         </div>

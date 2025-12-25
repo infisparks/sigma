@@ -209,6 +209,57 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
         updateDetail(selectedSymptomForDetail, 'customGroups', currentGroups);
     };
 
+    // --- Add New Item Logic ---
+    const addNewItem = async () => {
+        if (!searchQuery.trim()) return;
+        const newItemName = searchQuery.trim();
+
+        // Determine type based on active tab (Default to Symptoms if 'All' or 'Symptoms' is active)
+        const isFinding = selectedTabIndex === 1;
+        const dbName = isFinding ? 'Findings' : 'Symptoms';
+
+        // 1. Optimistic Local Update
+        if (isFinding) {
+            setRawFindings(prev => [...prev, newItemName]);
+        } else {
+            setRawSymptoms(prev => [...prev, newItemName]);
+        }
+
+        // Select the new item immediately
+        selectSymptom(newItemName);
+        setSearchQuery("");
+
+        // 2. Persist to Database (Master List)
+        try {
+            const { data: currentData, error: fetchError } = await supabase
+                .from('opd_datasets')
+                .select('datajson')
+                .eq('dataname', dbName)
+                .single();
+
+            if (fetchError) throw fetchError;
+
+            let list: string[] = [];
+            if (Array.isArray(currentData?.datajson)) {
+                list = currentData.datajson;
+            }
+
+            // Only update if not exists
+            if (!list.includes(newItemName)) {
+                const updatedList = [...list, newItemName];
+                const { error: updateError } = await supabase
+                    .from('opd_datasets')
+                    .update({ datajson: updatedList })
+                    .eq('dataname', dbName);
+
+                if (updateError) throw updateError;
+            }
+        } catch (e) {
+            console.error(`Failed to add new ${dbName} to database`, e);
+            // Optional: Revert local state or show toast error
+        }
+    };
+
     // Filter List
     const currentLeftList = (() => {
         let source: string[] = [];
@@ -282,6 +333,22 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
 
                 {/* Suggestions List */}
                 <div className="flex-1 overflow-y-auto p-3">
+                    {/* Add New Button */}
+                    {searchQuery && !currentLeftList.some(s => s.toLowerCase() === searchQuery.trim().toLowerCase()) && (
+                        <button
+                            onClick={addNewItem}
+                            className="w-full flex items-center gap-2 mb-2 px-3 py-2 bg-blue-50 border border-blue-200 border-dashed rounded-lg text-blue-700 hover:bg-blue-100 transition-colors group"
+                        >
+                            <div className="w-5 h-5 rounded-full bg-blue-200 flex items-center justify-center group-hover:bg-blue-300">
+                                <Plus className="w-3 h-3 text-blue-700" />
+                            </div>
+                            <div className="flex flex-col items-start">
+                                <span className="text-[10px] font-bold">Add "{searchQuery}"</span>
+                                <span className="text-[9px] opacity-70">to {selectedTabIndex === 1 ? 'Findings' : 'Symptoms'} list</span>
+                            </div>
+                        </button>
+                    )}
+
                     <div className="flex flex-wrap gap-1.5">
                         {currentLeftList.map(s => (
                             <button
