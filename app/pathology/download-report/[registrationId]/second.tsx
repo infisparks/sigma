@@ -50,7 +50,7 @@ export default function SecondPage({ patientData, aiSuggestions }: SecondPagePro
           <span className="font-semibold">Registration On:</span> {formatDateTime(patientData.createdAt)}
         </div>
         <div>
-          <span className="font-semibold">Client Name:</span> {(patientData.hospitalName || "-").toUpperCase()}
+          <span className="font-semibold">:</span> {(patientData.hospitalName || "-").toUpperCase()}
         </div>
         <div className="text-right">
           <span className="font-semibold">Reported On:</span> {formatDateTime(patientData.createdAt)}

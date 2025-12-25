@@ -293,7 +293,7 @@ export const generateReportPdf = async (
             { label: "Patient Name", value: data.title ? `${data.title} ${data.name.toUpperCase()}` : data.name.toUpperCase() },
             { label: "Age/Sex", value: `${data.age} ${data.day_type === "day" ? "Days" : data.day_type === "month" ? "Months" : "Years"} / ${data.gender}` },
             { label: "Ref Doctor", value: (data.doctorName || "-").toUpperCase() },
-            { label: "Client Name", value: (data.hospitalName || "-").toUpperCase() },
+            { label: "Clinic Name", value: (data.hospitalName || "-").toUpperCase() },
         ]
         const mergedPatientId = data.patientId && data.registration_id ? `${data.patientId}-${data.registration_id}` : data.patientId || data.registration_id || "-"
         const rightRows = [
