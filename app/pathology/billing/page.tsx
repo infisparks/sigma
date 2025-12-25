@@ -61,16 +61,12 @@ export default function BillingPage() {
     setLoading(true)
 
     // Query for fetching data
-    let query = supabase.from("zregistration").select(
-      `
-      *,
-      patient_detail(
-        name,
-        number,
-        uhid
-      )
-      `, { count: 'exact' } // Request total count
-    )
+    // Dynamic select: Use inner join for search to filter parent rows, otherwise left join
+    const selectQuery = searchQuery
+      ? `*, patient_detail!inner(name, number, uhid)`
+      : `*, patient_detail(name, number, uhid)`
+
+    let query = supabase.from("zregistration").select(selectQuery, { count: 'exact' })
 
     // Apply date filters
     if (startDate && endDate) {
@@ -78,12 +74,23 @@ export default function BillingPage() {
       query = query.lte("created_at", format(endOfDay(endDate), "yyyy-MM-dd HH:mm:ss.SSSxxx"))
     }
 
-    // UPDATED SEARCH LOGIC: Fast server-side search on patient name and number
+    // UPDATED SEARCH LOGIC: correct syntax for foreign table filtering
     if (searchQuery) {
-        // Use the correct relationship name and columns for searching
-        query = query.or(
-            `patient_detail.name.ilike.%${searchQuery}%,patient_detail.number.ilike.%${searchQuery}%`
-        )
+      const term = searchQuery.trim()
+      const isNumeric = /^\d+$/.test(term)
+
+      // Search fields on the joined 'patient_detail' table
+      const conditions = [
+        `name.ilike.%${term}%`,
+        `uhid.ilike.%${term}%`
+      ]
+
+      if (isNumeric) {
+        conditions.push(`number.eq.${term}`)
+      }
+
+      // Apply OR filter specifically to the foreign table
+      query = query.or(conditions.join(","), { foreignTable: 'patient_detail' })
     }
 
     // Apply hospital filter
@@ -141,21 +148,21 @@ export default function BillingPage() {
     const totalAmount = registrations.reduce((sum, reg) => sum + (reg.amount_paid_history?.totalAmount || 0), 0)
     const totalDiscount = registrations.reduce((sum, reg) => sum + (reg.amount_paid_history?.discount || reg.discount_amount || 0), 0)
     const totalAmountAfterDiscount = totalAmount - totalDiscount
-    
+
     const totalCash = registrations.reduce((sum, reg) => {
       if (!reg.amount_paid_history?.paymentHistory) return sum
       return sum + reg.amount_paid_history.paymentHistory
         .filter(p => p.paymentMode === "cash")
         .reduce((s, p) => s + (p.amount || 0), 0)
     }, 0)
-    
+
     const totalOnline = registrations.reduce((sum, reg) => {
       if (!reg.amount_paid_history?.paymentHistory) return sum
       return sum + reg.amount_paid_history.paymentHistory
         .filter(p => p.paymentMode === "online")
         .reduce((s, p) => s + (p.amount || 0), 0)
     }, 0)
-    
+
     const totalCollected = totalCash + totalOnline
     const totalRemaining = totalAmountAfterDiscount - totalCollected
 
@@ -235,8 +242,8 @@ export default function BillingPage() {
             <p className="text-gray-600">Manage and track all your billing transactions</p>
           </div>
           <div className="flex items-center space-x-3">
-            <Button 
-              onClick={handleExportExcel} 
+            <Button
+              onClick={handleExportExcel}
               className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300"
             >
               <Download className="h-4 w-4 mr-2" />
@@ -308,16 +315,15 @@ export default function BillingPage() {
                     key={key}
                     variant={dateRange === key ? "default" : "outline"}
                     onClick={() => handleDateRangeChange(key as DateRangeOption)}
-                    className={`transition-all duration-300 ${
-                      dateRange === key 
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg text-white" 
-                        : "hover:bg-blue-50 hover:border-blue-300"
-                    }`}
+                    className={`transition-all duration-300 ${dateRange === key
+                      ? "bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg text-white"
+                      : "hover:bg-blue-50 hover:border-blue-300"
+                      }`}
                   >
                     {label}
                   </Button>
                 ))}
-                
+
                 {/* Custom Date Range Picker */}
                 <Popover>
                   <PopoverTrigger asChild>
@@ -365,11 +371,10 @@ export default function BillingPage() {
                   <Input
                     type="text"
                     placeholder="Search by Patient Name or Number..."
-                    className={`pl-10 pr-10 transition-all duration-300 border-2 ${
-                      isSearchFocused 
-                        ? 'border-blue-400 shadow-lg bg-white' 
-                        : 'border-gray-200 hover:border-gray-300'
-                    } ${searchQuery ? 'bg-blue-50' : ''}`}
+                    className={`pl-10 pr-10 transition-all duration-300 border-2 ${isSearchFocused
+                      ? 'border-blue-400 shadow-lg bg-white'
+                      : 'border-gray-200 hover:border-gray-300'
+                      } ${searchQuery ? 'bg-blue-50' : ''}`}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onFocus={() => setIsSearchFocused(true)}
@@ -393,7 +398,7 @@ export default function BillingPage() {
                 >
                   <option value="all">All Hospitals</option>
                   <option value="Cigma Clinic">Cigma Clinic</option>
-                 
+
                 </select>
               </div>
             </div>
@@ -427,7 +432,7 @@ export default function BillingPage() {
         <div className="flex items-center justify-between">
           <div className="text-sm text-gray-600">
             Showing <span className="font-semibold text-blue-600">{registrations.length}</span> results
-             {` (Total: ${totalRecords} records)`}
+            {` (Total: ${totalRecords} records)`}
           </div>
         </div>
 
@@ -455,7 +460,7 @@ export default function BillingPage() {
                 <div className="text-center">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">No records found</h3>
                   <p className="text-gray-500 max-w-md">
-                    {searchQuery 
+                    {searchQuery
                       ? `No registrations match "${searchQuery}". Try adjusting your search terms.`
                       : "No registrations found for the selected criteria. Try changing your filters."
                     }
@@ -493,9 +498,8 @@ export default function BillingPage() {
                       return (
                         <TableRow
                           key={reg.id}
-                          className={`cursor-pointer transition-all duration-200 hover:bg-blue-50/50 hover:shadow-sm ${
-                            index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
-                          }`}
+                          className={`cursor-pointer transition-all duration-200 hover:bg-blue-50/50 hover:shadow-sm ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
+                            }`}
                           onClick={() => handleRowClick(reg)}
                         >
                           <TableCell className="font-medium">
@@ -508,7 +512,7 @@ export default function BillingPage() {
                               </div>
                             </div>
                           </TableCell>
-                          
+
                           <TableCell>
                             <div className="space-y-1">
                               <div className="font-medium text-gray-900">
@@ -519,7 +523,7 @@ export default function BillingPage() {
                               </div>
                             </div>
                           </TableCell>
-                          
+
                           <TableCell>
                             <div className="space-y-1">
                               <div className="text-sm font-medium">
@@ -530,7 +534,7 @@ export default function BillingPage() {
                               </div>
                             </div>
                           </TableCell>
-                          
+
                           <TableCell>
                             <div className="space-y-2">
                               <div className="flex items-center space-x-2">
@@ -549,7 +553,7 @@ export default function BillingPage() {
                               </div>
                             </div>
                           </TableCell>
-                          
+
                           <TableCell>
                             <div className="space-y-2">
                               <div className="flex flex-col space-y-1">
@@ -575,7 +579,7 @@ export default function BillingPage() {
                               )}
                             </div>
                           </TableCell>
-                          
+
                           <TableCell>
                             <div className="space-y-1">
                               <div className="text-sm font-medium text-gray-900">
@@ -591,7 +595,7 @@ export default function BillingPage() {
                               )}
                             </div>
                           </TableCell>
-                          
+
                           <TableCell>
                             <Button
                               variant="outline"
@@ -627,7 +631,7 @@ export default function BillingPage() {
                 Complete payment breakdown for Registration ID: {selectedRegistration?.id}
               </DialogDescription>
             </DialogHeader>
-            
+
             {selectedRegistration && (
               <div className="space-y-6 py-4">
                 {/* Patient Info Card */}
@@ -654,12 +658,11 @@ export default function BillingPage() {
                           <div><span className="font-medium">Hospital:</span> {selectedRegistration.hospital_name}</div>
                           <div><span className="font-medium">Doctor:</span> {selectedRegistration.doctor_name}</div>
                           <div>
-                            <span className="font-medium">Visit Type:</span> 
-                            <span className={`ml-2 px-2 py-1 rounded-full text-xs ${
-                              selectedRegistration.visit_type === "TPA" 
-                                ? "bg-purple-100 text-purple-800" 
-                                : "bg-green-100 text-green-800"
-                            }`}>
+                            <span className="font-medium">Visit Type:</span>
+                            <span className={`ml-2 px-2 py-1 rounded-full text-xs ${selectedRegistration.visit_type === "TPA"
+                              ? "bg-purple-100 text-purple-800"
+                              : "bg-green-100 text-green-800"
+                              }`}>
                               {selectedRegistration.visit_type}
                             </span>
                           </div>
@@ -679,7 +682,7 @@ export default function BillingPage() {
                       <div className="text-sm opacity-90">Total Bill</div>
                     </CardContent>
                   </Card>
-                  
+
                   <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
                     <CardContent className="p-4 text-center">
                       <div className="text-2xl font-bold">
@@ -688,7 +691,7 @@ export default function BillingPage() {
                       <div className="text-sm opacity-90">Discount</div>
                     </CardContent>
                   </Card>
-                  
+
                   <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
                     <CardContent className="p-4 text-center">
                       <div className="text-2xl font-bold">
@@ -697,7 +700,7 @@ export default function BillingPage() {
                       <div className="text-sm opacity-90">Collected</div>
                     </CardContent>
                   </Card>
-                  
+
                   <Card className="bg-gradient-to-br from-orange-500 to-orange-600 text-white">
                     <CardContent className="p-4 text-center">
                       <div className="text-2xl font-bold">
@@ -718,22 +721,21 @@ export default function BillingPage() {
                     <History className="h-5 w-5 mr-2 text-blue-600" />
                     Payment Transactions
                   </h3>
-                  
-                  {selectedRegistration.amount_paid_history?.paymentHistory && 
-                   selectedRegistration.amount_paid_history.paymentHistory.length > 0 ? (
+
+                  {selectedRegistration.amount_paid_history?.paymentHistory &&
+                    selectedRegistration.amount_paid_history.paymentHistory.length > 0 ? (
                     <div className="space-y-3">
                       {selectedRegistration.amount_paid_history.paymentHistory.map((payment, index) => (
                         <Card key={index} className="border-l-4 border-l-blue-500 hover:shadow-md transition-shadow duration-200">
                           <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-4">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                                  payment.paymentMode === 'cash' 
-                                    ? 'bg-green-100 text-green-600' 
-                                    : 'bg-blue-100 text-blue-600'
-                                }`}>
-                                  {payment.paymentMode === 'cash' ? 
-                                    <Wallet className="h-6 w-6" /> : 
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${payment.paymentMode === 'cash'
+                                  ? 'bg-green-100 text-green-600'
+                                  : 'bg-blue-100 text-blue-600'
+                                  }`}>
+                                  {payment.paymentMode === 'cash' ?
+                                    <Wallet className="h-6 w-6" /> :
                                     <CreditCard className="h-6 w-6" />
                                   }
                                 </div>

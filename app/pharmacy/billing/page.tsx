@@ -16,8 +16,9 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import {
-    Search, Plus, User, ShoppingCart, Trash2, CreditCard, UserPlus
+    Search, Plus, User, ShoppingCart, Trash2, CreditCard, UserPlus, Eye, History as HistoryIcon
 } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { supabase } from '@/lib/supabase'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { format, subYears, subMonths, subDays } from 'date-fns'
@@ -66,6 +67,7 @@ export default function PharmacyBillingPage() {
 
     // Doctors
     const [doctors, setDoctors] = useState<{ id: string, name: string }[]>([])
+    const [doctorMap, setDoctorMap] = useState<Record<number, string>>({})
     const [selectedDoctor, setSelectedDoctor] = useState<string>('')
 
     useEffect(() => {
@@ -73,6 +75,18 @@ export default function PharmacyBillingPage() {
             const { data } = await supabase.from('opd_datasets').select('datajson').eq('dataname', 'refer_doctors').single()
             if (data?.datajson) {
                 setDoctors(Array.isArray(data.datajson) ? data.datajson : [])
+            }
+
+            // Fetch Treating Doctors from config_data
+            const { data: configData } = await supabase.from('config_data').select('data').eq('data_heading', 'opd_doctor_data').single()
+            if (configData?.data) {
+                const map: Record<number, string> = {}
+                if (Array.isArray(configData.data)) {
+                    configData.data.forEach((doc: any) => {
+                        map[doc.id] = doc.doctor_name
+                    })
+                }
+                setDoctorMap(map)
             }
         }
         fetchDoctors()
@@ -92,6 +106,36 @@ export default function PharmacyBillingPage() {
 
     // Checkout
     const [checkoutLoading, setCheckoutLoading] = useState(false)
+
+    // Medicine History
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+    const [historyList, setHistoryList] = useState<any[]>([])
+    const [loadingHistory, setLoadingHistory] = useState(false)
+
+    const fetchMedicineHistory = async () => {
+        if (!selectedPatient?.uhid) return
+
+        setLoadingHistory(true)
+        setIsHistoryOpen(true)
+        try {
+            const { data, error } = await supabase
+                .from('opd_registration')
+                .select('created_at, rx_list_json, treating_doctor_id') // Use treating_doctor_id
+                .eq('uhid', selectedPatient.uhid)
+                .not('rx_list_json', 'is', null)
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+            // Filter out entries with valid non-empty arrays
+            const validList = (data || []).filter(item => Array.isArray(item.rx_list_json) && item.rx_list_json.length > 0)
+            setHistoryList(validList)
+        } catch (error) {
+            console.error("Error fetching history:", error)
+            alert("Failed to load medicine history")
+        } finally {
+            setLoadingHistory(false)
+        }
+    }
 
     // --- Search Inventory ---
     useEffect(() => {
@@ -520,8 +564,21 @@ export default function PharmacyBillingPage() {
                                 </div>
                             )
                         ) : (
-                            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 relative">
-                                <div className="absolute top-2 right-2 cursor-pointer text-gray-400" onClick={() => setSelectedPatient(null)}><Trash2 className="h-4 w-4" /></div>
+                            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 relative group">
+                                <div className="absolute top-2 right-2 flex gap-2">
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6 text-blue-600 hover:bg-blue-100"
+                                        onClick={fetchMedicineHistory}
+                                        title="View Medicine History"
+                                    >
+                                        <Eye className="h-4 w-4" />
+                                    </Button>
+                                    <div className="cursor-pointer text-gray-400 hover:text-red-500" onClick={() => setSelectedPatient(null)}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </div>
+                                </div>
                                 <div className="font-bold text-lg text-blue-900">{selectedPatient.name}</div>
                                 <div className="text-sm text-blue-700">UHID: {selectedPatient.uhid}</div>
                                 <div className="text-sm text-gray-600 mt-1">{selectedPatient.number}</div>
@@ -598,6 +655,86 @@ export default function PharmacyBillingPage() {
                     </CardFooter>
                 </Card>
             </div>
+
+            {/* Medicine History Modal */}
+            <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <HistoryIcon className="h-5 w-5 text-blue-600" />
+                            Medicine History - {selectedPatient?.name}
+                        </DialogTitle>
+                        <DialogDescription>
+                            Past prescriptions from OPD visits.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-6 mt-4">
+                        {loadingHistory ? (
+                            <div className="text-center py-10 text-gray-500">Loading history...</div>
+                        ) : historyList.length === 0 ? (
+                            <div className="text-center py-10 text-gray-400 border-2 border-dashed rounded-lg">
+                                No prescription history found for this patient.
+                            </div>
+                        ) : (
+                            historyList.map((visit, idx) => (
+                                <Card key={idx} className="border shadow-sm">
+                                    <CardHeader className="py-3 px-4 bg-gray-50 border-b flex flex-row items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Badge variant="outline" className="bg-white">
+                                                {format(new Date(visit.created_at), 'dd MMM yyyy')}
+                                            </Badge>
+                                            <span className="text-sm font-medium text-gray-600">
+                                                {format(new Date(visit.created_at), 'h:mm a')}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                            {doctorMap[visit.treating_doctor_id] || 'Unknown Doctor'}
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        <Table>
+                                            <TableHeader className="bg-white">
+                                                <TableRow className="hover:bg-transparent">
+                                                    <TableHead className="h-8 text-xs w-[40%]">Medicine</TableHead>
+                                                    <TableHead className="h-8 text-xs">Dosage</TableHead>
+                                                    <TableHead className="h-8 text-xs">Duration</TableHead>
+                                                    <TableHead className="h-8 text-xs">Instructions</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {visit.rx_list_json.map((med: any, i: number) => (
+                                                    <TableRow key={i} className="hover:bg-gray-50">
+                                                        <TableCell className="py-2 font-medium text-sm">
+                                                            {med.name}
+                                                            <div className="text-[10px] text-gray-400 uppercase">{med.type}</div>
+                                                        </TableCell>
+                                                        <TableCell className="py-2 text-xs">
+                                                            <span className="font-semibold bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">{med.dosage}</span>
+                                                        </TableCell>
+                                                        <TableCell className="py-2 text-xs text-gray-600">{med.duration}</TableCell>
+                                                        <TableCell className="py-2 text-xs text-gray-500 max-w-[150px] truncate" title={med.note}>
+                                                            {med.note || '-'}
+                                                            <div className="flex gap-1 mt-1 flex-wrap">
+                                                                {med.timing?.bb && <span title="Before Breakfast" className="cursor-help text-[9px] bg-green-50 text-green-700 px-1 rounded border border-green-200">BB (Before Breakfast)</span>}
+                                                                {med.timing?.ab && <span title="After Breakfast" className="cursor-help text-[9px] bg-blue-50 text-blue-700 px-1 rounded border border-blue-200">AB (After Breakfast)</span>}
+                                                                {med.timing?.bl && <span title="Before Lunch" className="cursor-help text-[9px] bg-yellow-50 text-yellow-700 px-1 rounded border border-yellow-200">BL (Before Lunch)</span>}
+                                                                {med.timing?.al && <span title="After Lunch" className="cursor-help text-[9px] bg-orange-50 text-orange-700 px-1 rounded border border-orange-200">AL (After Lunch)</span>}
+                                                                {med.timing?.bd && <span title="Before Dinner" className="cursor-help text-[9px] bg-indigo-50 text-indigo-700 px-1 rounded border border-indigo-200">BD (Before Dinner)</span>}
+                                                                {med.timing?.ad && <span title="After Dinner" className="cursor-help text-[9px] bg-purple-50 text-purple-700 px-1 rounded border border-purple-200">AD (After Dinner)</span>}
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </CardContent>
+                                </Card>
+                            ))
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
