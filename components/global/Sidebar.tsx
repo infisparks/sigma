@@ -83,7 +83,7 @@ const pathologyMenuItems = [
     label: 'Pharmacy',
     roles: ['admin', 'pharmacy'],
     submenu: [
-      
+
       { title: 'My Medicines', href: '/pharmacy/mymedicine' },
       { title: 'Billing / POS', href: '/pharmacy/billing' },
       { title: 'Sales History', href: '/pharmacy/sales' },

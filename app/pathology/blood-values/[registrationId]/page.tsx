@@ -254,7 +254,7 @@ const BloodValuesForm: React.FC = () => {
 
       try {
         setLoading(true)
-        
+
         // 1. Fetch the current test definition record
         const { data: testDefData, error: fetchError } = await supabase
           .from("zblood_test")
@@ -263,32 +263,32 @@ const BloodValuesForm: React.FC = () => {
           .single()
 
         if (fetchError || !testDefData) throw new Error(`Failed to fetch test definition for ${testName}.`)
-        
+
         const existingParameters = Array.isArray(testDefData.parameter) ? testDefData.parameter : []
-        
+
         // 2. Find the index of the parameter to update
         const paramIndex = existingParameters.findIndex((p: any) => p.name === paramName)
 
         if (paramIndex === -1) throw new Error(`Parameter ${paramName} not found in test definition.`)
-        
+
         // 3. Create the new suggestion entry
         const newSuggestion: SuggestionEntry = {
           description: newValue.trim(),
           shortName: newShortName,
         }
-        
+
         // 4. Update the parameter's suggestions array in the JSON structure
         const updatedParameters = [...existingParameters]
         const currentSuggestions = updatedParameters[paramIndex].suggestions || []
 
         // Check for duplicates before pushing (case-insensitive description check)
         const isDuplicate = currentSuggestions.some(
-            (s: SuggestionEntry) => s.description.toLowerCase() === newSuggestion.description.toLowerCase()
+          (s: SuggestionEntry) => s.description.toLowerCase() === newSuggestion.description.toLowerCase()
         );
 
         if (isDuplicate) {
-            alert(`Suggestion "${newValue.trim()}" already exists for ${paramName}.`);
-            return;
+          alert(`Suggestion "${newValue.trim()}" already exists for ${paramName}.`);
+          return;
         }
 
         updatedParameters[paramIndex].suggestions = [...currentSuggestions, newSuggestion];
@@ -300,22 +300,22 @@ const BloodValuesForm: React.FC = () => {
           .eq("id", testDefData.id)
 
         if (updateError) throw updateError
-        
+
         alert(`Successfully added new suggestion "${newValue.trim()}" to ${paramName} definition.`);
-        
+
         // 6. Update the local form state (testsWatch) to reflect the change immediately
         const testIdx = testsWatch.findIndex(t => t.testName === testName);
         if (testIdx > -1) {
-            const newTests = [...testsWatch];
-            const paramIdxInForm = newTests[testIdx].parameters.findIndex(p => p.name === paramName);
-            
-            if (paramIdxInForm > -1) {
-                // IMPORTANT: Update the suggestions array in the local form data
-                newTests[testIdx].parameters[paramIdxInForm].suggestions = updatedParameters[paramIndex].suggestions;
-                
-                // Use setValue to update the entire 'tests' array to trigger re-render
-                setValue("tests", newTests, { shouldValidate: false, shouldDirty: true });
-            }
+          const newTests = [...testsWatch];
+          const paramIdxInForm = newTests[testIdx].parameters.findIndex(p => p.name === paramName);
+
+          if (paramIdxInForm > -1) {
+            // IMPORTANT: Update the suggestions array in the local form data
+            newTests[testIdx].parameters[paramIdxInForm].suggestions = updatedParameters[paramIndex].suggestions;
+
+            // Use setValue to update the entire 'tests' array to trigger re-render
+            setValue("tests", newTests, { shouldValidate: false, shouldDirty: true });
+          }
         }
 
 
@@ -333,101 +333,101 @@ const BloodValuesForm: React.FC = () => {
   /* ── Fetch patient’s booked tests and definitions ── */
   useEffect(() => {
     if (!registrationId) return
-    ;(async () => {
-      try {
-        const { data: registrationData, error: registrationError } = await supabase
-          .from("zregistration")
-          .select(
-            `
+      ; (async () => {
+        try {
+          const { data: registrationData, error: registrationError } = await supabase
+            .from("zregistration")
+            .select(
+              `
           *,
           patient_detail ( 
             patient_id, uhid, name, age, gender, number, total_day, title, age_unit 
           )
         `,
-          )
-          .eq("id", registrationId)
-          .single()
-        if (registrationError || !registrationData) {
-          console.error("Error fetching registration:", registrationError)
-          setLoading(false)
-          return
-        }
+            )
+            .eq("id", registrationId)
+            .single()
+          if (registrationError || !registrationData) {
+            console.error("Error fetching registration:", registrationError)
+            setLoading(false)
+            return
+          }
 
-        const patient = registrationData.patient_detail as any
-        const bookedTests = registrationData.bloodtest_data || []
-        const storedBloodtestDetail = registrationData.bloodtest_detail || {}
+          const patient = registrationData.patient_detail as any
+          const bookedTests = registrationData.bloodtest_data || []
+          const storedBloodtestDetail = registrationData.bloodtest_detail || {}
 
-        let ageDays = patient.age
-        switch (patient.age_unit?.toLowerCase()) {
-          case "year":
-            ageDays *= 365
-            break
-          case "month":
-            ageDays *= 30
-            break
-        }
-        const genderKey = patient.gender?.toLowerCase() === "male" ? "male" : "female"
-        console.log(`Patient age: ${patient.age} ${patient.age_unit}, calculated age in days: ${ageDays}`)
+          let ageDays = patient.age
+          switch (patient.age_unit?.toLowerCase()) {
+            case "year":
+              ageDays *= 365
+              break
+            case "month":
+              ageDays *= 30
+              break
+          }
+          const genderKey = patient.gender?.toLowerCase() === "male" ? "male" : "female"
+          console.log(`Patient age: ${patient.age} ${patient.age_unit}, calculated age in days: ${ageDays}`)
 
-        const originalTestNames = (bookedTests || []).map((t: any) => t.testName)
-        const { data: bloodTests, error: bloodTestError } = await supabase
-          .from("zblood_test")
-          .select(`id, test_name, interpretation, parameter, sub_heading`) // Fetch definition details here
-          .in("test_name", originalTestNames)
+          const originalTestNames = (bookedTests || []).map((t: any) => t.testName)
+          const { data: bloodTests, error: bloodTestError } = await supabase
+            .from("zblood_test")
+            .select(`id, test_name, interpretation, parameter, sub_heading`) // Fetch definition details here
+            .in("test_name", originalTestNames)
 
-        if (bloodTestError) throw new Error(`Failed to fetch blood tests: ${bloodTestError.message}`)
+          if (bloodTestError) throw new Error(`Failed to fetch blood tests: ${bloodTestError.message}`)
 
-        const testDefinitions: Record<string, any> = {}
-        const testInterpretations: Record<string, string> = {}
-        bloodTests.forEach((test: any) => {
-             const key = test.test_name
-                .toLowerCase()
-                .replace(/\s+/g, "_")
-                .replace(/[.#$[\]()]/g, "")
+          const testDefinitions: Record<string, any> = {}
+          const testInterpretations: Record<string, string> = {}
+          bloodTests.forEach((test: any) => {
+            const key = test.test_name
+              .toLowerCase()
+              .replace(/\s+/g, "_")
+              .replace(/[.#$[\]()]/g, "")
             testDefinitions[test.test_name] = test;
             testInterpretations[key] = test.interpretation || ""
-        })
+          })
 
-        const mappedPatientData: PatientData = {
-          id: patient.patient_id,
-          name: patient.name,
-          age: patient.age,
-          gender: patient.gender,
-          patientId: patient.uhid,
-          contact: patient.number,
-          total_day: patient.total_day,
-          day_type: patient.age_unit,
-          title: patient.title,
-          hospitalName: registrationData.hospital_name,
-          registration_id: registrationData.id,
-          createdAt: registrationData.registration_time,
-          sampleCollectedAt: registrationData.samplecollected_time,
-          bloodtest_data: bookedTests,
-          bloodtest_detail: storedBloodtestDetail,
-          doctorName: registrationData.doctor_name,
-        }
+          const mappedPatientData: PatientData = {
+            id: patient.patient_id,
+            name: patient.name,
+            age: patient.age,
+            gender: patient.gender,
+            patientId: patient.uhid,
+            contact: patient.number,
+            total_day: patient.total_day,
+            day_type: patient.age_unit,
+            title: patient.title,
+            hospitalName: registrationData.hospital_name,
+            registration_id: registrationData.id,
+            createdAt: registrationData.registration_time,
+            sampleCollectedAt: registrationData.samplecollected_time,
+            bloodtest_data: bookedTests,
+            bloodtest_detail: storedBloodtestDetail,
+            doctorName: registrationData.doctor_name,
+          }
 
-        const tests: TestValueEntry[] = bookedTests.map((bt: any) => {
+          const tests: TestValueEntry[] = bookedTests.map((bt: any) => {
             const testDef = testDefinitions[bt.testName];
-            
+
             if (!testDef) {
-                console.warn(`Test definition not found for ${bt.testName}`);
-                return {
-                    testId: bt.testId,
-                    testName: bt.testName,
-                    testType: bt.testType,
-                    parameters: [],
-                    subheadings: [],
-                    selectedParameters: bt.selectedParameters,
-                } as TestValueEntry
+              console.warn(`Test definition not found for ${bt.testName}`);
+              return {
+                testId: bt.testId,
+                testName: bt.testName,
+                testType: bt.testType,
+                parameters: [],
+                subheadings: [],
+                selectedParameters: bt.selectedParameters,
+              } as TestValueEntry
             }
 
             const allParams = Array.isArray(testDef.parameter) ? testDef.parameter : []
             const subheadings = Array.isArray(testDef.sub_heading) ? testDef.sub_heading : []
 
             const wanted = bt.selectedParameters?.length
-                ? allParams.filter((p: any) => bt.selectedParameters.includes(p.name))
-                : allParams
+              ? allParams.filter((p: any) => bt.selectedParameters.includes(p.name))
+              : allParams
 
             const params: TestParameterValue[] = wanted.map((p: any) => {
               const ranges = p.range?.[genderKey] || []
@@ -495,36 +495,36 @@ const BloodValuesForm: React.FC = () => {
             } as TestValueEntry
           });
 
-        const mappedBloodtestDetail: Record<string, any> = {}
-        for (const t of tests) {
-          const key = t.testName
-            .toLowerCase()
-            .replace(/\s+/g, "_")
-            .replace(/[.#$[\]]/g, "")
-          mappedBloodtestDetail[key] = {
-            parameters: t.parameters,
-            subheadings: t.subheadings || [],
-            reportedOn: storedBloodtestDetail[key]?.reportedOn || new Date().toISOString(),
-            enteredBy: storedBloodtestDetail[key]?.enteredBy || "",
-            testId: t.testId,
-            testName: t.testName,
-            interpretation: testInterpretations[key] || "",
+          const mappedBloodtestDetail: Record<string, any> = {}
+          for (const t of tests) {
+            const key = t.testName
+              .toLowerCase()
+              .replace(/\s+/g, "_")
+              .replace(/[.#$[\]]/g, "")
+            mappedBloodtestDetail[key] = {
+              parameters: t.parameters,
+              subheadings: t.subheadings || [],
+              reportedOn: storedBloodtestDetail[key]?.reportedOn || new Date().toISOString(),
+              enteredBy: storedBloodtestDetail[key]?.enteredBy || "",
+              testId: t.testId,
+              testName: t.testName,
+              interpretation: testInterpretations[key] || "",
+            }
           }
+
+          setPatientDetails(mappedPatientData)
+          setFullPatientData({
+            ...mappedPatientData,
+            bloodtest: mappedBloodtestDetail,
+          })
+
+          reset({ registrationId, tests })
+        } catch (e) {
+          console.error("Error in fetching data for form:", e)
+        } finally {
+          setLoading(false)
         }
-
-        setPatientDetails(mappedPatientData)
-        setFullPatientData({
-          ...mappedPatientData,
-          bloodtest: mappedBloodtestDetail,
-        })
-
-        reset({ registrationId, tests })
-      } catch (e) {
-        console.error("Error in fetching data for form:", e)
-      } finally {
-        setLoading(false)
-      }
-    })()
+      })()
   }, [registrationId, reset])
 
   /* ══════════════ “Sum to 100” warning logic ══════════════ */
@@ -873,67 +873,67 @@ const BloodValuesForm: React.FC = () => {
                         )}
                         {sh.length
                           ? sh.map((s, shIdx) => {
-                              const tag = `${tIdx}-${shIdx}`
-                              const list = test.parameters
-                                .map((p, i) => ({ ...p, originalIndex: i }))
-                                .filter((p) => s.parameterNames.includes(p.name))
-                              const need100 = s.is100 === true || s.is100 === "true"
-                              const last = list[list.length - 1]
-                              return (
-                                <div key={shIdx} className="mt-2">
-                                  <h4
-                                    className={cn(
-                                      "mb-1 text-xs font-semibold text-gray-700",
-                                      warn100[tag] && "text-red-600",
-                                    )}
-                                  >
-                                    {s.title}
-                                    {need100 && (
-                                      <span className="ml-1 text-2xs font-normal text-gray-500">(must total 100%)</span>
-                                    )}
-                                  </h4>
-                                  <div className="grid gap-1">
-                                    {list.map((p) => {
-                                      const isLast = need100 && p.originalIndex === last.originalIndex
-                                      return (
-                                        <ParamRow
-                                          key={p.originalIndex}
-                                          tIdx={tIdx}
-                                          pIdx={p.originalIndex}
-                                          param={{ ...p, originalIndex: p.originalIndex }}
-                                          testName={test.testName}
-                                          value={testsWatch[tIdx].parameters[p.originalIndex].value}
-                                          setValue={setValue}
-                                          errors={errors}
-                                          numericChange={numericChange}
-                                          calcOne={calcFormulaOnce}
-                                          isLastOf100={isLast}
-                                          fillRemaining={() => fillRemaining(tIdx, s, p.originalIndex)}
-                                          buildMatches={buildMatches}
-                                          updateTestDefinitionSuggestion={updateTestDefinitionSuggestion}
-                                        />
-                                      )
-                                    })}
-                                  </div>
+                            const tag = `${tIdx}-${shIdx}`
+                            const list = test.parameters
+                              .map((p, i) => ({ ...p, originalIndex: i }))
+                              .filter((p) => s.parameterNames.includes(p.name))
+                            const need100 = s.is100 === true || s.is100 === "true"
+                            const last = list[list.length - 1]
+                            return (
+                              <div key={shIdx} className="mt-2">
+                                <h4
+                                  className={cn(
+                                    "mb-1 text-xs font-semibold text-gray-700",
+                                    warn100[tag] && "text-red-600",
+                                  )}
+                                >
+                                  {s.title}
+                                  {need100 && (
+                                    <span className="ml-1 text-2xs font-normal text-gray-500">(must total 100%)</span>
+                                  )}
+                                </h4>
+                                <div className="grid gap-1">
+                                  {list.map((p) => {
+                                    const isLast = need100 && p.originalIndex === last.originalIndex
+                                    return (
+                                      <ParamRow
+                                        key={p.originalIndex}
+                                        tIdx={tIdx}
+                                        pIdx={p.originalIndex}
+                                        param={{ ...p, originalIndex: p.originalIndex }}
+                                        testName={test.testName}
+                                        value={testsWatch[tIdx].parameters[p.originalIndex].value}
+                                        setValue={setValue}
+                                        errors={errors}
+                                        numericChange={numericChange}
+                                        calcOne={calcFormulaOnce}
+                                        isLastOf100={isLast}
+                                        fillRemaining={() => fillRemaining(tIdx, s, p.originalIndex)}
+                                        buildMatches={buildMatches}
+                                        updateTestDefinitionSuggestion={updateTestDefinitionSuggestion}
+                                      />
+                                    )
+                                  })}
                                 </div>
-                              )
-                            })
+                              </div>
+                            )
+                          })
                           : test.parameters.map((p, pIdx) => (
-                              <ParamRow
-                                key={pIdx}
-                                tIdx={tIdx}
-                                pIdx={pIdx}
-                                param={{ ...p, originalIndex: pIdx }}
-                                testName={test.testName}
-                                value={testsWatch[tIdx].parameters[pIdx].value}
-                                setValue={setValue}
-                                errors={errors}
-                                numericChange={numericChange}
-                                calcOne={calcFormulaOnce}
-                                buildMatches={buildMatches}
-                                updateTestDefinitionSuggestion={updateTestDefinitionSuggestion}
-                              />
-                            ))}
+                            <ParamRow
+                              key={pIdx}
+                              tIdx={tIdx}
+                              pIdx={pIdx}
+                              param={{ ...p, originalIndex: pIdx }}
+                              testName={test.testName}
+                              value={testsWatch[tIdx].parameters[pIdx].value}
+                              setValue={setValue}
+                              errors={errors}
+                              numericChange={numericChange}
+                              calcOne={calcFormulaOnce}
+                              buildMatches={buildMatches}
+                              updateTestDefinitionSuggestion={updateTestDefinitionSuggestion}
+                            />
+                          ))}
                       </CardContent>
                     </Card>
                   )
@@ -1034,30 +1034,30 @@ interface RowProps {
 }
 
 const AddSuggestionButton: React.FC<{
-    value: string;
-    testName: string;
-    paramName: string;
-    updateTestDefinitionSuggestion: (testName: string, paramName: string, newValue: string) => Promise<void>;
+  value: string;
+  testName: string;
+  paramName: string;
+  updateTestDefinitionSuggestion: (testName: string, paramName: string, newValue: string) => Promise<void>;
 }> = ({ value, testName, paramName, updateTestDefinitionSuggestion }) => {
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>
-                <Button
-                    type="button"
-                    onClick={() => updateTestDefinitionSuggestion(testName, paramName, value)}
-                    variant="outline"
-                    size="sm"
-                    className="ml-1 h-5 text-2xs text-blue-600 border-blue-600 hover:bg-blue-50 hover:text-blue-800 bg-transparent"
-                >
-                    <Plus className="h-3 w-3 mr-0.5" />
-                    Add Suggestion
-                </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-                <p>Add "{value}" to the **{paramName}** definition.</p>
-            </TooltipContent>
-        </Tooltip>
-    );
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          onClick={() => updateTestDefinitionSuggestion(testName, paramName, value)}
+          variant="outline"
+          size="sm"
+          className="ml-1 h-5 text-2xs text-blue-600 border-blue-600 hover:bg-blue-50 hover:text-blue-800 bg-transparent"
+        >
+          <Plus className="h-3 w-3 mr-0.5" />
+          Add Suggestion
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>Add "{value}" to the **{paramName}** definition.</p>
+      </TooltipContent>
+    </Tooltip>
+  );
 };
 
 
@@ -1078,8 +1078,8 @@ const ParamRow: React.FC<RowProps> = ({
 }) => {
   const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([])
   // Use the form value directly for the text input local state
-  const [currentTextValue, setCurrentTextValue] = useState(String(value ?? "")) 
-  
+  const [currentTextValue, setCurrentTextValue] = useState(String(value ?? ""))
+
   // Keep local state in sync with form hook state
   useEffect(() => {
     setCurrentTextValue(String(value ?? ""))
@@ -1108,7 +1108,7 @@ const ParamRow: React.FC<RowProps> = ({
       const focusable = Array.from(
         form.querySelectorAll('input:not([type="hidden"]), textarea, button:not([disabled])'),
       ) as (HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement)[]
-      
+
       const idx = focusable.indexOf(e.currentTarget as any)
       if (idx > -1) {
         const next = focusable[idx + 1]
@@ -1128,7 +1128,7 @@ const ParamRow: React.FC<RowProps> = ({
     return param.suggestions?.map(s => s.description.toLowerCase()) || [];
   }, [param.suggestions]);
 
-  const isNewSuggestionCandidate = 
+  const isNewSuggestionCandidate =
     param.valueType === "text" &&
     currentTextValue.trim() !== "" &&
     !existingDescriptions.includes(currentTextValue.trim().toLowerCase());
@@ -1172,12 +1172,12 @@ const ParamRow: React.FC<RowProps> = ({
           </Button>
         )}
         {isNewSuggestionCandidate && (
-             <AddSuggestionButton
-                value={currentTextValue.trim()}
-                testName={testName}
-                paramName={param.name}
-                updateTestDefinitionSuggestion={updateTestDefinitionSuggestion}
-            />
+          <AddSuggestionButton
+            value={currentTextValue.trim()}
+            testName={testName}
+            paramName={param.name}
+            updateTestDefinitionSuggestion={updateTestDefinitionSuggestion}
+          />
         )}
       </div>
       {param.valueType === "number" ? (

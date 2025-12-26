@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -80,6 +81,13 @@ export default function PharmacyBillingPage() {
     const [loading, setLoading] = useState(false)
     const [currentTime, setCurrentTime] = useState(new Date())
 
+    // --- Params for Edit Mode ---
+    const searchParams = useSearchParams()
+    const router = useRouter()
+    const editSaleId = searchParams.get('id')
+    const [isEditMode, setIsEditMode] = useState(false)
+    const [originalSaleData, setOriginalSaleData] = useState<any>(null)
+
     // --- Master Data ---
     const [medicineList, setMedicineList] = useState<ClinicMedicine[]>([])
     const [doctorList, setDoctorList] = useState<{ id: string, name: string }[]>([])
@@ -121,11 +129,18 @@ export default function PharmacyBillingPage() {
     }
 
     // --- Initialization ---
+    // --- Initialization ---
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000)
         fetchInitialData()
+
+        if (editSaleId) {
+            fetchSaleForEdit(editSaleId)
+        }
+
         return () => clearInterval(timer)
-    }, [])
+    }, [editSaleId])
+
 
     const fetchInitialData = async () => {
         // Fetch Medicines
@@ -135,6 +150,69 @@ export default function PharmacyBillingPage() {
         // Fetch Doctors (Mock or Config) - simplified for Speed
         const { data: docs } = await supabase.from('opd_datasets').select('datajson').eq('dataname', 'refer_doctors').single()
         if (docs?.datajson) setDoctorList(docs.datajson)
+    }
+
+    const fetchSaleForEdit = async (id: string) => {
+        setIsEditMode(true)
+        setLoading(true)
+
+        try {
+            // 1. Fetch Sale Header
+            const { data: sale, error: saleError } = await supabase.from('pharmacy_sales').select('*').eq('id', id).single()
+            if (saleError) throw saleError
+            setOriginalSaleData(sale)
+
+            // 2. Hydrate Header State
+            setSelectedPatient({
+                uhid: sale.patient_id,
+                name: sale.customer_name,
+                number: sale.customer_phone,
+                age: 0, // We assume details exist in patient DB or just use header
+                gender: 'unknown'
+            })
+            setPaymentMode(sale.payment_mode as any)
+            setSplitCash(sale.paid_amount_cash?.toString() || '0')
+            setSplitOnline(sale.paid_amount_online?.toString() || '0')
+            setRemark(sale.notes || '')
+            setSelectedDoctor(sale.doctor_name || '')
+
+            // 3. Fetch Items
+            const { data: items, error: itemsError } = await supabase.from('pharmacy_sale_items').select('*').eq('sale_id', id)
+            if (itemsError) throw itemsError
+
+            // 4. Hydrate Cart needs Medicine Name from ID
+            const { data: meds } = await supabase.from('clinic_medicine').select('id, name').in('id', items.map(i => i.medicine_id))
+            const medMap = new Map((meds || []).map(m => [m.id, m.name]))
+
+            const hydratedCart: CartItem[] = items.map(item => {
+                // Determine Mode: calculated from total_units_sold and quantity
+                // OR we stored it? We stored 'quantity_mode' in SQL but interface wasn't explicit
+                // Let's rely on stored quantity_mode column if added, otherwise derive
+                return {
+                    id: Math.random().toString(36), // Temp ID
+                    medicine_id: item.medicine_id,
+                    medicine_name: medMap.get(item.medicine_id) || 'Unknown',
+                    batch_number: item.batch_number,
+                    expiry_date: item.expiry_date,
+                    quantity_mode: item.quantity_mode as 'Pack' | 'Unit',
+                    quantity: Number(item.quantity),
+                    total_units_sold: item.total_units_sold,
+                    mrp_per_pack: 0, // Need to fetch from batch stock or approximate from unit_price
+                    unit_price: Number(item.unit_price), // This was saved as unit price
+                    discount_amount: Number(item.discount_amount || 0),
+                    total_price: Number(item.total_price)
+                }
+            })
+
+            // Need MRP for correct future calcs? 
+            // We can fetch batch MRp, but for rendering historical cart, unit_price is key.
+            setCart(hydratedCart)
+
+        } catch (e: any) {
+            alert('Error loading sale for edit: ' + e.message)
+        } finally {
+            setLoading(false)
+        }
     }
 
     // --- Shortcuts ---
@@ -405,14 +483,23 @@ export default function PharmacyBillingPage() {
         }
 
         try {
-            const { data, error } = await supabase.rpc('save_sales_entry', payload)
-            if (error) throw error
+            if (isEditMode && editSaleId) {
+                // CALL UPDATE RPC
+                const { data, error } = await supabase.rpc('update_pharmacy_sale', {
+                    ...payload,
+                    p_sale_id: editSaleId
+                })
+                if (error) throw error
+                window.open(`/pharmacy/bill/${editSaleId}`, '_blank')
+                router.replace('/pharmacy/sales')
+            } else {
+                // CALL CREATE RPC
+                const { data, error } = await supabase.rpc('save_sales_entry', payload)
+                if (error) throw error
+                window.open(`/pharmacy/bill/${data.sale_id}`, '_blank')
+                window.location.reload()
+            }
 
-            // Redirect to Bill Page
-            window.open(`/pharmacy/bill/${data.sale_id}`, '_blank')
-
-            // Optional: Reload or Reset (Reloading is safer to ensure stock sync)
-            window.location.reload()
 
         } catch (e: any) {
             console.error(e)
@@ -895,7 +982,8 @@ export default function PharmacyBillingPage() {
                                     <span>Processing...</span>
                                 ) : (
                                     <span className="flex items-center gap-2">
-                                        <CheckCircle2 className="h-6 w-6" /> Complete Sale
+                                        <CheckCircle2 className="h-6 w-6" />
+                                        {isEditMode ? 'Update Sale & Inventory' : 'Complete Sale'}
                                     </span>
                                 )}
                             </Button>

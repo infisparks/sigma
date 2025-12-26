@@ -22,7 +22,7 @@ import {
 import {
     Search, FileText, Calendar as CalendarIcon, FilterX,
     ArrowUpRight, CreditCard, Banknote, TrendingUp, History,
-    Eye, Printer
+    Eye, Printer, Trash2
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from "date-fns"
@@ -36,6 +36,7 @@ interface SaleItem {
     medicine_name: string
     batch_number: string
     item_discount_amount: number | null
+    discount_amount?: number // Added for compatibility
     quantity: number
     quantity_mode: string
     unit_price: number
@@ -143,6 +144,25 @@ export default function SalesDashboardPage() {
             totalCash: totalCash,
             totalOnline: totalOnline
         })
+    }
+
+    const handleDeleteSale = async (id: string) => {
+        if (!confirm('Are you sure you want to DELETE this sale? Stock will be restored.')) return
+
+        setLoading(true)
+        try {
+            const { error } = await supabase.rpc('delete_pharmacy_sale', { p_sale_id: id })
+            if (error) throw error
+
+            alert('Sale Deleted & Stock Restored.')
+            setIsDetailsOpen(false)
+            fetchSales() // Refresh list
+        } catch (e: any) {
+            console.error(e)
+            alert('Delete Failed: ' + e.message)
+        } finally {
+            setLoading(false)
+        }
     }
 
     const fetchSaleDetails = async (sale: Sale) => {
@@ -405,18 +425,36 @@ export default function SalesDashboardPage() {
                     {selectedSale && (
                         <div className="space-y-6">
                             {/* Summary Stats */}
-                            <div className="grid grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg border">
-                                <div>
-                                    <div className="text-xs text-gray-500">Patient</div>
-                                    <div className="font-semibold">{selectedSale.customer_name}</div>
+                            <div className="bg-gray-50 p-4 rounded-lg border">
+                                <div className="grid grid-cols-2 gap-4 mb-4 border-b pb-4">
+                                    <div>
+                                        <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Patient Name</div>
+                                        <div className="font-semibold text-lg">{selectedSale.customer_name}</div>
+                                        <div className="text-xs text-gray-500 mt-1">{selectedSale.customer_phone || 'No Phone'}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Payment Mode</div>
+                                        <div className="font-medium text-lg text-blue-700">{selectedSale.payment_mode}</div>
+                                        <div className="text-xs text-gray-500 mt-1">{format(new Date(selectedSale.created_at), 'dd MMM yyyy, hh:mm a')}</div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <div className="text-xs text-gray-500">Total Amount</div>
-                                    <div className="font-bold text-blue-700 text-lg">₹{(selectedSale.curr_total || 0).toFixed(0)}</div>
-                                </div>
-                                <div>
-                                    <div className="text-xs text-gray-500">Payment</div>
-                                    <div className="font-medium">{selectedSale.payment_mode}</div>
+                                <div className="flex justify-end gap-8 text-sm">
+                                    {selectedSale.discount_amount > 0 && (
+                                        <>
+                                            <div className="text-right">
+                                                <div className="text-gray-500">Subtotal</div>
+                                                <div className="font-medium">₹{(selectedSale.subtotal || 0).toLocaleString('en-IN')}</div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-gray-500">Discount</div>
+                                                <div className="font-medium text-green-600">- ₹{(selectedSale.discount_amount || 0).toLocaleString('en-IN')}</div>
+                                            </div>
+                                        </>
+                                    )}
+                                    <div className="text-right">
+                                        <div className="text-gray-500 font-bold">Total Payable</div>
+                                        <div className="font-bold text-xl text-gray-900">₹{(selectedSale.curr_total || 0).toLocaleString('en-IN')}</div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -431,12 +469,13 @@ export default function SalesDashboardPage() {
                                                 <TableHead>Batch</TableHead>
                                                 <TableHead className="text-right">Qty</TableHead>
                                                 <TableHead className="text-right">Price</TableHead>
+                                                <TableHead className="text-right text-green-600">Disc</TableHead>
                                                 <TableHead className="text-right">Total</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {detailsLoading ? (
-                                                <TableRow><TableCell colSpan={5} className="text-center py-8">Loading items...</TableCell></TableRow>
+                                                <TableRow><TableCell colSpan={6} className="text-center py-8">Loading items...</TableCell></TableRow>
                                             ) : (
                                                 saleItems.map(item => (
                                                     <TableRow key={item.id}>
@@ -447,6 +486,11 @@ export default function SalesDashboardPage() {
                                                             <span className="text-[10px] ml-1 text-gray-400">{item.quantity_mode}</span>
                                                         </TableCell>
                                                         <TableCell className="text-right text-xs">₹{item.unit_price}</TableCell>
+                                                        <TableCell className="text-right text-xs text-green-600 font-medium">
+                                                            {item.item_discount_amount || item['discount_amount'] ?
+                                                                `-₹${Number(item.item_discount_amount || item['discount_amount'] || 0).toFixed(2)}`
+                                                                : '-'}
+                                                        </TableCell>
                                                         <TableCell className="text-right font-medium">₹{item.total_price}</TableCell>
                                                     </TableRow>
                                                 ))
@@ -464,6 +508,18 @@ export default function SalesDashboardPage() {
                                     onClick={() => window.open(`/pharmacy/bill/${selectedSale.id}`, '_blank')}
                                 >
                                     <Printer className="h-4 w-4 mr-2" /> Print Bill
+                                </Button>
+                                <Button
+                                    className="bg-orange-600 hover:bg-orange-700 text-white ml-2"
+                                    onClick={() => window.location.href = `/pharmacy/billing?id=${selectedSale.id}`}
+                                >
+                                    <FileText className="h-4 w-4 mr-2" /> Edit / Return
+                                </Button>
+                                <Button
+                                    className="bg-red-600 hover:bg-red-700 text-white ml-2"
+                                    onClick={() => handleDeleteSale(selectedSale.id)}
+                                >
+                                    <Trash2 className="h-4 w-4 mr-2" /> Delete
                                 </Button>
                             </div>
                         </div>
