@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     Table,
     TableBody,
@@ -13,730 +14,491 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-import {
-    Plus, Search, ArrowLeft, Trash2, Save, BatteryLow, Package, RefreshCw, Edit
-} from 'lucide-react'
+import { Search, Package, Calendar, TrendingUp, AlertCircle, ChevronDown, ChevronRight, CheckCircle2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { format } from 'date-fns'
+import { cn } from '@/lib/utils'
 
-// Types
-interface InventoryItem {
-    id: string
-    name: string
-    manufacturer_name: string
-    pack_size_label: string
-    current_stock: number
-    low_stock_limit: number
-    mrp: number
-    cost_price: number
+// --- Types ---
+
+// 1. Stock Types
+interface BatchStock {
     batch_number: string
     expiry_date: string
-    preferred_vendor_id?: string
+    quantity: number
+    remaining_units: number // NEW: Track granular units
+    pack_size_quantity: number // NEW: Units/Pack definition
+    mrp: number
+    purchase_rate: number
 }
 
-interface MasterMedicine {
-    id: number
-    name: string
-    manufacturer_name: string
-    pack_size_label: string
-    medicine_desc: string
-    price: number // Base price from master
+interface MedicineStockAgg {
+    medicine_id: number
+    medicine_name: string
+    pack_size: string
+    total_quantity: number // Total Packs
+    total_units: number // NEW: Total Loose Units
+    total_value_cost: number
+    total_value_mrp: number
+    batches: BatchStock[]
+    status: 'In Stock' | 'Low Stock' | 'Out of Stock'
 }
 
-interface ConfigItem extends MasterMedicine {
-    custom_mrp: number
-    low_stock_limit: number
-    vendor_price?: number // Optional
-    vendor_id?: string
-}
-
-interface Vendor {
+// 2. Purchase Types
+interface PurchaseItem {
     id: string
-    name: string
+    medicine_name: string
+    batch_number: string
+    quantity: number
+    unit_price: number
+    total_amount: number
 }
 
-export default function InventoryPage() {
-    const [view, setView] = useState<'list' | 'add'>('list')
-    const [inventory, setInventory] = useState<InventoryItem[]>([])
+interface PurchaseInvoice {
+    id: string
+    invoice_number: string
+    invoice_date: string
+    vendor_name: string
+    total_amount: number
+    status: string
+    items: PurchaseItem[]
+}
+
+
+export default function InventoryMasterPage() {
+    const [activeTab, setActiveTab] = useState('stock')
     const [loading, setLoading] = useState(true)
-    const [searchTerm, setSearchTerm] = useState('')
 
-    // Add Mode State
-    const [masterSearch, setMasterSearch] = useState('')
-    const [masterResults, setMasterResults] = useState<MasterMedicine[]>([])
-    const [searchLoading, setSearchLoading] = useState(false)
-    const [selectedItems, setSelectedItems] = useState<ConfigItem[]>([])
-    const [vendors, setVendors] = useState<Vendor[]>([])
+    // Stock State
+    const [stockList, setStockList] = useState<MedicineStockAgg[]>([])
+    const [stockSearch, setStockSearch] = useState('')
+    const [expandedMedicineId, setExpandedMedicineId] = useState<number | null>(null)
 
-    // Bulk Config State
-    const [bulkVendor, setBulkVendor] = useState<string>('')
+    // Purchase State
+    const [purchaseList, setPurchaseList] = useState<PurchaseInvoice[]>([])
+    const [purchaseDateFilter, setPurchaseDateFilter] = useState('')
 
-    // Stock Update State
-    const [stockUpdateItem, setStockUpdateItem] = useState<InventoryItem | null>(null)
-    const [stockUpdateForm, setStockUpdateForm] = useState({
-        quantity: '',
-        purchase_date: new Date().toISOString().split('T')[0],
-        vendor_id: '',
-        unit_cost_price: '',
-        batch_number: '',
-        expiry_date: ''
-    })
-
-    // Price Update State
-    const [editPriceItem, setEditPriceItem] = useState<InventoryItem | null>(null)
-    const [newMrp, setNewMrp] = useState('')
-
+    // --- initialization ---
     useEffect(() => {
-        fetchInventory()
-        fetchVendors()
+        refreshData()
     }, [])
 
-    const fetchInventory = async () => {
-        try {
-            setLoading(true)
-            const { data, error } = await supabase
-                .from('pharmacy_inventory')
-                .select('*')
-                .order('name')
-
-            if (error) throw error
-            setInventory(data || [])
-        } catch (error) {
-            console.error('Error loading inventory:', error)
-        } finally {
-            setLoading(false)
-        }
+    const refreshData = async () => {
+        setLoading(true)
+        await Promise.all([fetchStock(), fetchPurchases()])
+        setLoading(false)
     }
 
-    const fetchVendors = async () => {
-        const { data } = await supabase.from('pharmacy_vendors').select('id, name')
-        setVendors(data || [])
-    }
-
-    const searchMaster = async () => {
-        if (masterSearch.length < 3) return
-        setSearchLoading(true)
+    // --- Fetch Stock Logic ---
+    const fetchStock = async () => {
         try {
-            const { data, error } = await supabase
-                .from('medicine')
+            // 1. Fetch Clinic Formularies
+            const { data: meds, error: medError } = await supabase
+                .from('clinic_medicine')
+                .select('id, name, pack_size_label')
+
+            if (medError) throw medError
+
+            // 2. Fetch All Active Batches
+            const { data: batches, error: batchError } = await supabase
+                .from('pharmacy_batch_stock')
                 .select('*')
-                .ilike('name', `${masterSearch}%`)
-                .limit(20)
+                .gt('quantity', 0) // Only show active stock
 
-            if (error) throw error
+            if (batchError) throw batchError
 
-            const sortedData = (data || []).sort((a: MasterMedicine, b: MasterMedicine) => {
-                return a.name.length - b.name.length
+            // 3. Aggregate
+            const medMap = new Map<number, MedicineStockAgg>()
+
+            // Initialize Map
+            meds?.forEach(m => {
+                medMap.set(m.id, {
+                    medicine_id: m.id,
+                    medicine_name: m.name,
+                    pack_size: m.pack_size_label,
+                    total_quantity: 0,
+                    total_units: 0,
+                    total_value_cost: 0,
+                    total_value_mrp: 0,
+                    batches: [],
+                    status: 'Out of Stock'
+                })
             })
 
-            setMasterResults(sortedData)
+            // Fill Data
+            batches?.forEach(b => {
+                const med = medMap.get(b.medicine_id)
+                if (med) {
+                    med.total_quantity += b.quantity
+                    // Fallback to qty * 1 if remaining_units is null (backward compatibility)
+                    const units = b.remaining_units !== undefined ? b.remaining_units : (b.quantity * (b.pack_size_quantity || 1));
+                    med.total_units += units;
+
+                    med.total_value_cost += (b.quantity * b.purchase_rate)
+                    med.total_value_mrp += (b.quantity * b.mrp)
+                    med.batches.push({
+                        batch_number: b.batch_number,
+                        expiry_date: b.expiry_date,
+                        quantity: b.quantity,
+                        remaining_units: units,
+                        pack_size_quantity: b.pack_size_quantity || 1,
+                        mrp: b.mrp,
+                        purchase_rate: b.purchase_rate
+                    })
+                }
+            })
+
+            // Determine Status & Sort Batches by Expiry
+            const computedList = Array.from(medMap.values()).map(m => {
+                // Sort batches: Earliest Expiry First
+                m.batches.sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())
+
+                if (m.total_quantity === 0) m.status = 'Out of Stock'
+                else if (m.total_quantity < 50) m.status = 'Low Stock'
+                else m.status = 'In Stock'
+
+                return m
+            })
+
+            setStockList(computedList)
+
         } catch (error) {
-            console.error('Search failed:', error)
-        } finally {
-            setSearchLoading(false)
+            console.error('Stock Load Failed', error)
         }
     }
 
-    const toggleSelect = (med: MasterMedicine) => {
-        const exists = selectedItems.find(i => i.id === med.id)
-        if (exists) {
-            setSelectedItems(selectedItems.filter(i => i.id !== med.id))
-        } else {
-            // Add with defaults
-            setSelectedItems([...selectedItems, {
-                ...med,
-                custom_mrp: med.price || 0,
-                low_stock_limit: 3, // Default low stock
-                vendor_id: bulkVendor || undefined
-            }])
-        }
-    }
-
-    const updateItemConfig = (id: number, field: keyof ConfigItem, value: any) => {
-        setSelectedItems(selectedItems.map(item =>
-            item.id === id ? { ...item, [field]: value } : item
-        ))
-    }
-
-    const applyBulkVendor = (vendorId: string) => {
-        setBulkVendor(vendorId)
-        setSelectedItems(selectedItems.map(item => ({ ...item, vendor_id: vendorId })))
-    }
-
-    const handleSaveAll = async () => {
-        if (selectedItems.length === 0) return
-
+    // --- Fetch History Logic ---
+    const fetchPurchases = async () => {
         try {
-            const payload = selectedItems.map(item => ({
-                medicine_id: item.id,
-                name: item.name,
-                manufacturer_name: item.manufacturer_name,
-                pack_size_label: item.pack_size_label,
-                description: item.medicine_desc,
-                current_stock: 0, // Initial stock is 0 until purchased
-                low_stock_limit: item.low_stock_limit,
-                mrp: item.custom_mrp,
-                cost_price: item.vendor_price || 0,
-                preferred_vendor_id: item.vendor_id || null
+            let query = supabase
+                .from('pharmacy_purchase_invoice')
+                .select(`
+                    id,
+                    invoice_number,
+                    invoice_date,
+                    total_amount,
+                    status,
+                    vendor:pharmacy_vendors(name),
+                    items:pharmacy_purchase_item(
+                        id,
+                        quantity,
+                        unit_price,
+                        total_amount,
+                        batch_number,
+                        medicine:clinic_medicine(name)
+                    )
+                `)
+                .order('created_at', { ascending: false })
+
+            if (purchaseDateFilter) {
+                query = query.eq('invoice_date', purchaseDateFilter)
+            }
+
+            const { data, error } = await query
+            if (error) throw error
+
+            const mapped = (data || []).map((p: any) => ({
+                id: p.id,
+                invoice_number: p.invoice_number,
+                invoice_date: p.invoice_date,
+                vendor_name: p.vendor?.name || 'Unknown',
+                total_amount: p.total_amount,
+                status: p.status,
+                items: p.items?.map((i: any) => ({
+                    id: i.id,
+                    medicine_name: i.medicine?.name || 'Unknown',
+                    batch_number: i.batch_number,
+                    quantity: i.quantity,
+                    unit_price: i.unit_price,
+                    total_amount: i.total_amount
+                })) || []
             }))
 
-            const { error } = await supabase
-                .from('pharmacy_inventory')
-                .insert(payload)
-
-            if (error) throw error
-
-            alert('Medicines added successfully!')
-            setView('list')
-            setSelectedItems([])
-            setMasterSearch('')
-            setMasterResults([])
-            setBulkVendor('')
-            fetchInventory()
-        } catch (error) {
-            console.error('Failed to add medicines:', error)
-            alert('Failed to add medicines')
-        }
-    }
-
-    // --- Stock Update Logic ---
-    const openStockUpdate = (item: InventoryItem) => {
-        setStockUpdateItem(item)
-        setStockUpdateForm({
-            quantity: '',
-            purchase_date: new Date().toISOString().split('T')[0],
-            vendor_id: item.preferred_vendor_id || '',
-            unit_cost_price: item.cost_price?.toString() || '', // Should ideally help user by prefilling last known cost
-            batch_number: '',
-            expiry_date: ''
-        })
-    }
-
-    const handleStockUpdateSubmit = async () => {
-        if (!stockUpdateItem || !stockUpdateForm.quantity || !stockUpdateForm.purchase_date) {
-            alert('Please fill Quantity and Date')
-            return
-        }
-
-        const qty = parseInt(stockUpdateForm.quantity)
-        if (qty <= 0) {
-            alert('Quantity must be positive')
-            return
-        }
-
-        try {
-            // 1. Create Purchase Record
-            // Even if vendor is unknown, we insert null or a placeholder if constraints allow.
-            // My schema allows null vendor_id? Let's check schema. Yes, but good to have.
-            const { data: purchase, error: pError } = await supabase
-                .from('pharmacy_purchases')
-                .insert({
-                    vendor_id: stockUpdateForm.vendor_id || null,
-                    purchase_date: stockUpdateForm.purchase_date,
-                    total_amount: (parseFloat(stockUpdateForm.unit_cost_price) || 0) * qty,
-                    status: 'completed',
-                    notes: 'Quick Stock Update via Inventory'
-                })
-                .select()
-                .single()
-
-            if (pError) throw pError
-
-            // 2. Create Purchase Item
-            const { error: iError } = await supabase
-                .from('pharmacy_purchase_items')
-                .insert({
-                    purchase_id: purchase.id,
-                    inventory_id: stockUpdateItem.id,
-                    quantity: qty,
-                    unit_cost_price: parseFloat(stockUpdateForm.unit_cost_price) || 0,
-                    batch_number: stockUpdateForm.batch_number,
-                    expiry_date: stockUpdateForm.expiry_date || null
-                })
-
-            if (iError) throw iError
-
-            // 3. Update Inventory Stock
-            const newStock = stockUpdateItem.current_stock + qty
-            await supabase
-                .from('pharmacy_inventory')
-                .update({
-                    current_stock: newStock,
-                    batch_number: stockUpdateForm.batch_number || stockUpdateItem.batch_number,
-                    expiry_date: stockUpdateForm.expiry_date || stockUpdateItem.expiry_date
-                })
-                .eq('id', stockUpdateItem.id)
-
-            alert('Stock Updated Successfully')
-            setStockUpdateItem(null)
-            fetchInventory()
+            setPurchaseList(mapped)
 
         } catch (error) {
-            console.error('Stock update failed:', error)
-            alert('Failed to update stock')
+            console.error(error)
         }
     }
 
-    // --- Price Update Logic ---
-    const openEditPrice = (item: InventoryItem) => {
-        setEditPriceItem(item)
-        setNewMrp(item.mrp.toString())
-    }
-
-    const handleUpdateMrp = async () => {
-        if (!editPriceItem || !newMrp) return
-
-        try {
-            const { error } = await supabase
-                .from('pharmacy_inventory')
-                .update({ mrp: parseFloat(newMrp) })
-                .eq('id', editPriceItem.id)
-
-            if (error) throw error
-
-            alert('MRP Updated Successfully')
-            setEditPriceItem(null)
-            fetchInventory()
-        } catch (error) {
-            console.error('Error updating MRP:', error)
-            alert('Failed to update MRP')
+    // --- Actions ---
+    const toggleExpand = (id: number) => {
+        if (expandedMedicineId === id) {
+            setExpandedMedicineId(null)
+        } else {
+            setExpandedMedicineId(id)
         }
     }
 
-
-    // Filter local inventory
-    const filteredInventory = inventory.filter(item =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    // --- Derived Data ---
+    const filteredStock = stockList.filter(s =>
+        s.medicine_name.toLowerCase().includes(stockSearch.toLowerCase())
     )
 
-    if (view === 'add') {
-        return (
-            <div className="p-6 space-y-6 bg-gray-50/50 min-h-screen animate-in fade-in duration-300">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <Button variant="outline" size="icon" onClick={() => setView('list')}>
-                            <ArrowLeft className="h-4 w-4" />
-                        </Button>
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Add New Medicines</h1>
-                            <p className="text-muted-foreground text-sm">Search master database & add to inventory.</p>
-                        </div>
-                    </div>
-                    <Button onClick={handleSaveAll} disabled={selectedItems.length === 0} className="bg-green-600 hover:bg-green-700">
-                        <Save className="mr-2 h-4 w-4" /> Save {selectedItems.length} Items
-                    </Button>
+    // Stats
+    const totalInventoryValue = stockList.reduce((sum, i) => sum + i.total_value_cost, 0)
+    const totalItems = stockList.reduce((sum, i) => sum + i.total_quantity, 0)
+
+    return (
+        <div className="min-h-screen bg-gray-50/50 p-6 space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Pharmacy Management</h1>
+                    <p className="text-muted-foreground">Comprehensive overview of Inventory and Purchase Records.</p>
                 </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left: Search & Select */}
-                    <Card className="lg:col-span-1 h-fit">
-                        <CardHeader>
-                            <CardTitle className="text-base">1. Search Medicine</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex gap-2">
-                                <Input
-                                    placeholder="Search (min 3 chars)..."
-                                    value={masterSearch}
-                                    onChange={e => setMasterSearch(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && searchMaster()}
-                                />
-                                <Button size="icon" onClick={searchMaster} disabled={searchLoading}>
-                                    {searchLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> : <Search className="h-4 w-4" />}
-                                </Button>
-                            </div>
-
-                            <div className="border rounded-md max-h-[500px] overflow-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="w-[40px]"></TableHead>
-                                            <TableHead>Name</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {masterResults.map(med => {
-                                            const isSelected = !!selectedItems.find(i => i.id === med.id)
-                                            return (
-                                                <TableRow key={med.id} className={isSelected ? 'bg-blue-50' : ''}>
-                                                    <TableCell>
-                                                        <Checkbox
-                                                            checked={isSelected}
-                                                            onCheckedChange={() => toggleSelect(med)}
-                                                        />
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <div className="font-medium text-sm">{med.name}</div>
-                                                        <div className="text-xs text-muted-foreground">{med.manufacturer_name} • {med.pack_size_label}</div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            )
-                                        })}
-                                        {masterResults.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={2} className="h-24 text-center text-muted-foreground text-sm">
-                                                    {searchLoading ? 'Searching...' : 'No results found'}
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </CardContent>
+                <div className="flex gap-4">
+                    <Card className="p-3 bg-blue-600 text-white border-none shadow-lg shadow-blue-600/20">
+                        <div className="text-xs font-semibold opacity-90">Total Stock Value (Cost)</div>
+                        <div className="text-2xl font-bold">₹{totalInventoryValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
                     </Card>
+                    <Card className="p-3 bg-white shadow-sm border-blue-100">
+                        <div className="text-xs font-semibold text-gray-500">Total Packs</div>
+                        <div className="text-2xl font-bold text-blue-900">{totalItems}</div>
+                    </Card>
+                </div>
+            </div>
 
-                    {/* Right: Configure Selected */}
-                    <Card className="lg:col-span-2 h-fit">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-base">2. Review & Configure ({selectedItems.length})</CardTitle>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+                <TabsList className="bg-white border p-1 h-12">
+                    <TabsTrigger value="stock" className="h-10 text-sm px-6 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
+                        Current Inventory ({filteredStock.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="purchases" className="h-10 text-sm px-6 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
+                        Purchase History
+                    </TabsTrigger>
+                </TabsList>
 
-                            {/* Bulk Actions */}
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-gray-600">Bulk Vendor:</span>
-                                <Select value={bulkVendor} onValueChange={applyBulkVendor}>
-                                    <SelectTrigger className="w-[180px] h-8 text-sm">
-                                        <SelectValue placeholder="Assign Vendor..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {vendors.map(v => (
-                                            <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                {/* --- TAB 1: STOCK --- */}
+                <TabsContent value="stock" className="space-y-4">
+                    <Card className="border-none shadow-sm bg-white">
+                        <CardHeader className="pb-2">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search inventory by medicine name..."
+                                    className="pl-10 h-10 bg-gray-50 border-gray-200"
+                                    value={stockSearch}
+                                    onChange={e => setStockSearch(e.target.value)}
+                                />
                             </div>
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="bg-gray-50">
                                     <TableRow>
-                                        <TableHead>Medicine</TableHead>
-                                        <TableHead className="w-[120px]">Vendor</TableHead>
-                                        <TableHead className="w-[100px]">MRP</TableHead>
-                                        <TableHead className="w-[100px]">Low Lim.</TableHead>
-                                        <TableHead className="w-[100px]">Vendor Price</TableHead>
-                                        <TableHead className="w-[50px]"></TableHead>
+                                        <TableHead className="w-[40px]"></TableHead>
+                                        <TableHead>Medicine Details</TableHead>
+                                        <TableHead className="text-right">Total Stock</TableHead>
+                                        <TableHead className="text-right">Est. Value (MRP / Cost)</TableHead>
+                                        <TableHead className="text-center">Status</TableHead>
+                                        <TableHead className="w-[100px] text-right">Action</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {selectedItems.map(item => (
-                                        <TableRow key={item.id}>
-                                            <TableCell>
-                                                <div className="font-medium text-sm">{item.name}</div>
-                                                <div className="text-xs text-muted-foreground">{item.pack_size_label}</div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Select
-                                                    value={item.vendor_id || ''}
-                                                    onValueChange={v => updateItemConfig(item.id, 'vendor_id', v)}
-                                                >
-                                                    <SelectTrigger className="h-8 text-xs w-full">
-                                                        <SelectValue placeholder="Select" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {vendors.map(v => (
-                                                            <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Input
-                                                    type="number"
-                                                    className="h-8 text-xs"
-                                                    value={item.custom_mrp}
-                                                    onChange={e => updateItemConfig(item.id, 'custom_mrp', parseFloat(e.target.value))}
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Input
-                                                    type="number"
-                                                    className="h-8 text-xs"
-                                                    value={item.low_stock_limit}
-                                                    onChange={e => updateItemConfig(item.id, 'low_stock_limit', parseInt(e.target.value))}
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Input
-                                                    type="number"
-                                                    className="h-8 text-xs"
-                                                    placeholder="Opt."
-                                                    value={item.vendor_price || ''}
-                                                    onChange={e => updateItemConfig(item.id, 'vendor_price', parseFloat(e.target.value))}
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-red-500 hover:text-red-600"
-                                                    onClick={() => toggleSelect(item as MasterMedicine)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {selectedItems.length === 0 && (
+                                    {filteredStock.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                                                Select items from the left to configure them here.
+                                                No stock found. Check your filters or add purchases.
                                             </TableCell>
                                         </TableRow>
+                                    ) : (
+                                        filteredStock.map(item => {
+                                            const isExpanded = expandedMedicineId === item.medicine_id;
+                                            return (
+                                                <React.Fragment key={item.medicine_id}>
+                                                    {/* MAIN ROW */}
+                                                    <TableRow
+                                                        className={cn(
+                                                            "cursor-pointer transition-colors border-b border-gray-100",
+                                                            isExpanded ? "bg-blue-50/50 hover:bg-blue-50" : "hover:bg-gray-50"
+                                                        )}
+                                                        onClick={() => toggleExpand(item.medicine_id)}
+                                                    >
+                                                        <TableCell>
+                                                            <div className={cn("transition-transform duration-200", isExpanded && "rotate-90")}>
+                                                                <ChevronRight className="h-4 w-4 text-gray-400" />
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <div className="font-semibold text-gray-900">{item.medicine_name}</div>
+                                                            <div className="text-xs text-gray-500">{item.pack_size}</div>
+                                                        </TableCell>
+
+                                                        {/* STOCK DISPLAY WITH UNITS */}
+                                                        <TableCell className="text-right">
+                                                            <div className="font-mono font-medium text-gray-900">{item.total_quantity} Packs</div>
+                                                            {item.total_units > 0 && (
+                                                                <div className="text-xs text-blue-600 bg-blue-50 inline-block px-1.5 py-0.5 rounded mt-0.5">
+                                                                    {item.total_units} Units Total
+                                                                </div>
+                                                            )}
+                                                        </TableCell>
+
+                                                        <TableCell className="text-right">
+                                                            <div className="font-bold text-gray-900">₹{item.total_value_mrp.toLocaleString()} <span className="text-[10px] font-normal text-gray-400 ml-1">MRP</span></div>
+                                                            <div className="text-xs text-gray-500">₹{item.total_value_cost.toLocaleString()} <span className="text-[10px] text-gray-400 ml-1">Cost</span></div>
+                                                        </TableCell>
+                                                        <TableCell className="text-center">
+                                                            <Badge variant={item.status === 'Out of Stock' ? 'destructive' : 'outline'}
+                                                                className={item.status === 'In Stock' ? 'bg-green-50 text-green-700 border-green-200 whitespace-nowrap' : 'whitespace-nowrap'}>
+                                                                {item.status}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={(e) => { e.stopPropagation(); toggleExpand(item.medicine_id); }}
+                                                                className={cn("text-xs h-7", isExpanded ? "text-blue-700 bg-blue-100" : "text-blue-600 hover:text-blue-700")}
+                                                            >
+                                                                {isExpanded ? 'Hide Batches' : 'View Batches'}
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+
+                                                    {/* EXPANDED DETAIL ROW */}
+                                                    {isExpanded && (
+                                                        <TableRow className="bg-gray-50/50 border-b-2 border-blue-100 animate-in fade-in duration-200">
+                                                            <TableCell colSpan={6} className="p-0">
+                                                                <div className="p-4 pl-12">
+                                                                    <div className="bg-white border rounded-lg overflow-hidden shadow-sm">
+                                                                        <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
+                                                                            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Batch Details</span>
+                                                                            <span className="text-xs text-gray-400">Found {item.batches.length} active batches</span>
+                                                                        </div>
+                                                                        {item.batches.length > 0 ? (
+                                                                            <Table>
+                                                                                <TableHeader>
+                                                                                    <TableRow className="h-8 hover:bg-transparent">
+                                                                                        <TableHead className="h-8 text-xs font-semibold">Batch No</TableHead>
+                                                                                        <TableHead className="h-8 text-xs font-semibold">Expiry</TableHead>
+                                                                                        <TableHead className="h-8 text-xs font-semibold text-right">Start Packs</TableHead>
+                                                                                        <TableHead className="h-8 text-xs font-semibold text-right">Remaining Packs</TableHead>
+                                                                                        <TableHead className="h-8 text-xs font-semibold text-right">Loose Units</TableHead>
+                                                                                        <TableHead className="h-8 text-xs font-semibold text-right">Rate (Cost)</TableHead>
+                                                                                        <TableHead className="h-8 text-xs font-semibold text-right">MRP</TableHead>
+                                                                                    </TableRow>
+                                                                                </TableHeader>
+                                                                                <TableBody>
+                                                                                    {item.batches.map((b, idx) => (
+                                                                                        <TableRow key={idx} className="h-9 hover:bg-blue-50/30">
+                                                                                            <TableCell className="font-mono text-xs font-medium text-gray-900">{b.batch_number}</TableCell>
+                                                                                            <TableCell className="text-xs text-red-600">{b.expiry_date}</TableCell>
+                                                                                            {/* Currently we don't track start packs separately in this view, so just show current Qty as placeholder or omit */}
+                                                                                            <TableCell className="text-xs text-right text-gray-400">-</TableCell>
+                                                                                            <TableCell className="text-xs text-right font-bold text-gray-900">{b.quantity}</TableCell>
+                                                                                            <TableCell className="text-xs text-right">
+                                                                                                <Badge variant="secondary" className="font-normal text-[10px] h-5 bg-blue-100 text-blue-700 hover:bg-blue-100">
+                                                                                                    {b.remaining_units} ({b.pack_size_quantity}/pk)
+                                                                                                </Badge>
+                                                                                            </TableCell>
+                                                                                            <TableCell className="text-xs text-right text-gray-500">₹{b.purchase_rate}</TableCell>
+                                                                                            <TableCell className="text-xs text-right font-bold text-gray-900">₹{b.mrp}</TableCell>
+                                                                                        </TableRow>
+                                                                                    ))}
+                                                                                </TableBody>
+                                                                            </Table>
+                                                                        ) : (
+                                                                            <div className="p-8 text-center text-gray-400 text-sm italic">
+                                                                                No active batches in stock for this medicine.
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    )}
+                                                </React.Fragment>
+                                            )
+                                        })
                                     )}
                                 </TableBody>
                             </Table>
                         </CardContent>
                     </Card>
-                </div>
-            </div>
-        )
-    }
+                </TabsContent>
 
-    // Default List View
-    return (
-        <div className="p-6 space-y-6 bg-gray-50/50 min-h-screen">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">Inventory Management</h1>
-                    <p className="text-muted-foreground">Detailed view of your pharmacy stock.</p>
-                </div>
-                <Button onClick={() => setView('add')} className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20">
-                    <Plus className="mr-2 h-4 w-4" /> Add New Medicine
-                </Button>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-4">
-                <Card className="bg-white shadow-sm hover:shadow-md transition-shadow">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Total Medicines</CardTitle>
-                        <Package className="h-4 w-4 text-blue-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{inventory.length}</div>
-                    </CardContent>
-                </Card>
-                <Card className="bg-white shadow-sm hover:shadow-md transition-shadow">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Low Stock Items</CardTitle>
-                        <BatteryLow className="h-4 w-4 text-orange-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-orange-600">
-                            {inventory.filter(i => i.current_stock <= i.low_stock_limit).length}
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <Card className="border-none shadow-sm bg-white/50 backdrop-blur-sm">
-                <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                        <div className="relative flex-1 max-w-sm">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                type="search"
-                                placeholder="Search inventory..."
-                                className="pl-8 bg-white"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <div className="rounded-md border bg-white">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-gray-50/50">
-                                    <TableHead>Medicine Name</TableHead>
-                                    <TableHead>Manufacturer</TableHead>
-                                    <TableHead>Pack Size</TableHead>
-                                    <TableHead className="text-right">Stock</TableHead>
-                                    <TableHead className="text-right">MRP</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {loading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center">Loading Inventory...</TableCell>
-                                    </TableRow>
-                                ) : filteredInventory.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                                            No medicines in inventory. Add some to get started.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    filteredInventory.map((item) => (
-                                        <TableRow key={item.id} className="hover:bg-blue-50/50 transition-colors group">
-                                            <TableCell className="font-medium">
-                                                <div className="flex flex-col">
-                                                    <span>{item.name}</span>
-                                                    {item.batch_number && (
-                                                        <span className="text-xs text-gray-500">Batch: {item.batch_number}</span>
-                                                    )}
+                {/* --- TAB 2: PURCHASES --- */}
+                <TabsContent value="purchases" className="space-y-4">
+                    <Card className="border-none shadow-sm bg-white">
+                        <CardHeader className="pb-2">
+                            <div className="flex gap-4">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search invoice no or vendor..."
+                                        className="pl-10"
+                                        disabled
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        type="date"
+                                        value={purchaseDateFilter}
+                                        onChange={e => { setPurchaseDateFilter(e.target.value); fetchPurchases(); }}
+                                        className="w-40"
+                                    />
+                                    {purchaseDateFilter && (
+                                        <Button variant="ghost" size="sm" onClick={() => { setPurchaseDateFilter(''); fetchPurchases(); }}>Clear</Button>
+                                    )}
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                {purchaseList.map(invoice => (
+                                    <Card key={invoice.id} className="border shadow-sm overflow-hidden transform transition-all hover:shadow-md">
+                                        <div className="bg-gray-50/50 p-4 flex items-center justify-between border-b">
+                                            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
+                                                <div>
+                                                    <div className="text-xs text-muted-foreground uppercase tracking-wider">Vendor</div>
+                                                    <div className="font-semibold text-gray-900">{invoice.vendor_name}</div>
                                                 </div>
-                                            </TableCell>
-                                            <TableCell className="text-gray-600">{item.manufacturer_name}</TableCell>
-                                            <TableCell>{item.pack_size_label}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Badge
-                                                    variant={item.current_stock <= item.low_stock_limit ? "destructive" : "secondary"}
-                                                    className={item.current_stock <= item.low_stock_limit ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-green-100 text-green-700 hover:bg-green-200"}
-                                                >
-                                                    {item.current_stock}
+                                                <div>
+                                                    <div className="text-xs text-muted-foreground uppercase tracking-wider">Invoice #</div>
+                                                    <div className="font-mono text-sm">{invoice.invoice_number}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-xs text-muted-foreground uppercase tracking-wider">Date</div>
+                                                    <div className="text-sm">{invoice.invoice_date}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xl font-bold text-gray-900">₹{invoice.total_amount.toLocaleString()}</div>
+                                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                                    {invoice.status.toUpperCase()}
                                                 </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right font-medium">₹{item.mrp}</TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        onClick={() => openEditPrice(item)}
-                                                        title="Update MRP"
-                                                    >
-                                                        <Edit className="h-3 w-3" />
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        onClick={() => openStockUpdate(item)}
-                                                    >
-                                                        <RefreshCw className="mr-2 h-3 w-3" /> Update Stock
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
+                                            </div>
+                                        </div>
+                                        <div className="bg-white p-4">
+                                            <div className="text-xs font-semibold text-gray-500 mb-2 uppercase">Items Purchased</div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                                                {invoice.items.map(item => (
+                                                    <div key={item.id} className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0 hover:bg-gray-50 px-2 rounded">
+                                                        <div>
+                                                            <span className="font-medium text-gray-800">{item.medicine_name}</span>
+                                                            <span className="text-xs text-gray-400 ml-2">BATCH: {item.batch_number}</span>
+                                                        </div>
+                                                        <div className="text-gray-600">
+                                                            <span>{item.quantity} x ₹{item.unit_price}</span>
+                                                            <span className="font-semibold ml-2 min-w-[60px] inline-block text-right">₹{item.total_amount}</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </Card>
+                                ))}
+                                {purchaseList.length === 0 && (
+                                    <div className="h-32 flex items-center justify-center text-muted-foreground border-2 border-dashed rounded-lg">
+                                        No Purchase Records Found
+                                    </div>
                                 )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Stock Update Dialog */}
-            <Dialog open={!!stockUpdateItem} onOpenChange={(open) => !open && setStockUpdateItem(null)}>
-                <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                        <DialogTitle>Update Stock & Repurchase History</DialogTitle>
-                        <DialogDescription>
-                            Adding stock for <strong>{stockUpdateItem?.name}</strong>. This will record a purchase history.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {stockUpdateItem && (
-                        <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Vendor</Label>
-                                    <Select
-                                        value={stockUpdateForm.vendor_id}
-                                        onValueChange={v => setStockUpdateForm({ ...stockUpdateForm, vendor_id: v })}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select Vendor" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {vendors.map(v => (
-                                                <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Purchase Date (Entry Date)</Label>
-                                    <Input
-                                        type="date"
-                                        value={stockUpdateForm.purchase_date}
-                                        onChange={e => setStockUpdateForm({ ...stockUpdateForm, purchase_date: e.target.value })}
-                                    />
-                                </div>
                             </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Add Quantity</Label>
-                                    <Input
-                                        type="number"
-                                        placeholder="e.g. 100"
-                                        className="font-bold border-blue-200"
-                                        value={stockUpdateForm.quantity}
-                                        onChange={e => setStockUpdateForm({ ...stockUpdateForm, quantity: e.target.value })}
-                                    />
-                                    <p className="text-xs text-muted-foreground">Current Stock: {stockUpdateItem.current_stock}</p>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Buying Price (Per Unit)</Label>
-                                    <Input
-                                        type="number"
-                                        placeholder="e.g. 10.50"
-                                        value={stockUpdateForm.unit_cost_price}
-                                        onChange={e => setStockUpdateForm({ ...stockUpdateForm, unit_cost_price: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Batch Number</Label>
-                                    <Input
-                                        placeholder="Optional"
-                                        value={stockUpdateForm.batch_number}
-                                        onChange={e => setStockUpdateForm({ ...stockUpdateForm, batch_number: e.target.value })}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Expiry Date</Label>
-                                    <Input
-                                        type="date"
-                                        value={stockUpdateForm.expiry_date}
-                                        onChange={e => setStockUpdateForm({ ...stockUpdateForm, expiry_date: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setStockUpdateItem(null)}>Cancel</Button>
-                        <Button onClick={handleStockUpdateSubmit} className="bg-blue-600 hover:bg-blue-700">Confirm Update</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-            {/* MRP Update Dialog */}
-            <Dialog open={!!editPriceItem} onOpenChange={(open) => !open && setEditPriceItem(null)}>
-                <DialogContent className="sm:max-w-[400px]">
-                    <DialogHeader>
-                        <DialogTitle>Update MRP Price</DialogTitle>
-                        <DialogDescription>
-                            Update the selling price (MRP) for <strong>{editPriceItem?.name}</strong>.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {editPriceItem && (
-                        <div className="grid gap-4 py-4">
-                            <div className="space-y-2">
-                                <Label>New MRP</Label>
-                                <Input
-                                    type="number"
-                                    placeholder="Enter new MRP"
-                                    value={newMrp}
-                                    onChange={e => setNewMrp(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                    )}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setEditPriceItem(null)}>Cancel</Button>
-                        <Button onClick={handleUpdateMrp} className="bg-blue-600 hover:bg-blue-700">Update MRP</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
         </div>
     )
 }

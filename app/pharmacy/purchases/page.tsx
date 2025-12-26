@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import {
     Table,
     TableBody,
@@ -13,157 +14,241 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import {
-    Search, Calendar
-} from 'lucide-react'
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from '@/components/ui/accordion'
+import { Search, Calendar, FileText, ChevronDown, ChevronRight, Package, Filter } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { format } from 'date-fns'
+import { cn } from '@/lib/utils'
 
-
-interface Purchase {
+// Types based on NEW Schema (pharmacy_purchase_invoice)
+interface PurchaseItem {
     id: string
-    vendor: { name: string }
-    purchase_date: string
-    invoice_number: string
+    medicine_name: string
+    batch_number: string
+    expiry_date: string
+    quantity: number
+    unit_price: number // Cost Rate
+    mrp: number
     total_amount: number
-    status: string
-    pharmacy_purchase_items: {
-        inventory: { name: string }
-        quantity: number
-        unit_cost_price: number
-    }[]
 }
 
-export default function PurchasesPage() {
-    const [purchases, setPurchases] = useState<Purchase[]>([])
+interface PurchaseInvoice {
+    id: string
+    invoice_number: string
+    invoice_date: string
+    vendor_name: string
+    total_amount: number
+    status: string
+    items: PurchaseItem[]
+}
+
+export default function PurchasesHistoryPage() {
+    const [purchases, setPurchases] = useState<PurchaseInvoice[]>([])
     const [loading, setLoading] = useState(true)
+    const [expandedIds, setExpandedIds] = useState<string[]>([])
 
     // Filters
     const [dateFilter, setDateFilter] = useState('')
     const [searchFilter, setSearchFilter] = useState('')
 
     useEffect(() => {
-        fetchPurchases()
-    }, [dateFilter, searchFilter]) // Add dependencies
+        fetchHistory()
+    }, [dateFilter])
 
-    const fetchPurchases = async () => {
+    const fetchHistory = async () => {
         setLoading(true)
-        let query = supabase
-            .from('pharmacy_purchases')
-            .select(`
-                *, 
-                vendor:pharmacy_vendors(name),
-                pharmacy_purchase_items (
-                    quantity,
-                    unit_cost_price,
-                    inventory:pharmacy_inventory(name)
-                )
-            `)
-            .order('purchase_date', { ascending: false })
+        try {
+            // Query NEW tables: pharmacy_purchase_invoice
+            let query = supabase
+                .from('pharmacy_purchase_invoice')
+                .select(`
+                    id,
+                    invoice_number,
+                    invoice_date,
+                    total_amount,
+                    status,
+                    vendor:pharmacy_vendors(name),
+                    items:pharmacy_purchase_item(
+                        id,
+                        quantity,
+                        unit_price,
+                        mrp,
+                        total_amount,
+                        batch_number,
+                        expiry_date,
+                        medicine:clinic_medicine(name)
+                    )
+                `)
+                .order('invoice_date', { ascending: false })
 
-        if (dateFilter) {
-            query = query.eq('purchase_date', dateFilter)
+            if (dateFilter) {
+                query = query.eq('invoice_date', dateFilter)
+            }
+
+            const { data, error } = await query
+
+            if (error) throw error
+
+            const mappedData: PurchaseInvoice[] = (data || []).map((p: any) => ({
+                id: p.id,
+                invoice_number: p.invoice_number,
+                invoice_date: p.invoice_date,
+                vendor_name: p.vendor?.name || 'Unknown Vendor',
+                total_amount: p.total_amount,
+                status: p.status,
+                items: (p.items || []).map((i: any) => ({
+                    id: i.id,
+                    medicine_name: i.medicine?.name || 'Unknown Item',
+                    batch_number: i.batch_number,
+                    expiry_date: i.expiry_date,
+                    quantity: i.quantity,
+                    unit_price: i.unit_price,
+                    mrp: i.mrp,
+                    total_amount: i.total_amount
+                }))
+            }))
+
+            setPurchases(mappedData)
+        } catch (error) {
+            console.error('Error fetching purchase history:', error)
+        } finally {
+            setLoading(false)
         }
-
-        const { data, error } = await query
-
-        if (error) {
-            console.error('Error fetching purchases:', error)
-        }
-
-        let fetchedData = data || [] as any
-
-        // Client-side filtering for medicine name since deep filtering is complex in supabase simple queries
-        if (searchFilter) {
-            fetchedData = fetchedData.filter((p: any) =>
-                p.pharmacy_purchase_items.some((item: any) =>
-                    item.inventory?.name.toLowerCase().includes(searchFilter.toLowerCase())
-                )
-            )
-        }
-
-        setPurchases(fetchedData)
-        setLoading(false)
     }
 
+    // Client-side Filter
+    const filteredPurchases = purchases.filter(p =>
+        p.vendor_name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+        p.invoice_number.toLowerCase().includes(searchFilter.toLowerCase())
+    )
 
+    const toggleExpand = (id: string) => {
+        setExpandedIds(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        )
+    }
 
     return (
-        <div className="p-6 space-y-6 bg-gray-50/50 min-h-screen">
-            <div className="flex items-center justify-between">
+        <div className="p-6 space-y-6 bg-gray-50/50 min-h-screen animate-in fade-in duration-300">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">Purchases History</h1>
-                    <p className="text-muted-foreground">Log of stock incoming from vendors.</p>
+                    <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
+                        <FileText className="h-8 w-8 text-blue-600" />
+                        Purchase History
+                    </h1>
+                    <p className="text-muted-foreground">Archive of all procurement invoices.</p>
                 </div>
-
             </div>
 
-            <div className="flex gap-4 items-center bg-white p-4 rounded-lg shadow-sm">
-                <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-gray-500" />
-                    <Input
-                        type="date"
-                        className="w-40"
-                        value={dateFilter}
-                        onChange={e => setDateFilter(e.target.value)}
-                    />
-                </div>
-                <div className="flex items-center gap-2 flex-1">
-                    <Search className="h-4 w-4 text-gray-500" />
-                    <Input
-                        placeholder="Search by Medicine Name..."
-                        value={searchFilter}
-                        onChange={e => setSearchFilter(e.target.value)}
-                    />
-                </div>
-                {(dateFilter || searchFilter) && (
-                    <Button variant="ghost" onClick={() => { setDateFilter(''); setSearchFilter(''); }}>Clear</Button>
-                )}
-            </div>
-
-            <Card>
-                <CardContent className="p-0">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[120px]">Date</TableHead>
-                                <TableHead className="w-[150px]">Vendor</TableHead>
-                                <TableHead className="w-[100px]">Invoice #</TableHead>
-                                <TableHead>Items (Medicine - Qty - Cost)</TableHead>
-                                <TableHead className="text-right">Total Amount</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {loading ? (
-                                <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell></TableRow>
-                            ) : purchases.length === 0 ? (
-                                <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No purchase history found.</TableCell></TableRow>
-                            ) : (
-                                purchases.map(p => (
-                                    <TableRow key={p.id} className="hover:bg-gray-50">
-                                        <TableCell className="align-top font-medium">{format(new Date(p.purchase_date), 'dd MMM yyyy')}</TableCell>
-                                        <TableCell className="align-top text-gray-600">{p.vendor?.name || 'Unknown'}</TableCell>
-                                        <TableCell className="align-top">{p.invoice_number || '-'}</TableCell>
-                                        <TableCell>
-                                            <div className="space-y-1">
-                                                {p.pharmacy_purchase_items?.map((item, idx) => (
-                                                    <div key={idx} className="text-sm flex gap-2">
-                                                        <span className="font-medium text-blue-800">• {item.inventory?.name}</span>
-                                                        <span className="text-gray-500">x{item.quantity} @ ₹{item.unit_cost_price}</span>
-                                                    </div>
-                                                ))}
-                                                {(!p.pharmacy_purchase_items || p.pharmacy_purchase_items.length === 0) && (
-                                                    <span className="text-gray-400 italic">No items details</span>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="align-top text-right font-bold">₹{p.total_amount}</TableCell>
-                                    </TableRow>
-                                ))
-                            )}
-                        </TableBody>
-                    </Table>
+            {/* Filters */}
+            <Card className="border-none shadow-sm bg-white">
+                <CardContent className="p-4 flex flex-col md:flex-row gap-4 items-center">
+                    <div className="relative flex-1 w-full">
+                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search Vendor or Invoice No..."
+                            className="pl-9 bg-gray-50 border-gray-200"
+                            value={searchFilter}
+                            onChange={e => setSearchFilter(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex items-center gap-2 w-full md:w-auto">
+                        <Calendar className="h-4 w-4 text-gray-500" />
+                        <Input
+                            type="date"
+                            className="w-full md:w-[180px]"
+                            value={dateFilter}
+                            onChange={e => setDateFilter(e.target.value)}
+                        />
+                        {dateFilter && (
+                            <Button variant="ghost" size="icon" onClick={() => setDateFilter('')}>
+                                <Filter className="h-4 w-4 text-red-500" />
+                            </Button>
+                        )}
+                    </div>
                 </CardContent>
             </Card>
+
+            {/* List */}
+            <div className="space-y-4">
+                {loading ? (
+                    <div className="text-center py-12 text-muted-foreground">Loading records...</div>
+                ) : filteredPurchases.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
+                        No invoices found matching your criteria.
+                    </div>
+                ) : (
+                    filteredPurchases.map(invoice => (
+                        <Card key={invoice.id} className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow">
+                            <div
+                                className="bg-white p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                                onClick={() => toggleExpand(invoice.id)}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className={`p-2 rounded-full bg-blue-50 text-blue-600 transition-transform duration-200 ${expandedIds.includes(invoice.id) ? 'rotate-90' : ''}`}>
+                                        <ChevronRight className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-gray-900 text-lg">{invoice.vendor_name}</span>
+                                            <Badge variant="outline" className="font-mono text-xs">{invoice.invoice_number}</Badge>
+                                        </div>
+                                        <div className="text-sm text-gray-500 flex items-center gap-4 mt-1">
+                                            <span>{format(new Date(invoice.invoice_date), 'dd MMM yyyy')}</span>
+                                            <span>•</span>
+                                            <span>{invoice.items.length} Items</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-xl font-bold text-gray-900">₹{invoice.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                                    <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-none">
+                                        {invoice.status.toUpperCase()}
+                                    </Badge>
+                                </div>
+                            </div>
+
+                            {/* Expanded Details */}
+                            <div className={cn(
+                                "border-t bg-gray-50/50 transition-all duration-300 ease-in-out px-4 overflow-hidden",
+                                expandedIds.includes(invoice.id) ? "max-h-[500px] py-4 overflow-y-auto" : "max-h-0 py-0"
+                            )}>
+                                <Table>
+                                    <TableHeader className="bg-gray-100">
+                                        <TableRow>
+                                            <TableHead>Medicine</TableHead>
+                                            <TableHead>Batch</TableHead>
+                                            <TableHead className="text-right">Qty</TableHead>
+                                            <TableHead className="text-right">Rate</TableHead>
+                                            <TableHead className="text-right">MRP</TableHead>
+                                            <TableHead className="text-right">Total</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {invoice.items.map(item => (
+                                            <TableRow key={item.id} className="hover:bg-white">
+                                                <TableCell className="font-medium text-gray-800">{item.medicine_name}</TableCell>
+                                                <TableCell>
+                                                    <div className="font-mono text-xs">{item.batch_number}</div>
+                                                    <div className="text-xs text-gray-400">Exp: {item.expiry_date}</div>
+                                                </TableCell>
+                                                <TableCell className="text-right font-medium">{item.quantity}</TableCell>
+                                                <TableCell className="text-right text-gray-600">₹{item.unit_price}</TableCell>
+                                                <TableCell className="text-right text-gray-600">₹{item.mrp}</TableCell>
+                                                <TableCell className="text-right font-bold">₹{item.total_amount.toLocaleString()}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </Card>
+                    ))
+                )}
+            </div>
         </div>
     )
 }
