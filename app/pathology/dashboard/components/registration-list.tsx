@@ -286,7 +286,7 @@ export function RegistrationList({
                             )}
 
                             {/* --- TECHNICIAN VIEW --- */}
-                            {role === "technician" && (
+                            {(role === "technician" || role === "technician-staff") && (
                               <>
                                 <button
                                   onClick={() => {

@@ -92,6 +92,17 @@ export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
         }
       }
 
+      if (userRole === 'technician-staff') {
+        const allowedRoutes = [...TECHNICIAN_ALLOWED_ROUTES, '/pathology/patient-entry'];
+        const isAllowed = allowedRoutes.some(route =>
+          pathname.startsWith(route)
+        );
+
+        if (!isAllowed) {
+          router.replace('/pathology/dashboard');
+        }
+      }
+
       if (userRole === 'pharmacy') {
         const isAllowed = PHARMACY_ALLOWED_ROUTES.some(route =>
           pathname.startsWith(route)

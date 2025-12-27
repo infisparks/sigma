@@ -34,13 +34,13 @@ const pathologyMenuItems = [
     icon: UserPlus,
     label: 'Patient Entry',
     href: '/pathology/patient-entry',
-    roles: ['admin', 'staff']
+    roles: ['admin', 'staff', 'technician-staff']
   },
   {
     icon: LayoutDashboard,
     label: 'Pathology Dashboard',
     href: '/pathology/dashboard',
-    roles: ['admin', 'technician', 'phlebo', 'staff']
+    roles: ['admin', 'technician', 'phlebo', 'staff', 'technician-staff']
   },
   {
     icon: UserPlus,
@@ -97,7 +97,7 @@ const pathologyMenuItems = [
     icon: LogOut,
     label: 'Logout',
     href: 'logout-action',
-    roles: ['admin', 'technician', 'phlebo', "pharmacy", 'staff', 'doctor']
+    roles: ['admin', 'technician', 'phlebo', "pharmacy", 'staff', 'doctor', 'technician-staff']
   },
 ];
 
