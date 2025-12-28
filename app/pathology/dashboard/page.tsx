@@ -372,11 +372,22 @@ export default function Dashboard() {
     fetchDashboardStats()
   }, [startDate, endDate])
 
-  // DB search effect for long search terms
+  /* --- filters --- */
+  const [globalSearchTerm, setGlobalSearchTerm] = useState("")
+
+  // DB search effect for long search terms (existing functionality)
   useEffect(() => {
     const term = searchTerm.trim()
     if (term.length > 30) {
       setIsDbSearchLoading(true)
+
+      const isNumeric = /^\d+$/.test(term)
+      const orConditions = [`name.ilike.%${term}%`, `uhid.ilike.%${term}%`]
+      if (isNumeric) {
+        orConditions.push(`number.eq.${term}`)
+      }
+      const orString = orConditions.join(",")
+
       supabase
         .from("zregistration")
         .select(
@@ -384,11 +395,11 @@ export default function Dashboard() {
           tpa,
           bill_no,
           is_enterbydoctor,
-          patient_detail (
+          patient_detail!inner (
             patient_id, name, age, gender, number, address, age_unit, total_day, title, uhid 
           )`,
         )
-        .or(`patient_detail.name.ilike.%${term}%,patient_detail.number.ilike.%${term}%,patient_detail.uhid.ilike.%${term}%`)
+        .or(orString, { foreignTable: "patient_detail" })
         .order("registration_time", { ascending: false })
         .then(({ data, error }) => {
           if (error) {
@@ -436,11 +447,94 @@ export default function Dashboard() {
           setDbSearchResults(sorted)
           setIsDbSearchLoading(false)
         })
-    } else {
+    } else if (!globalSearchTerm) {
+      // Only clear if no global search is active
       setDbSearchResults(null)
       setIsDbSearchLoading(false)
     }
-  }, [searchTerm])
+  }, [searchTerm, globalSearchTerm])
+
+  const handleGlobalSearch = async () => {
+    if (!globalSearchTerm.trim()) {
+      setDbSearchResults(null)
+      return
+    }
+
+    setIsDbSearchLoading(true)
+    try {
+      const term = globalSearchTerm.trim()
+
+      const isNumeric = /^\d+$/.test(term)
+      const orConditions = [`name.ilike.%${term}%`, `uhid.ilike.%${term}%`]
+      if (isNumeric) {
+        orConditions.push(`number.eq.${term}`)
+      }
+      const orString = orConditions.join(",")
+
+      const { data, error } = await supabase
+        .from("zregistration")
+        .select(
+          `*,
+          tpa,
+          bill_no,
+          is_enterbydoctor,
+          patient_detail!inner (
+            patient_id, name, age, gender, number, address, age_unit, total_day, title, uhid 
+          )`,
+        )
+        .or(orString, { foreignTable: "patient_detail" })
+        .order("registration_time", { ascending: false })
+        .limit(50) // Limit to avoid too many results
+
+      if (error) throw error
+
+      const mappedData: Registration[] = (data || []).map((registrationRow: any) => {
+        const patientDetail = registrationRow.patient_detail || {}
+        return {
+          id: registrationRow.id,
+          bloodtest_detail: registrationRow.bloodtest_detail || {},
+          registration_id: registrationRow.id,
+          visitType: registrationRow.visit_type || "",
+          createdAt: registrationRow.registration_time || registrationRow.created_at,
+          discountAmount: registrationRow.discount_amount || 0,
+          amountPaid: registrationRow.amount_paid || 0,
+          doctor_name: registrationRow.doctor_name,
+          bloodTests: (registrationRow.bloodtest_data || []).map((test: any) => ({
+            ...test,
+            testName: String(test.testName || ""),
+          })),
+          bloodtest: registrationRow.bloodtest_detail || {},
+          sampleCollectedAt: registrationRow.samplecollected_time,
+          paymentHistory: registrationRow.amount_paid_history || null,
+          hospitalName: registrationRow.hospital_name,
+          patient_id: patientDetail?.uhid ?? "",
+          name: patientDetail?.name ?? "Unknown",
+          patientId: patientDetail?.uhid ?? "",
+          age: patientDetail?.age ?? 0,
+          gender: patientDetail.gender,
+          contact: patientDetail.number,
+          address: patientDetail.address,
+          day_type: patientDetail.age_unit,
+          total_day: patientDetail.total_day,
+          title: patientDetail.title,
+          tpa: registrationRow.tpa === true,
+          is_enterbydoctor: registrationRow.is_enterbydoctor === true,
+        }
+      })
+
+      const sorted = mappedData.sort((a, b) => {
+        const rankDiff = getRank(a) - getRank(b)
+        return rankDiff !== 0 ? rankDiff : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      })
+
+      setDbSearchResults(sorted)
+    } catch (error: any) {
+      console.error("Global Search Error:", error.message)
+      alert("Global search failed")
+    } finally {
+      setIsDbSearchLoading(false)
+    }
+  }
 
   /* --- filters --- */
   const filteredRegistrations = useMemo(() => {
@@ -569,8 +663,9 @@ export default function Dashboard() {
   }, [selectedRegistration])
 
   const handleDownloadMultipleBills = useCallback(() => {
-    downloadMultipleBills(selectedRegistrations, registrations)
-  }, [selectedRegistrations, registrations])
+    const source = dbSearchResults !== null ? dbSearchResults : registrations
+    downloadMultipleBills(selectedRegistrations, source)
+  }, [selectedRegistrations, registrations, dbSearchResults])
 
   const handleUpdateAmountAndDiscount = useCallback(async () => {
     if (!selectedRegistration) return
@@ -682,6 +777,8 @@ export default function Dashboard() {
     }
   }
 
+  const sourceRegistrations = dbSearchResults !== null ? dbSearchResults : registrations
+
   return (
     <div className="flex h-screen bg-gray-50">
       <div className="flex-1 overflow-auto">
@@ -691,7 +788,7 @@ export default function Dashboard() {
             showCheckboxes={showCheckboxes}
             setShowCheckboxes={setShowCheckboxes}
             selectedRegistrations={selectedRegistrations}
-            registrations={registrations}
+            registrations={sourceRegistrations}
             handleDownloadMultipleBills={handleDownloadMultipleBills}
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
@@ -708,6 +805,9 @@ export default function Dashboard() {
             setHospitalFilterTerm={setHospitalFilterTerm}
             loadedDataStartDate={startDate}
             loadedDataEndDate={endDate}
+            globalSearchTerm={globalSearchTerm}
+            setGlobalSearchTerm={setGlobalSearchTerm}
+            onGlobalSearch={handleGlobalSearch}
           />
 
           <RegistrationList

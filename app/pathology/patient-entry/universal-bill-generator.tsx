@@ -1,4 +1,3 @@
-// @/app/opd/universal-bill-generator.tsx
 "use client"
 
 import { jsPDF } from "jspdf"
@@ -11,13 +10,13 @@ import { Button } from "@/components/ui/button"
 
 // Common patient info fields used by the bill generator
 export interface PatientBillInfo {
-    uhid: string; 
-    name: string; 
-    contact: string; 
-    age: number; 
-    dayType: "year" | "month" | "day"; 
-    gender: string; 
-    address?: string; 
+    uhid: string;
+    name: string;
+    contact: string;
+    age: number;
+    dayType: "year" | "month" | "day";
+    gender: string;
+    address?: string;
     title: string;
 }
 
@@ -67,266 +66,224 @@ interface GeneratePdfArgs {
 // Core function to generate the jsPDF document
 async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Promise<jsPDF> {
     const { patientInfo, registrationId, date, time, referredBy, discount, services, paymentEntries } = billData;
-    
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
+
+    // CHANGED: A5 Landscape configuration
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a5" })
     const pageWidth = doc.internal.pageSize.getWidth()
     const pageHeight = doc.internal.pageSize.getHeight()
 
-    // Try letterhead
-    try {
-        const img = new Image()
-        img.crossOrigin = "anonymous"
-        await new Promise((res, rej) => {
-            img.onload = res
-            img.onerror = rej
-            img.src = "/letterhead.png"
-        })
-        doc.addImage(img, "PNG", 0, 0, pageWidth, pageHeight)
-    } catch (e) {
-        console.warn("Letterhead image not loaded:", e)
-    }
+    // --- Custom Header Function ---
+    const drawHeader = () => {
+        // Logo / Title
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(22);
+        doc.setTextColor(41, 128, 185); // Professional Blue
+        doc.text("CIGMA", 15, 15);
 
-    // Helper to get doctor name from ID (if applicable, though we mostly use names now)
+        // Subtitle
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(127, 140, 141); // Grey
+        doc.text("Clinic and Diagnostic Center", 15, 20);
+
+        // Divider Line
+        doc.setDrawColor(41, 128, 185);
+        doc.setLineWidth(0.5);
+        doc.line(15, 25, pageWidth - 15, 25);
+
+        doc.setTextColor(0, 0, 0); // Reset text color
+    };
+
+    // Draw initial header
+    drawHeader();
+
+    // Helper to get doctor name from ID
     const getDoctorName = (doctorIdentifier: string | number): string => {
         if (!doctorIdentifier) return "-"
         if (typeof doctorIdentifier === 'number') {
             const doc = doctors.find((d) => d.id === doctorIdentifier)
             return doc ? String(doc.doctor_name) : String(doctorIdentifier)
         }
-        return String(doctorIdentifier); // Assume string is already the name
+        return String(doctorIdentifier);
     }
 
-    let yPos = 53
+    let yPos = 32; // Start content below the header
+
+    // Date & Time (Top Right relative to header)
     doc.setFontSize(9)
     doc.setFont("helvetica", "normal")
     doc.text(
         `Date: ${format(date, "dd/MM/yyyy")} | Time: ${time}`,
-        pageWidth - 20,
-        yPos,
+        pageWidth - 15,
+        18,
         { align: "right" }
     )
-    yPos += 8
 
     // Bill Number and UHID display
     doc.setFontSize(10)
     doc.setFont("helvetica", "bold")
-    doc.text(`Registration ID (Bill No): ${String(registrationId || 'N/A')}`, 20, yPos);
-    doc.text(`UHID: ${patientInfo.uhid || '-'}`, 20, yPos + 5);
-    yPos += 10;
-
+    doc.text(`Bill No: ${String(registrationId || 'N/A')}`, 15, yPos);
+    doc.text(`UHID: ${patientInfo.uhid || '-'}`, 70, yPos);
+    yPos += 8;
 
     // Patient Info header
-    doc.setFontSize(11)
+    doc.setFontSize(10)
     doc.setFont("helvetica", "bold")
-    doc.setFillColor(240, 248, 255)
-    doc.rect(20, yPos - 2, pageWidth - 40, 6, "F")
-    doc.text("PATIENT INFORMATION", 22, yPos + 2)
-    yPos += 10
+    doc.setFillColor(236, 240, 241) // Light grey/blue
+    doc.rect(15, yPos - 3, pageWidth - 30, 6, "F")
+    doc.text("PATIENT DETAILS", 17, yPos + 1)
+    yPos += 8
 
-    // Patient Info columns (parallel)
-    const leftX = 22
-    const rightX = pageWidth / 2 + 20
-    let leftColY = yPos
+    // Patient Info columns
+    const col1X = 17;
+    const col2X = pageWidth / 2 + 10;
 
-    // Name (Left)
-    doc.setFont("helvetica", "bold")
-    doc.text("Name:", leftX, leftColY)
-    doc.setFont("helvetica", "normal")
-    doc.text(`${patientInfo.title} ${patientInfo.name}`, leftX + 18, leftColY)
+    // Row 1
+    doc.setFont("helvetica", "bold"); doc.text("Name:", col1X, yPos);
+    doc.setFont("helvetica", "normal"); doc.text(`${patientInfo.title} ${patientInfo.name}`, col1X + 18, yPos);
 
-    // Phone (Right)
-    doc.setFont("helvetica", "bold")
-    doc.text("Phone:", rightX, leftColY)
-    doc.setFont("helvetica", "normal")
-    doc.text(String(patientInfo.contact), rightX + 18, leftColY)
+    doc.setFont("helvetica", "bold"); doc.text("Phone:", col2X, yPos);
+    doc.setFont("helvetica", "normal"); doc.text(String(patientInfo.contact), col2X + 18, yPos);
+    yPos += 5;
 
-    leftColY += 5
+    // Row 2
+    doc.setFont("helvetica", "bold"); doc.text("Age/Sex:", col1X, yPos);
+    doc.setFont("helvetica", "normal");
+    const genderStr = patientInfo.gender ? patientInfo.gender.charAt(0).toUpperCase() + patientInfo.gender.slice(1) : "-";
+    doc.text(`${String(patientInfo.age ?? "-")} ${String(patientInfo.dayType || "Y")} / ${genderStr}`, col1X + 18, yPos);
 
-    // Age (Left)
-    doc.setFont("helvetica", "bold")
-    doc.text("Age:", leftX, leftColY)
-    doc.setFont("helvetica", "normal")
-    doc.text(
-        `${String(patientInfo.age ?? "-")} ${String(patientInfo.dayType || "years")}`,
-        leftX + 18,
-        leftColY
-    )
+    doc.setFont("helvetica", "bold"); doc.text("Ref. By:", col2X, yPos);
+    doc.setFont("helvetica", "normal"); doc.text(String(referredBy), col2X + 18, yPos);
+    yPos += 5;
 
-    // Gender (Right)
-    doc.setFont("helvetica", "bold")
-    doc.text("Gender:", rightX, leftColY)
-    doc.setFont("helvetica", "normal")
-    doc.text(
-        patientInfo.gender ? String(patientInfo.gender.charAt(0).toUpperCase() + patientInfo.gender.slice(1)) : "-",
-        rightX + 18,
-        leftColY
-    )
-
-    leftColY += 5
-
-    // Address (Left)
+    // Row 3 (Address)
     if (patientInfo.address) {
-        doc.setFont("helvetica", "bold")
-        doc.text("Address:", leftX, leftColY)
-        doc.setFont("helvetica", "normal")
-        const addressText = String(patientInfo.address.length > 30 ? `${patientInfo.address.slice(0, 30)}...` : patientInfo.address);
-        doc.text(addressText, leftX + 18, leftColY);
+        doc.setFont("helvetica", "bold"); doc.text("Address:", col1X, yPos);
+        doc.setFont("helvetica", "normal");
+        const addressText = String(patientInfo.address.length > 55 ? `${patientInfo.address.slice(0, 55)}...` : patientInfo.address);
+        doc.text(addressText, col1X + 18, yPos);
+        yPos += 5;
     }
-    
-    // Referred By (Right)
-    doc.setFont("helvetica", "bold")
-    doc.text("Referred By:", rightX, leftColY)
-    doc.setFont("helvetica", "normal")
-    doc.text(String(referredBy), rightX + 25, leftColY)
-    
-    leftColY += 5
-    yPos = leftColY + 5 // Take the max of updated Y positions for patient info
 
-    // Table header
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "bold")
-    doc.setFillColor(204, 229, 255);
-    doc.rect(20, yPos - 2, pageWidth - 40, 5, "F")
-    doc.text("No.", 22, yPos + 1)
-    doc.text("Modality/Service", 32, yPos + 1)
-    doc.text("Service Details", 70, yPos + 1)
-    doc.text("Doctor/Specialist", 125, yPos + 1)
-    doc.text("Charges (Rs.)", pageWidth - 22, yPos + 1, { align: "right" })
-    yPos += 7
+    yPos += 3; // Spacer
+
+    // Table header helper
+    const drawTableHeader = (y: number) => {
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.setFillColor(41, 128, 185); // Professional Blue
+        doc.setTextColor(255, 255, 255);
+        doc.rect(15, y - 4, pageWidth - 30, 6, "F")
+
+        doc.text("SN", 17, y)
+        doc.text("Service Name", 30, y)
+        doc.text("Details", 90, y)
+        doc.text("Physician", 135, y)
+        doc.text("Amount", pageWidth - 17, y, { align: "right" })
+
+        doc.setTextColor(0, 0, 0);
+    }
+
+    drawTableHeader(yPos);
+    yPos += 6;
 
     doc.setFont("helvetica", "normal")
     let totalCharges = 0
 
     services.forEach((m: BillServiceItem, i: number) => {
-        if (yPos > pageHeight - 50) {
+        // Page break logic
+        if (yPos > pageHeight - 35) { // Leave space for summary
             doc.addPage()
-            try {
-                const newImg = new Image()
-                newImg.crossOrigin = "anonymous"
-                new Promise((res) => { newImg.onload = res; newImg.src = "/letterhead.png"; })
-                doc.addImage(newImg, "PNG", 0, 0, pageWidth, pageHeight)
-            } catch { }
-            yPos = 30
-            doc.setFontSize(8)
-            doc.setFont("helvetica", "bold")
-            doc.setFillColor(220, 220, 220)
-            doc.rect(20, yPos - 2, pageWidth - 40, 5, "F")
-            doc.text("No.", 22, yPos + 1)
-            doc.text("Modality/Service", 32, yPos + 1)
-            doc.text("Service Details", 70, yPos + 1)
-            doc.text("Doctor/Specialist", 125, yPos + 1)
-            doc.text("Charges (Rs.)", pageWidth - 22, yPos + 1, { align: "right" })
-            yPos += 7
+            drawHeader();
+            yPos = 35;
+            drawTableHeader(yPos);
+            yPos += 6;
             doc.setFont("helvetica", "normal")
         }
 
         if (i % 2 === 0) {
-            doc.setFillColor(250, 250, 250)
-            doc.rect(20, yPos - 1, pageWidth - 40, 4, "F")
+            doc.setFillColor(242, 243, 244)
+            doc.rect(15, yPos - 4, pageWidth - 30, 6, "F")
         }
 
-        const modalityType = String(m.type.charAt(0).toUpperCase() + m.type.slice(1))
         const serviceName = m.name.length > 35 ? `${m.name.slice(0, 35)}…` : m.name;
         const doctorInfo = m.doctor ? `Dr. ${getDoctorName(m.doctor)}` : "-";
         const amt = Number(m.charges) || 0
-        
-        doc.text(String(i + 1), 22, yPos + 1)
-        doc.text(modalityType, 32, yPos + 1)
-        doc.text(serviceName, 70, yPos + 1)
-        doc.text(doctorInfo.length > 25 ? `${doctorInfo.slice(0, 25)}…` : doctorInfo, 125, yPos + 1)
-        doc.text(`Rs. ${amt.toFixed(2)}`, pageWidth - 22, yPos + 1, { align: "right" })
-        totalCharges += amt
-        yPos += 4
-    })
-    yPos += 7
 
-    // Payment summary
-    doc.setFontSize(11)
-    doc.setFont("helvetica", "bold")
-    doc.setFillColor(240, 248, 255)
-    doc.rect(20, yPos - 2, pageWidth - 40, 6, "F")
-    doc.text("PAYMENT SUMMARY", 22, yPos + 2)
-    yPos += 10
-    
+        doc.text(String(i + 1), 17, yPos)
+        doc.text(serviceName, 30, yPos)
+        doc.text(m.details ? (m.details.length > 25 ? m.details.slice(0, 25) + ".." : m.details) : "-", 90, yPos)
+        doc.text(doctorInfo.length > 18 ? `${doctorInfo.slice(0, 18)}…` : doctorInfo, 135, yPos)
+        doc.text(amt.toFixed(2), pageWidth - 17, yPos, { align: "right" })
+        totalCharges += amt
+        yPos += 6
+    })
+
+    yPos += 2;
+
+    // Check availability for summary
+    if (yPos > pageHeight - 40) {
+        doc.addPage();
+        drawHeader();
+        yPos = 35;
+    }
+
+    doc.setDrawColor(200, 200, 200);
+    doc.line(15, yPos, pageWidth - 15, yPos);
+    yPos += 5;
+
     const totalPaid = paymentEntries.reduce((sum, p) => sum + (p.amount || 0), 0);
     const net = totalCharges - discount
     const due = net - totalPaid
-    const sx = pageWidth - 70
 
-    doc.setFontSize(9)
-    doc.setFont("helvetica", "bold")
-    doc.text("Total Charges:", sx - 35, yPos)
-    doc.setFont("helvetica", "normal")
-    doc.text(`Rs. ${totalCharges.toFixed(2)}`, pageWidth - 22, yPos, { align: "right" })
-    yPos += 4
-
-    if (discount > 0) {
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(200, 0, 0)
-        doc.text("Discount:", sx - 35, yPos)
-        doc.setFont("helvetica", "normal")
-        doc.text(`Rs. ${discount.toFixed(2)}`, pageWidth - 22, yPos, { align: "right" })
-        doc.setTextColor(0, 0, 0)
-        yPos += 4
-    }
-
-    doc.setDrawColor(0, 0, 0)
-    doc.line(sx - 35, yPos, pageWidth - 20, yPos)
-    yPos += 3
-
-    doc.setFont("helvetica", "bold")
-    doc.text("Net Amount:", sx - 35, yPos)
-    doc.text(`Rs. ${net.toFixed(2)}`, pageWidth - 22, yPos, { align: "right" })
-    yPos += 5
-    
-    // Paid breakdown
-    doc.setFont("helvetica", "normal")
-    const paymentModes = paymentEntries.reduce((acc, p) => {
-        const mode = p.paymentMode.charAt(0).toUpperCase() + p.paymentMode.slice(1);
-        acc[mode] = (acc[mode] || 0) + (p.amount || 0);
-        return acc;
-    }, {} as Record<string, number>);
-
-    Object.entries(paymentModes).forEach(([mode, amount]) => {
-        doc.text(`${mode} Paid:`, sx - 35, yPos)
-        doc.text(`Rs. ${amount.toFixed(2)}`, pageWidth - 22, yPos, { align: "right" })
-        yPos += 5
-    });
-
-    doc.setFont("helvetica", "bold")
-    doc.text("Total Paid:", sx - 35, yPos)
-    doc.text(`Rs. ${totalPaid.toFixed(2)}`, pageWidth - 22, yPos, { align: "right" })
-    yPos += 5
-
-    // Due amount
-    if (due > 0) {
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(200, 0, 0)
-        doc.text("Due Amount:", sx - 35, yPos)
-        doc.text(`Rs. ${due.toFixed(2)}`, pageWidth - 22, yPos, { align: "right" })
-        doc.setTextColor(0, 0, 0)
-        yPos += 5
-    }
-
-    // Amounts in words
+    // Amount in Words
     doc.setFontSize(9)
     doc.setFont("helvetica", "italic")
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-    yPos += 5
-    doc.text(`Total Paid (in words): ${capitalize(toWords(totalPaid))} only`, 20, yPos)
-    yPos += 5
-    if (due > 0) {
-        doc.text(`Due Amount (in words): ${capitalize(toWords(due))} only`, 20, yPos)
-        yPos += 5
-    }
-    
-    // Add signature/footer text
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "normal")
-    // doc.text("This is an auto-generated bill and may not require a signature.", 20, pageHeight - 15)
-    doc.setFont("helvetica", "bold")
-    // doc.text("For: Cigma Clinic", pageWidth - 40, pageHeight - 15)
 
+    // Wrap words if too long? usually fits in A5 landscape width
+    doc.text(`In Words: ${capitalize(toWords(Math.floor(totalPaid)))} Rupees Only`, 15, yPos + 5)
+
+    const summaryX = pageWidth - 80;
+    const valX = pageWidth - 17;
+
+    doc.setFont("helvetica", "bold")
+    doc.text("Total Charges:", summaryX, yPos)
+    doc.setFont("helvetica", "normal")
+    doc.text(totalCharges.toFixed(2), valX, yPos, { align: "right" })
+    yPos += 5;
+
+    if (discount > 0) {
+        doc.setFont("helvetica", "bold")
+        doc.text("Discount:", summaryX, yPos)
+        doc.text(discount.toFixed(2), valX, yPos, { align: "right" })
+        yPos += 5;
+    }
+
+    doc.setFont("helvetica", "bold")
+    doc.text("Net Amount:", summaryX, yPos)
+    doc.text(net.toFixed(2), valX, yPos, { align: "right" })
+    yPos += 5;
+
+    doc.text("Paid Amount:", summaryX, yPos)
+    doc.text(totalPaid.toFixed(2), valX, yPos, { align: "right" })
+    yPos += 5;
+
+    if (due > 0) {
+        doc.setTextColor(192, 57, 43); // Red
+        doc.text("Balance Due:", summaryX, yPos)
+        doc.text(due.toFixed(2), valX, yPos, { align: "right" })
+        doc.setTextColor(0, 0, 0);
+    }
+
+    // Footer
+    const footerY = pageHeight - 10;
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("Generated by CIGMA Clinic System", 15, footerY);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Authorized Signatory", pageWidth - 15, footerY, { align: "right" });
 
     return doc
 }

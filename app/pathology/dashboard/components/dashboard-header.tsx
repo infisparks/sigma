@@ -35,8 +35,11 @@ interface DashboardHeaderProps {
   isFilterContentMounted: boolean
   hospitalFilterTerm: string
   setHospitalFilterTerm: (term: string) => void
-  loadedDataStartDate?: string // Optional prop to display the start date of loaded data
-  loadedDataEndDate?: string // Optional prop to display the end date of loaded data
+  loadedDataStartDate?: string
+  loadedDataEndDate?: string
+  globalSearchTerm: string
+  setGlobalSearchTerm: (term: string) => void
+  onGlobalSearch: () => void
 }
 
 export function DashboardHeader({
@@ -61,6 +64,9 @@ export function DashboardHeader({
   setHospitalFilterTerm,
   loadedDataStartDate,
   loadedDataEndDate,
+  globalSearchTerm,
+  setGlobalSearchTerm,
+  onGlobalSearch,
 }: DashboardHeaderProps) {
   const filterContentRef = useRef<HTMLDivElement>(null)
 
@@ -165,63 +171,93 @@ export function DashboardHeader({
             className={`${isFiltersExpanded ? "block" : "hidden"} transition-all duration-300`}
           >
             {isFilterContentMounted && (
-              <div className="p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
+              <div className="p-4 space-y-4">
+                {/* Global Search Section */}
+                <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg flex flex-col sm:flex-row items-center gap-4">
+                  <div className="flex-1 w-full sm:w-auto relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <MagnifyingGlassIcon className="h-4 w-4 text-blue-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Global Search (All records by Name, Phone, UHID)..."
+                      value={globalSearchTerm}
+                      onChange={(e) => setGlobalSearchTerm(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') onGlobalSearch()
+                      }}
+                      className="pl-10 w-full p-2 border border-blue-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+                    />
                   </div>
-                  <input
-                    type="text"
-                    placeholder="Search name or phone..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
-                  />
+                  <button
+                    onClick={onGlobalSearch}
+                    className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors flex items-center justify-center whitespace-nowrap"
+                  >
+                    <MagnifyingGlassIcon className="h-4 w-4 mr-2" />
+                    Global Search
+                  </button>
                 </div>
 
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <CalendarIcon className="h-4 w-4 text-gray-400" />
+                {/* Existing Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Filter current list..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
+                    />
                   </div>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="pl-10 w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
-                  />
-                </div>
 
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <CalendarIcon className="h-4 w-4 text-gray-400" />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <CalendarIcon className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="pl-10 w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
+                    />
                   </div>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="pl-10 w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
-                  />
-                </div>
 
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="notCollected">Not Collected</option>
-                  <option value="sampleCollected">Pending</option>
-                  <option value="completed">Completed</option>
-                </select>
-                 <select
-                  value={hospitalFilterTerm}
-                  onChange={(e) => setHospitalFilterTerm(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
-                >
-                  <option value="all">All Hospitals</option>
-                  <option value="Cigma Clinic">Cigma Clinic</option>
-                
-                </select>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <CalendarIcon className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="pl-10 w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="notCollected">Not Collected</option>
+                      <option value="sampleCollected">Pending</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                    <select
+                      value={hospitalFilterTerm}
+                      onChange={(e) => setHospitalFilterTerm(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-stone-500 focus:border-transparent text-sm"
+                    >
+                      <option value="all">All Hospitals</option>
+                      <option value="Cigma Clinic">Cigma Clinic</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             )}
           </div>
