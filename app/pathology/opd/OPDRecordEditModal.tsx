@@ -1,4 +1,3 @@
-// @/app/opd/opd-dashboard/OPDRecordEditModal.tsx
 
 "use client"
 
@@ -10,8 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, X, FileText, Save, Plus, Heart, Scale, Stethoscope, FilePenLine, UserCircle, Phone } from 'lucide-react'; 
-import { openUniversalBillInNewTabProgrammatically, type BillServiceItem, type UniversalBillData, type DoctorLite } from "../patient-entry/universal-bill-generator"; 
+import { Loader2, X, FileText, Save, Plus, Heart, Scale, Stethoscope, FilePenLine, UserCircle, Phone, Activity } from 'lucide-react';
+import { openUniversalBillInNewTabProgrammatically, type BillServiceItem, type UniversalBillData, type DoctorLite } from "../patient-entry/universal-bill-generator";
 
 // --- Helper Functions (Duplicated for self-sufficiency) ---
 
@@ -27,9 +26,9 @@ function formatDate(isoString: string | null | undefined): string {
 
 function calculateDOB(age: number, unit: 'year' | 'month' | 'day'): string {
     const today = new Date(); const dob = new Date(today);
-    dob.setHours(0, 0, 0, 0); 
-    if (unit === 'year') { dob.setFullYear(dob.getFullYear() - age); } 
-    else if (unit === 'month') { dob.setMonth(dob.getMonth() - age); } 
+    dob.setHours(0, 0, 0, 0);
+    if (unit === 'year') { dob.setFullYear(dob.getFullYear() - age); }
+    else if (unit === 'month') { dob.setMonth(dob.getMonth() - age); }
     else if (unit === 'day') { dob.setDate(dob.getDate() - age); }
     return dob.toISOString().split('T')[0];
 }
@@ -46,7 +45,7 @@ interface PatientDetails {
 interface FullOPDRecord {
     id: number;
     uhid: string;
-    created_at: string; 
+    created_at: string;
     treating_doctor_id: number;
     referring_doctor_name: string;
     visit_category: 'First Visit' | 'Follow Up';
@@ -57,6 +56,7 @@ interface FullOPDRecord {
     bp: string | null;
     pulse: number | null;
     weight: number | null;
+    spo2: string | null;
     patient_detail: PatientDetails | null;
 }
 
@@ -78,6 +78,7 @@ interface EditFormFields {
     bp: string;
     pulse: number | null;
     weight: number | null;
+    spo2: string;
     discountAmount: number;
     paymentEntries: PaymentEntry[];
 }
@@ -118,7 +119,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
         dayType: (record?.patient_detail?.age_unit as 'year' | 'month' | 'day') || 'year',
         gender: record?.patient_detail?.gender || '',
         address: record?.patient_detail?.address || '',
-        
+
         // Registration/Service Details defaults
         treatingDoctorId: record?.treating_doctor_id || doctorList[0]?.id || 0,
         referringDoctorName: record?.referring_doctor_name || '',
@@ -126,6 +127,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
         bp: record?.bp || '',
         pulse: record?.pulse || null,
         weight: record?.weight || null,
+        spo2: record?.spo2 || '',
         discountAmount: record?.discount_amount || 0,
         paymentEntries: record?.payment_entries || [],
     }), [record, doctorList]);
@@ -136,13 +138,13 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
     });
 
     const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({ control, name: "paymentEntries" });
-    
+
     // Watch fields for dynamic calculation
     const watchedFields = watch();
     const watchedDiscount = watchedFields.discountAmount || 0;
     const watchedPayments = watchedFields.paymentEntries || [];
-    
-    const treatingDoctor = useMemo(() => 
+
+    const treatingDoctor = useMemo(() =>
         doctorList.find(d => d.id === watchedFields.treatingDoctorId),
         [doctorList, watchedFields.treatingDoctorId]
     );
@@ -150,8 +152,8 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
     // Recalculate Total Fees based on watched Doctor/Visit Category
     useEffect(() => {
         if (treatingDoctor) {
-            const fees = watchedFields.visitCategory === 'Follow Up' 
-                ? treatingDoctor.follow_up_fee || 0 
+            const fees = watchedFields.visitCategory === 'Follow Up'
+                ? treatingDoctor.follow_up_fee || 0
                 : treatingDoctor.first_visit_fee || 0;
             setTotalFees(fees);
         } else {
@@ -175,7 +177,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                     .single();
 
                 if (error) throw error;
-                
+
                 if (data && data.payment_entries === null) {
                     data.payment_entries = [];
                 }
@@ -191,9 +193,9 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
         };
         fetchRecord();
     }, [opdId, onClose]);
-    
+
     // --- Handlers ---
-    
+
     const handleAddPaymentEntry = () => {
         appendPayment({ amount: 0, paymentMode: "cash", time: new Date().toISOString() });
     }
@@ -224,7 +226,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                 .eq('uhid', record.uhid);
 
             if (patientErr) throw patientErr;
-            
+
             // --- 2. Update OPD Registration Detail ---
             const finalPayments = data.paymentEntries.filter(p => p.amount > 0);
             const finalTotalPaid = calculateTotalPaid(finalPayments);
@@ -236,8 +238,9 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                 bp: data.bp || null,
                 pulse: data.pulse || null,
                 weight: data.weight || null,
+                spo2: data.spo2 || null, // Added SpO2
                 discount_amount: data.discountAmount,
-                total_fees: totalFees, 
+                total_fees: totalFees,
                 amount_paid: finalTotalPaid,
                 payment_entries: finalPayments,
                 // REMOVED updated_at
@@ -268,7 +271,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
 
         const patientData = record.patient_detail;
         const doctorName = treatingDoctor?.doctor_name || record.referring_doctor_name;
-        
+
         // Use the currently watched values for the bill (to reflect unsaved changes)
         const currentDiscount = watchedDiscount;
         const currentTotalFees = totalFees;
@@ -281,20 +284,20 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
             doctor: doctorName,
             details: watchedFields.referringDoctorName ? `Ref: ${watchedFields.referringDoctorName}` : 'Self'
         }];
-        
-        const regDate = getDateFromISO(record.created_at); 
+
+        const regDate = getDateFromISO(record.created_at);
         const regTime = new Date(record.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
         const billData: UniversalBillData = {
             patientInfo: {
-                uhid: record.uhid, 
+                uhid: record.uhid,
                 // Use watched fields for the bill patient info (if user changed them)
-                name: watchedFields.name, 
-                contact: watchedFields.number, 
+                name: watchedFields.name,
+                contact: watchedFields.number,
                 age: watchedFields.age,
-                dayType: watchedFields.dayType as any, 
-                title: watchedFields.title, 
-                address: watchedFields.address, 
+                dayType: watchedFields.dayType as any,
+                title: watchedFields.title,
+                address: watchedFields.address,
                 gender: watchedFields.gender,
             },
             registrationId: record.id,
@@ -303,10 +306,10 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
             referredBy: watchedFields.referringDoctorName || doctorName,
             discount: currentDiscount,
             services: serviceItems,
-            paymentEntries: currentPayments.map(p => ({ 
-                amount: p.amount, 
-                paymentMode: p.paymentMode.toLowerCase() as 'online' | 'cash' | 'card', 
-                time: p.time 
+            paymentEntries: currentPayments.map(p => ({
+                amount: p.amount,
+                paymentMode: p.paymentMode.toLowerCase() as 'online' | 'cash' | 'card',
+                time: p.time
             })),
             sendWhatsApp: false
         };
@@ -318,7 +321,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
             console.error(e);
         }
     };
-    
+
     const totalPaid = calculateTotalPaid(watchedPayments);
     const remainingAmount = totalFees - watchedDiscount - totalPaid;
 
@@ -334,7 +337,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
 
     if (!record) {
         return (
-             <Dialog open={true}>
+            <Dialog open={true}>
                 <DialogContent className="sm:max-w-[800px]"><div className="text-red-500">Record not found.</div><Button onClick={() => onClose(false)}>Close</Button></DialogContent>
             </Dialog>
         );
@@ -361,15 +364,15 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                 <div><Label className="text-xs">Title</Label>
                                     <Select value={watchedFields.title} onValueChange={(v) => setValue("title", v)}><SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                                         <SelectContent>{[".", "MR", "MRS", "MAST", "MISS", "MS", "BABY", "SMT", "BABY OF", "DR"].map((t) => (<SelectItem key={t} value={t}>{t === "." ? "NoTitle" : t}</SelectItem>))}</SelectContent></Select></div>
-                                
+
                                 {/* Name */}
                                 <div><Label className="text-xs">Full Name</Label>
                                     <Input {...register("name", { required: true })} className="h-8" placeholder="Name" /></div>
-                                
+
                                 {/* Contact */}
-                                <div><Label className="text-xs flex items-center"><Phone className="h-3 w-3 mr-1"/> Contact Number</Label>
+                                <div><Label className="text-xs flex items-center"><Phone className="h-3 w-3 mr-1" /> Contact Number</Label>
                                     <Input {...register("number", { required: true, pattern: { value: /^[0-9]{10}$/, message: "10 digits" } })} className="h-8" placeholder="10-digit mobile" /></div>
-                                
+
                                 {/* Age & Unit */}
                                 <div className='grid grid-cols-3 gap-2'>
                                     <div className='col-span-2'><Label className="text-xs">Age</Label>
@@ -383,7 +386,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                 <div><Label className="text-xs">Gender</Label>
                                     <Select value={watchedFields.gender} onValueChange={(v) => setValue("gender", v)}><SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                                         <SelectContent><SelectItem value="male">Male</SelectItem><SelectItem value="female">Female</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
-                                
+
                                 {/* Address */}
                                 <div><Label className="text-xs">Address</Label>
                                     <Input {...register("address")} className="h-8" placeholder="Address" /></div>
@@ -399,8 +402,8 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                     {/* Treating Doctor */}
                                     <div>
                                         <Label className="text-sm">Treating Doctor *</Label>
-                                        <Select 
-                                            value={String(watchedFields.treatingDoctorId)} 
+                                        <Select
+                                            value={String(watchedFields.treatingDoctorId)}
                                             onValueChange={(v) => setValue("treatingDoctorId", Number(v))}
                                         >
                                             <SelectTrigger className="h-9"><SelectValue placeholder="Select Treating Doctor" /></SelectTrigger>
@@ -411,12 +414,12 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    
+
                                     {/* Visit Category */}
                                     <div>
                                         <Label className="text-sm">Visit Type *</Label>
-                                        <Select 
-                                            value={watchedFields.visitCategory} 
+                                        <Select
+                                            value={watchedFields.visitCategory}
                                             onValueChange={(v) => setValue("visitCategory", v as any)}
                                         >
                                             <SelectTrigger className="h-9"><SelectValue placeholder="Select Visit Type" /></SelectTrigger>
@@ -426,17 +429,17 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    
+
                                     {/* Referring Doctor */}
                                     <div>
                                         <Label className="text-sm">Referring Doctor</Label>
-                                        <Input 
-                                            {...register("referringDoctorName")} 
-                                            className="h-9" 
-                                            placeholder="External/Internal Referral" 
+                                        <Input
+                                            {...register("referringDoctorName")}
+                                            className="h-9"
+                                            placeholder="External/Internal Referral"
                                         />
                                     </div>
-                                    
+
                                     {/* Calculated Fee Display */}
                                     <div>
                                         <Label className="text-sm">Calculated Fee</Label>
@@ -444,20 +447,24 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                                 <h3 className="text-md font-bold text-gray-700 mb-3">Vitals</h3>
                                 <div className="space-y-3">
                                     <div>
-                                        <Label className="text-sm flex items-center"><Heart className="h-3 w-3 mr-1"/> BP (Systolic/Diastolic)</Label>
-                                        <Input {...register("bp")} className="h-9" placeholder="e.g., 120/80"/>
+                                        <Label className="text-sm flex items-center"><Heart className="h-3 w-3 mr-1" /> BP (Systolic/Diastolic)</Label>
+                                        <Input {...register("bp")} className="h-9" placeholder="e.g., 120/80" />
                                     </div>
                                     <div>
-                                        <Label className="text-sm flex items-center"><Stethoscope className="h-3 w-3 mr-1"/> Pulse (BPM)</Label>
+                                        <Label className="text-sm flex items-center"><Stethoscope className="h-3 w-3 mr-1" /> Pulse (BPM)</Label>
                                         <Input type="number" {...register("pulse", { valueAsNumber: true })} className="h-9" placeholder="e.g., 72" />
                                     </div>
                                     <div>
-                                        <Label className="text-sm flex items-center"><Scale className="h-3 w-3 mr-1"/> Weight (Kg)</Label>
+                                        <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> SpO2 (%)</Label>
+                                        <Input type="text" {...register("spo2")} className="h-9" placeholder="e.g., 99%" />
+                                    </div>
+                                    <div>
+                                        <Label className="text-sm flex items-center"><Scale className="h-3 w-3 mr-1" /> Weight (Kg)</Label>
                                         <Input type="number" step="0.1" {...register("weight", { valueAsNumber: true })} className="h-9" placeholder="e.g., 65.5" />
                                     </div>
                                 </div>
@@ -474,35 +481,35 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                 <h3 className="text-lg font-semibold text-gray-700">Payment Entries</h3>
                                 <Button type="button" variant="outline" size="sm" onClick={handleAddPaymentEntry}><Plus className="h-4 w-4 mr-1" /> Add Payment</Button>
                             </div>
-                            
+
                             <div className="mb-3">
                                 <Label className="text-sm">Discount (₹)</Label>
-                                <Input 
-                                    type="number" 
-                                    step="0.01" 
-                                    {...register("discountAmount", { valueAsNumber: true })} 
-                                    placeholder="0" 
-                                    className="h-9" 
+                                <Input
+                                    type="number"
+                                    step="0.01"
+                                    {...register("discountAmount", { valueAsNumber: true })}
+                                    placeholder="0"
+                                    className="h-9"
                                 />
                             </div>
-                            
+
                             <div className="max-h-40 overflow-y-auto space-y-2">
                                 {paymentFields.map((field, idx) => (
                                     <div key={field.id} className="border rounded-lg p-2 bg-gray-50">
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="text-sm font-medium">Payment {idx + 1}</span>
-                                            <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removePayment(idx)}> 
-                                                <X className="h-3 w-3 text-red-500" /> 
+                                            <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removePayment(idx)}>
+                                                <X className="h-3 w-3 text-red-500" />
                                             </Button>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <div> 
-                                                <Label className="text-xs">Amount (₹)</Label> 
-                                                <Input type="number" step="0.01" {...register(`paymentEntries.${idx}.amount`, { valueAsNumber: true })} className="h-8" placeholder="Amount" /> 
+                                            <div>
+                                                <Label className="text-xs">Amount (₹)</Label>
+                                                <Input type="number" step="0.01" {...register(`paymentEntries.${idx}.amount`, { valueAsNumber: true })} className="h-8" placeholder="Amount" />
                                             </div>
-                                            <div> 
+                                            <div>
                                                 <Label className="xs">Mode</Label>
-                                                <Select value={watchedFields.paymentEntries[idx]?.paymentMode} onValueChange={(v) => setValue(`paymentEntries.${idx}.paymentMode`, v as any)}>
+                                                <Select value={watchedFields.paymentEntries[idx]?.paymentMode} onValueChange={(v) => setValue(`paymentEntries.${idx}.paymentMode` as any, v as any)}>
                                                     <SelectTrigger className="h-8"> <SelectValue /> </SelectTrigger>
                                                     <SelectContent><SelectItem value="online">Online</SelectItem><SelectItem value="cash">Cash</SelectItem></SelectContent>
                                                 </Select>
@@ -534,7 +541,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                             <div className="flex justify-end gap-2 mt-4">
                                 <Button type="button" variant="outline" onClick={handleDownloadBill}><FileText className="h-4 w-4 mr-2" /> Download Bill</Button>
                                 <Button type="submit" disabled={isUpdating} className="bg-blue-600 hover:bg-blue-700">
-                                    {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />} 
+                                    {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                                     Save Changes
                                 </Button>
                             </div>

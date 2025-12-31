@@ -1,4 +1,3 @@
-// @/app/pathology/patient-entry/OPDRegistration.tsx
 
 import React, { useMemo } from "react"
 import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form"
@@ -6,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, X, User, Heart, Scale, Stethoscope } from "lucide-react"
+import { Plus, X, User, Heart, Scale, Stethoscope, Activity } from "lucide-react"
 import { format } from "date-fns"
 
 // --- Supabase and Config Imports ---
@@ -34,6 +33,7 @@ interface OPDData {
     bp: string;
     pulse: number | null;
     weight: number | null;
+    spo2: string;
     discountAmount: number;
     paymentEntries: any[];
 }
@@ -181,8 +181,8 @@ const OPDRegistration: React.FC<OPDProps> = ({
 
     // Sync form values to parent state
     React.useEffect(() => {
-        const { treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, discountAmount, paymentEntries, ...regDetails } = watchFields;
-        setOpdData({ treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, discountAmount, paymentEntries });
+        const { treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, discountAmount, paymentEntries, ...regDetails } = watchFields;
+        setOpdData({ treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, discountAmount, paymentEntries });
 
         // Sync CommonRegDetails (DoctorName here refers to the treating doctor's name)
         const doctor = doctorList.find(d => String(d.id) === String(treatingDoctorId));
@@ -255,6 +255,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                 bp: data.bp || null,
                 pulse: data.pulse || null,
                 weight: data.weight || null,
+                spo2: data.spo2 || null,
                 discount_amount: data.discountAmount,
                 amount_paid: finalTotalPaid,
                 payment_entries: finalPaymentEntries,
@@ -313,7 +314,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
             // 4. CLEAR FORM: Reset component-specific fields
             reset({
                 ...defaultRHFValues,
-                bp: '', pulse: null, weight: null,
+                bp: '', pulse: null, weight: null, spo2: '',
                 discountAmount: 0,
                 paymentEntries: [],
             });
@@ -402,7 +403,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                             <Label className="text-sm flex items-center"><Heart className="h-3 w-3 mr-1" /> BP (Systolic/Diastolic)</Label>
                             <Input {...control.register("bp")} className="h-8" placeholder="e.g., 120/80" disabled={!isExistingPatient} />
                         </div>
-                        <div className="col-span-3">
+                        <div className="col-span-2">
                             <Label className="text-sm flex items-center"><Stethoscope className="h-3 w-3 mr-1" /> Pulse (BPM)</Label>
                             <Input
                                 type="number"
@@ -413,7 +414,17 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                 onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
                             />
                         </div>
-                        <div className="col-span-3">
+                        <div className="col-span-2">
+                            <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> SpO2 (%)</Label>
+                            <Input
+                                type="text"
+                                {...control.register("spo2")}
+                                className="h-8"
+                                placeholder="e.g., 98"
+                                disabled={!isExistingPatient}
+                            />
+                        </div>
+                        <div className="col-span-2">
                             <Label className="text-sm flex items-center"><Scale className="h-3 w-3 mr-1" /> Weight (Kg)</Label>
                             <Input
                                 type="number"

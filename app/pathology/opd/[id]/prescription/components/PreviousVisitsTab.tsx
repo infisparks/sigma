@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from "@/lib/supabase";
-import { ChevronLeft, ChevronRight, FileText, Calendar, User, Clock, Search, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, Calendar, User, Clock, Search, AlertCircle, Copy, Check } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
 
@@ -17,6 +17,7 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
     const [selectedVisitIndex, setSelectedVisitIndex] = useState(0);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
+    const [copiedId, setCopiedId] = useState<number | null>(null);
 
     // --- Fetch Data ---
     useEffect(() => {
@@ -47,6 +48,57 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
     );
 
     const currentVisit = filteredVisits[selectedVisitIndex];
+
+    const handleCopy = (visit: any) => {
+        if (!confirm("This will overwrite your current form drafts with data from this visit. Are you sure?")) return;
+
+        try {
+            // 1. Checkup
+            if (visit.checkup_data_json) {
+                localStorage.setItem(`draft_checkup_${currentOpdId}`, JSON.stringify(visit.checkup_data_json));
+            }
+
+            // 2. Rx (Treatment)
+            if (visit.rx_list_json) {
+                localStorage.setItem(`draft_rx_${currentOpdId}`, JSON.stringify(visit.rx_list_json));
+            }
+
+            // 3. Instructions
+            const instructionsData = {
+                instructions: visit.instructions_list_json || [],
+                investigations: visit.investigations_list_json || [],
+                procedures: visit.procedures_list_json || []
+            };
+            localStorage.setItem(`draft_instructions_${currentOpdId}`, JSON.stringify(instructionsData));
+
+            // 4. Symptoms
+            const symptomsRecord: Record<string, any> = {};
+            (visit.symptoms_list_json || []).forEach((item: any) => {
+                symptomsRecord[item.name] = item;
+            });
+            localStorage.setItem(`draft_symptom_details_${currentOpdId}`, JSON.stringify(symptomsRecord));
+            localStorage.setItem(`draft_symptoms_${currentOpdId}`, JSON.stringify(Object.keys(symptomsRecord)));
+
+            // 5. Diagnosis
+            const diagnosisRecord: Record<string, any> = {};
+            (visit.diagnosis_list_json || []).forEach((item: any) => {
+                diagnosisRecord[item.name] = item;
+            });
+            localStorage.setItem(`draft_diagnosis_details_${currentOpdId}`, JSON.stringify(diagnosisRecord));
+            localStorage.setItem(`draft_diagnosis_${currentOpdId}`, JSON.stringify(Object.keys(diagnosisRecord)));
+
+            // 6. Fitness
+            if (visit.fitness_plan_json) {
+                localStorage.setItem(`draft_fitness_${currentOpdId}`, JSON.stringify(visit.fitness_plan_json));
+            }
+
+            setCopiedId(visit.id);
+            setTimeout(() => setCopiedId(null), 3000);
+        } catch (e) {
+            console.error("Error copying data", e);
+            alert("Failed to copy data.");
+        }
+    };
 
     // --- Render Loading / Empty ---
     if (loading) return (
@@ -95,42 +147,58 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
                 {/* List */}
                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
                     {filteredVisits.length > 0 ? filteredVisits.map((visit, idx) => (
-                        <button
-                            key={visit.id}
-                            onClick={() => setSelectedVisitIndex(idx)}
-                            className={cn(
-                                "w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 border text-left group relative overflow-hidden",
-                                selectedVisitIndex === idx
-                                    ? "bg-blue-600 border-blue-600 shadow-md shadow-blue-200"
-                                    : "bg-white border-slate-100 hover:border-blue-200 hover:shadow-sm"
-                            )}
-                        >
-                            {/* Date Box */}
-                            <div className={cn(
-                                "flex flex-col items-center justify-center w-10 h-10 rounded-lg border shrink-0 transition-colors",
-                                selectedVisitIndex === idx
-                                    ? "bg-white/10 border-white/20 text-white"
-                                    : "bg-slate-50 border-slate-200 text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 group-hover:border-blue-100"
-                            )}>
-                                <span className="text-[10px] font-black leading-none">{format(new Date(visit.created_at), 'dd')}</span>
-                                <span className="text-[8px] font-bold uppercase leading-none mt-0.5">{format(new Date(visit.created_at), 'MMM')}</span>
-                            </div>
+                        <div key={visit.id} className="relative group/item">
+                            <button
+                                onClick={() => setSelectedVisitIndex(idx)}
+                                className={cn(
+                                    "w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 border text-left relative overflow-hidden",
+                                    selectedVisitIndex === idx
+                                        ? "bg-blue-600 border-blue-600 shadow-md shadow-blue-200"
+                                        : "bg-white border-slate-100 hover:border-blue-200 hover:shadow-sm"
+                                )}
+                            >
+                                {/* Date Box */}
+                                <div className={cn(
+                                    "flex flex-col items-center justify-center w-10 h-10 rounded-lg border shrink-0 transition-colors",
+                                    selectedVisitIndex === idx
+                                        ? "bg-white/10 border-white/20 text-white"
+                                        : "bg-slate-50 border-slate-200 text-slate-500 group-hover/item:bg-blue-50 group-hover/item:text-blue-600 group-hover/item:border-blue-100"
+                                )}>
+                                    <span className="text-[10px] font-black leading-none">{format(new Date(visit.created_at), 'dd')}</span>
+                                    <span className="text-[8px] font-bold uppercase leading-none mt-0.5">{format(new Date(visit.created_at), 'MMM')}</span>
+                                </div>
 
-                            <div className="min-w-0">
-                                <p className={cn(
-                                    "text-[10px] font-bold truncate",
-                                    selectedVisitIndex === idx ? "text-white" : "text-slate-800"
-                                )}>
-                                    Visit #{visit.id}
-                                </p>
-                                <p className={cn(
-                                    "text-[9px] truncate mt-0.5",
-                                    selectedVisitIndex === idx ? "text-blue-100" : "text-slate-400"
-                                )}>
-                                    {format(new Date(visit.created_at), 'h:mm a')} • {format(new Date(visit.created_at), 'yyyy')}
-                                </p>
-                            </div>
-                        </button>
+                                <div className="min-w-0 flex-1">
+                                    <p className={cn(
+                                        "text-[10px] font-bold truncate",
+                                        selectedVisitIndex === idx ? "text-white" : "text-slate-800"
+                                    )}>
+                                        Visit #{visit.id}
+                                    </p>
+                                    <p className={cn(
+                                        "text-[9px] truncate mt-0.5",
+                                        selectedVisitIndex === idx ? "text-blue-100" : "text-slate-400"
+                                    )}>
+                                        {format(new Date(visit.created_at), 'h:mm a')} • {format(new Date(visit.created_at), 'yyyy')}
+                                    </p>
+                                </div>
+                            </button>
+
+                            {/* Quick Copy Button on Hover - Reassign */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCopy(visit);
+                                }}
+                                className={cn(
+                                    "absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center rounded-lg bg-white shadow-sm border border-slate-200 opacity-0 group-hover/item:opacity-100 transition-all z-10 hover:bg-blue-50 hover:text-blue-600",
+                                    copiedId === visit.id ? "text-green-600 border-green-200 bg-green-50 opacity-100" : "text-slate-400"
+                                )}
+                                title="Copy to Current Form"
+                            >
+                                {copiedId === visit.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                        </div>
                     )) : (
                         <div className="text-center py-8">
                             <p className="text-[10px] text-slate-400">No visits found.</p>
@@ -168,6 +236,31 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
                                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white hover:shadow-sm text-slate-500 hover:text-slate-900 transition-all disabled:opacity-30"
                             >
                                 <ChevronRight className="w-4 h-4" />
+                            </button>
+
+                            <div className="w-px h-4 bg-slate-300 mx-1"></div>
+
+                            {/* Main Copy Button - Reassign */}
+                            <button
+                                onClick={() => handleCopy(currentVisit)}
+                                className={cn(
+                                    "flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-[10px] font-bold transition-all shadow-sm",
+                                    copiedId === currentVisit.id
+                                        ? "bg-green-100 text-green-700"
+                                        : "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-200"
+                                )}
+                            >
+                                {copiedId === currentVisit.id ? (
+                                    <>
+                                        <Check className="w-3 h-3" />
+                                        <span>Copied!</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="w-3 h-3" />
+                                        <span>Reassign / Copy</span>
+                                    </>
+                                )}
                             </button>
                         </div>
 
@@ -290,6 +383,4 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
         </div>
     );
 }
-
-// Unused sub-components removed for cleaner file
 

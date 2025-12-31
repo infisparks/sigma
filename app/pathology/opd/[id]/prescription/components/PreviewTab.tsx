@@ -389,6 +389,16 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                         </button>
 
                         <button
+                            onClick={() => window.print()}
+                            className="w-full flex items-center justify-between p-2.5 bg-blue-600 border border-blue-700 rounded-lg hover:bg-blue-700 text-white shadow-sm mb-1.5"
+                        >
+                            <div className="flex items-center gap-2.5">
+                                <Printer className="w-3.5 h-3.5 text-white" />
+                                <span className="text-[10px] font-black uppercase tracking-wider">Print PDF</span>
+                            </div>
+                        </button>
+
+                        <button
                             onClick={() => setIsPrintDialogOpen(true)}
                             className="w-full flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
                         >
@@ -405,6 +415,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
             {/* --- RIGHT PANEL (Preview) --- */}
             <div className="flex-1 overflow-auto p-4 flex justify-center">
                 <div
+                    id="print-area"
                     className="bg-white shadow-2xl transition-all origin-top"
                     style={{
                         width: '794px', // A4 Width
@@ -709,6 +720,51 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            {/* --- Print Styles --- */}
+            <style jsx global>{`
+                @media print {
+                    @page {
+                        size: A4;
+                        margin: 0mm;
+                    }
+                    /* Hide everything by default */
+                    body * {
+                        visibility: hidden;
+                    }
+                    
+                    /* Show print area and its children */
+                    #print-area, #print-area * {
+                        visibility: visible;
+                    }
+
+                    /* Position print area */
+                    #print-area {
+                        position: fixed;
+                        left: 0;
+                        top: 0;
+                        width: 210mm !important;
+                        min-height: 297mm !important;
+                        margin: 0 !important;
+                        /* padding: 0 !important;  <-- REMOVED to allow inline styles (user margins) to work */
+                        overflow: visible !important;
+                        transform: none !important; /* Remove screen scaling */
+                        box-shadow: none !important;
+                        border: none !important;
+                        background: white !important;
+                    }
+
+                    /* Ensure background colors print */
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+
+                    /* Hide scrollbars and UI elements */
+                    ::-webkit-scrollbar {
+                        display: none;
+                    }
+                }
+            `}</style>
         </div>
     );
 }
