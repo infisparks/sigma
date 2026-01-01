@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // --- Theme ---
 const AppColors = {
@@ -422,6 +423,19 @@ function DetailPanel({ detail, isSym, onUpdate, onRemove, onToggleCustom, onAddG
     const accentColor = isSym ? "text-pink-500" : "text-orange-500";
     const accentBg = isSym ? "bg-pink-50" : "bg-orange-50";
 
+    // Custom Duration State
+    const [isCustomDurationOpen, setIsCustomDurationOpen] = useState(false);
+    const [customDurationValue, setCustomDurationValue] = useState("");
+    const [customDurationUnit, setCustomDurationUnit] = useState("Days");
+
+    const handleApplyCustomDuration = () => {
+        if (!customDurationValue) return;
+        const formatted = `${customDurationValue} ${customDurationUnit}`;
+        onUpdate('duration', formatted);
+        setIsCustomDurationOpen(false);
+        setCustomDurationValue("");
+    };
+
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
@@ -503,7 +517,49 @@ function DetailPanel({ detail, isSym, onUpdate, onRemove, onToggleCustom, onAddG
                                     {d}
                                 </button>
                             ))}
+                            <button
+                                onClick={() => setIsCustomDurationOpen(!isCustomDurationOpen)}
+                                className={cn(
+                                    "px-2 h-8 rounded-md text-[10px] font-bold border transition-all bg-white text-blue-600 border-blue-200 hover:border-blue-400",
+                                    isCustomDurationOpen ? "bg-blue-50 border-blue-400" : ""
+                                )}
+                            >
+                                Custom
+                            </button>
                         </div>
+
+                        {/* Custom Duration Inputs */}
+                        {isCustomDurationOpen && (
+                            <div className="mt-2 p-2 bg-slate-100 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                                <Input
+                                    type="number"
+                                    value={customDurationValue}
+                                    onChange={(e) => setCustomDurationValue(e.target.value)}
+                                    className="h-8 text-xs w-20 bg-white"
+                                    placeholder="Num"
+                                />
+                                <Select value={customDurationUnit} onValueChange={setCustomDurationUnit}>
+                                    <SelectTrigger className="h-8 w-24 text-xs bg-white">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="z-[9999]">
+                                        <SelectItem value="Days">Days</SelectItem>
+                                        <SelectItem value="Weeks">Weeks</SelectItem>
+                                        <SelectItem value="Months">Months</SelectItem>
+                                        <SelectItem value="Years">Years</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Button size="sm" onClick={handleApplyCustomDuration} className="h-8 text-xs">
+                                    Update
+                                </Button>
+                            </div>
+                        )}
+                        {/* Show selected duration if it's custom (not in the standard list) */}
+                        {detail.duration && !['1d', '2d', '3d', '4d', '1w', '2w', '1m', '3m', '6m', '1y'].includes(detail.duration) && (
+                            <div className="mt-2 text-[10px] font-bold text-slate-500 flex items-center gap-2">
+                                Current: <span className="bg-slate-800 text-white px-2 py-1 rounded">{detail.duration}</span>
+                            </div>
+                        )}
                     </div>
                 )}
 
