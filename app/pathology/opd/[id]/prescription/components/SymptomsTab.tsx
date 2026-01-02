@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { usePrescription } from "../context/PrescriptionContext";
+import { SymptomDetail, CustomOptionGroup } from "../types";
 
 // --- Theme ---
 const AppColors = {
@@ -25,189 +27,110 @@ const AppColors = {
     accentOrange: "text-orange-500",
 };
 
-// --- Models ---
-interface CustomOptionGroup {
-    title: string;
-    options: string[];
-}
-
-interface SymptomDetail {
-    name: string;
-    note: string;
-    duration?: string;
-    severity?: string;
-    customGroups: CustomOptionGroup[];
-    selectedCustomOptions: Set<string>;
-}
-
 interface SymptomsTabProps {
     opdId: number;
 }
 
 export default function SymptomsTab({ opdId }: SymptomsTabProps) {
+    // --- Context ---
+    const { symptoms, addSymptom, removeSymptom, updateSymptom, isLoading } = usePrescription();
+
     // --- State ---
     const [selectedTabIndex, setSelectedTabIndex] = useState(0); // 0: Symptoms, 1: Findings, 2: All
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedSymptomForDetail, setSelectedSymptomForDetail] = useState<string | null>(null);
-    const [selectedSymptomDetails, setSelectedSymptomDetails] = useState<Record<string, SymptomDetail>>({});
 
     const [rawSymptoms, setRawSymptoms] = useState<string[]>([]);
     const [rawFindings, setRawFindings] = useState<string[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [isLoaded, setIsLoaded] = useState(false);
-
     const [isOptionDialogOpen, setIsOptionDialogOpen] = useState(false);
 
-    const [isFinalized, setIsFinalized] = useState(false);
-
-    // --- Fetch Data ---
+    // --- Fetch Master Data Only ---
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchMasterData = async () => {
+            const cacheKey = 'OPD_MASTER_SYMPTOMS_CACHE';
+
+            // 1. Try Cache
             try {
-                // 1. Load Master Data
-                const { data: masterData } = await supabase.from('opd_datasets').select('dataname, datajson');
-                if (masterData) {
-                    masterData.forEach((row: any) => {
-                        const list = Array.isArray(row.datajson) ? row.datajson : [];
-                        if (row.dataname === 'Symptoms') setRawSymptoms(list);
-                        else if (row.dataname === 'Findings') setRawFindings(list);
-                    });
+                const cached = localStorage.getItem(cacheKey);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (parsed.symptoms) setRawSymptoms(parsed.symptoms);
+                    if (parsed.findings) setRawFindings(parsed.findings);
                 }
+            } catch (e) { console.error("Cache read error", e); }
 
-                // 2. Load Status & Server Data
-                const { data: serverData, error } = await supabase
-                    .from('opd_registration')
-                    .select('is_finalized, symptoms_list_json')
-                    .eq('id', opdId)
-                    .single();
+            // 2. Fetch Network
+            const { data: masterData } = await supabase.from('opd_datasets').select('dataname, datajson');
 
-                if (error) throw error;
+            let fetchedSymptoms: string[] = [];
+            let fetchedFindings: string[] = [];
 
-                const finalized = serverData?.is_finalized || false;
-                const serverList = serverData?.symptoms_list_json || [];
-                setIsFinalized(finalized);
-
-                // Helper to convert List (Server/JSON) -> Record (Local State)
-                const parseListToRecord = (list: any[]) => {
-                    const record: Record<string, SymptomDetail> = {};
-                    list.forEach((item: any) => {
-                        record[item.name] = {
-                            ...item,
-                            customGroups: item.customGroups || [],
-                            selectedCustomOptions: new Set(item.selectedCustomOptions || [])
-                        };
-                    });
-                    return record;
-                };
-
-                // Helper to parse Local Storage JSON -> Record
-                const parseLocalJSON = (jsonStr: string) => {
-                    const parsed = JSON.parse(jsonStr);
-                    for (const key in parsed) {
-                        parsed[key].customGroups = parsed[key].customGroups || [];
-                        parsed[key].selectedCustomOptions = new Set(parsed[key].selectedCustomOptions || []);
+            if (masterData) {
+                masterData.forEach((row: any) => {
+                    const list = Array.isArray(row.datajson) ? row.datajson : [];
+                    if (row.dataname === 'Symptoms') {
+                        setRawSymptoms(list);
+                        fetchedSymptoms = list;
                     }
-                    return parsed;
-                };
-
-                // 3. Decide Source
-                if (finalized) {
-                    // Finalized: Strictly load from server
-                    setSelectedSymptomDetails(parseListToRecord(serverList));
-                } else {
-                    // Draft: Prioritize Local Storage
-                    const savedDetails = localStorage.getItem(`draft_symptom_details_${opdId}`);
-
-                    if (savedDetails) {
-                        try {
-                            setSelectedSymptomDetails(parseLocalJSON(savedDetails));
-                        } catch (e) {
-                            console.error("Local draft corrupt", e);
-                            setSelectedSymptomDetails(parseListToRecord(serverList));
-                        }
-                    } else {
-                        // No local draft? Initialize from server (sync)
-                        const initialData = parseListToRecord(serverList);
-                        setSelectedSymptomDetails(initialData);
-
-                        // Sync to local immediately
-                        // We need to serialize the Set back to Array for storage
-                        const serializable = Object.fromEntries(
-                            Object.entries(initialData).map(([k, v]) => [k, { ...v, selectedCustomOptions: Array.from(v.selectedCustomOptions) }])
-                        );
-                        localStorage.setItem(`draft_symptom_details_${opdId}`, JSON.stringify(serializable));
+                    else if (row.dataname === 'Findings') {
+                        setRawFindings(list);
+                        fetchedFindings = list;
                     }
-                }
+                });
 
-                setIsLoaded(true);
-            } catch (e) {
-                console.error("Error fetching symptoms data", e);
-                setIsLoaded(true); // Ensure loaded is set even on error
-            } finally {
-                setLoading(false);
+                // 3. Update Cache
+                try {
+                    const cachePayload = { symptoms: fetchedSymptoms, findings: fetchedFindings };
+                    localStorage.setItem(cacheKey, JSON.stringify(cachePayload));
+                } catch (e) { console.error("Cache write error", e); }
             }
         };
-        fetchData();
-    }, [opdId]);
-
-    useEffect(() => {
-        if (isLoaded) {
-            const serializableDetails = Object.fromEntries(
-                Object.entries(selectedSymptomDetails).map(([key, detail]) => [
-                    key,
-                    {
-                        ...detail,
-                        selectedCustomOptions: Array.from(detail.selectedCustomOptions)
-                    }
-                ])
-            );
-            localStorage.setItem(`draft_symptom_details_${opdId}`, JSON.stringify(serializableDetails));
-            // Also save list of keys for easier access if needed
-            localStorage.setItem(`draft_symptoms_${opdId}`, JSON.stringify(Object.keys(selectedSymptomDetails)));
-        }
-    }, [selectedSymptomDetails, opdId, isLoaded]);
+        fetchMasterData();
+    }, []);
 
     // --- Logic ---
     const isSymptom = (name: string) => rawSymptoms.includes(name);
 
     const selectSymptom = (label: string) => {
-        if (!selectedSymptomDetails[label]) {
-            setSelectedSymptomDetails(prev => ({
-                ...prev,
-                [label]: { name: label, note: '', customGroups: [], selectedCustomOptions: new Set() }
-            }));
+        if (!symptoms[label]) {
+            addSymptom({
+                name: label,
+                note: '',
+                customGroups: [],
+                selectedCustomOptions: []
+            });
         }
         setSelectedSymptomForDetail(label);
     };
 
-    const removeSymptom = (label: string) => {
-        const newDetails = { ...selectedSymptomDetails };
-        delete newDetails[label];
-        setSelectedSymptomDetails(newDetails);
-
+    const handleRemoveSymptom = (label: string) => {
+        removeSymptom(label);
         if (selectedSymptomForDetail === label) {
             setSelectedSymptomForDetail(null);
         }
     };
 
-    const updateDetail = (label: string, field: keyof SymptomDetail, value: any) => {
-        setSelectedSymptomDetails(prev => ({
-            ...prev,
-            [label]: { ...prev[label], [field]: value }
-        }));
+    const handleUpdateDetail = (label: string, field: keyof SymptomDetail, value: any) => {
+        updateSymptom(label, { [field]: value });
     };
 
     const toggleCustomOption = (label: string, option: string) => {
-        const currentSet = new Set(selectedSymptomDetails[label].selectedCustomOptions);
-        if (currentSet.has(option)) currentSet.delete(option);
-        else currentSet.add(option);
-        updateDetail(label, 'selectedCustomOptions', currentSet);
+        const currentOptions = symptoms[label]?.selectedCustomOptions || [];
+        const isSelected = currentOptions.includes(option);
+
+        let newOptions;
+        if (isSelected) {
+            newOptions = currentOptions.filter(o => o !== option);
+        } else {
+            newOptions = [...currentOptions, option];
+        }
+        updateSymptom(label, { selectedCustomOptions: newOptions });
     };
 
     const addCustomGroup = (group: CustomOptionGroup) => {
         if (!selectedSymptomForDetail) return;
-        const currentGroups = [...(selectedSymptomDetails[selectedSymptomForDetail].customGroups || []), group];
-        updateDetail(selectedSymptomForDetail, 'customGroups', currentGroups);
+        const currentGroups = [...(symptoms[selectedSymptomForDetail]?.customGroups || []), group];
+        updateSymptom(selectedSymptomForDetail, { customGroups: currentGroups });
     };
 
     // --- Add New Item Logic ---
@@ -215,49 +138,31 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
         if (!searchQuery.trim()) return;
         const newItemName = searchQuery.trim();
 
-        // Determine type based on active tab (Default to Symptoms if 'All' or 'Symptoms' is active)
         const isFinding = selectedTabIndex === 1;
         const dbName = isFinding ? 'Findings' : 'Symptoms';
 
         // 1. Optimistic Local Update
-        if (isFinding) {
-            setRawFindings(prev => [...prev, newItemName]);
-        } else {
-            setRawSymptoms(prev => [...prev, newItemName]);
-        }
+        if (isFinding) setRawFindings(prev => [...prev, newItemName]);
+        else setRawSymptoms(prev => [...prev, newItemName]);
 
-        // Select the new item immediately
+        // Select immediately
         selectSymptom(newItemName);
         setSearchQuery("");
 
-        // 2. Persist to Database (Master List)
+        // 2. Persist to Master DB
         try {
-            const { data: currentData, error: fetchError } = await supabase
+            const { data: currentData } = await supabase
                 .from('opd_datasets')
                 .select('datajson')
                 .eq('dataname', dbName)
                 .single();
 
-            if (fetchError) throw fetchError;
-
-            let list: string[] = [];
-            if (Array.isArray(currentData?.datajson)) {
-                list = currentData.datajson;
-            }
-
-            // Only update if not exists
+            const list: string[] = Array.isArray(currentData?.datajson) ? currentData.datajson : [];
             if (!list.includes(newItemName)) {
-                const updatedList = [...list, newItemName];
-                const { error: updateError } = await supabase
-                    .from('opd_datasets')
-                    .update({ datajson: updatedList })
-                    .eq('dataname', dbName);
-
-                if (updateError) throw updateError;
+                await supabase.from('opd_datasets').update({ datajson: [...list, newItemName] }).eq('dataname', dbName);
             }
         } catch (e) {
-            console.error(`Failed to add new ${dbName} to database`, e);
-            // Optional: Revert local state or show toast error
+            console.error(`Failed to add new ${dbName}`, e);
         }
     };
 
@@ -271,10 +176,10 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
         if (searchQuery) {
             source = source.filter(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
         }
-        return source.filter(s => !selectedSymptomDetails[s]);
+        return source.filter(s => !symptoms[s]);
     })();
 
-    if (loading) return <div className="flex items-center justify-center h-full">Loading...</div>;
+    if (isLoading) return <div className="flex items-center justify-center h-full">Loading...</div>;
 
     return (
         <div className={`flex h-full ${AppColors.bg}`}>
@@ -309,22 +214,22 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
                 </div>
 
                 {/* Active Selections */}
-                {Object.keys(selectedSymptomDetails).length > 0 && (
+                {Object.keys(symptoms).length > 0 && (
                     <div className="border-b border-slate-100">
                         <div className="px-3 py-1.5 bg-blue-50/50 flex items-center gap-1.5">
                             <div className="bg-blue-100 p-0.5 rounded-full"><Check className="w-2.5 h-2.5 text-blue-600" /></div>
-                            <span className="text-[9px] font-bold text-slate-500 tracking-wider uppercase">Active ({Object.keys(selectedSymptomDetails).length})</span>
+                            <span className="text-[9px] font-bold text-slate-500 tracking-wider uppercase">Active ({Object.keys(symptoms).length})</span>
                         </div>
                         <div className="p-3 max-h-[140px] overflow-y-auto">
                             <div className="flex flex-wrap gap-1.5">
-                                {Object.values(selectedSymptomDetails).map(detail => (
+                                {Object.values(symptoms).map(detail => (
                                     <SelectedChip
                                         key={detail.name}
                                         detail={detail}
                                         isViewing={selectedSymptomForDetail === detail.name}
                                         isSym={isSymptom(detail.name)}
                                         onClick={() => setSelectedSymptomForDetail(detail.name)}
-                                        onRemove={() => removeSymptom(detail.name)}
+                                        onRemove={() => handleRemoveSymptom(detail.name)}
                                     />
                                 ))}
                             </div>
@@ -366,12 +271,12 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
 
             {/* --- RIGHT PANEL (Details) --- */}
             <div className="flex-1 bg-slate-50/50 flex flex-col">
-                {selectedSymptomForDetail ? (
+                {selectedSymptomForDetail && symptoms[selectedSymptomForDetail] ? (
                     <DetailPanel
-                        detail={selectedSymptomDetails[selectedSymptomForDetail]}
+                        detail={symptoms[selectedSymptomForDetail]}
                         isSym={isSymptom(selectedSymptomForDetail)}
-                        onUpdate={(field, val) => updateDetail(selectedSymptomForDetail, field, val)}
-                        onRemove={() => removeSymptom(selectedSymptomForDetail)}
+                        onUpdate={(field, val) => handleUpdateDetail(selectedSymptomForDetail, field, val)}
+                        onRemove={() => handleRemoveSymptom(selectedSymptomForDetail)}
                         onToggleCustom={(opt) => toggleCustomOption(selectedSymptomForDetail, opt)}
                         onAddGroup={() => setIsOptionDialogOpen(true)}
                     />
@@ -586,7 +491,7 @@ function DetailPanel({ detail, isSym, onUpdate, onRemove, onToggleCustom, onAddG
                                     <p className="text-[10px] font-bold text-slate-900 mb-2">{group.title}</p>
                                     <div className="flex flex-wrap gap-1.5">
                                         {group.options.map(opt => {
-                                            const isSel = detail.selectedCustomOptions.has(opt);
+                                            const isSel = detail.selectedCustomOptions.includes(opt);
                                             return (
                                                 <button
                                                     key={opt}

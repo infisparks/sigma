@@ -1,9 +1,13 @@
 "use client"
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, CheckCircle, List, Check } from 'lucide-react';
+import {
+    Search, Check, X,
+    List, CheckCircle, Plus
+} from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
+import { usePrescription } from "../context/PrescriptionContext";
 
 // --- Theme Constants ---
 const ModernTheme = {
@@ -20,6 +24,24 @@ interface InstructionsTabProps {
 }
 
 export default function InstructionsTab({ opdId }: InstructionsTabProps) {
+    // --- Context ---
+    const {
+        instructions, setInstructions,
+        investigations, setInvestigations,
+        procedures, setProcedures,
+        suggestedInstructions, suggestedInvestigations, suggestedProcedures
+    } = usePrescription();
+
+    // --- Helpers Wrappers ---
+    const addInstruction = (item: string) => setInstructions([...instructions, item]);
+    const removeInstruction = (item: string) => setInstructions(instructions.filter(i => i !== item));
+
+    const addInvestigation = (item: string) => setInvestigations([...investigations, item]);
+    const removeInvestigation = (item: string) => setInvestigations(investigations.filter(i => i !== item));
+
+    const addProcedure = (item: string) => setProcedures([...procedures, item]);
+    const removeProcedure = (item: string) => setProcedures(procedures.filter(i => i !== item));
+
     // --- State ---
     const [selectedSubTab, setSelectedSubTab] = useState(0); // 0: Instructions, 1: Investigations, 2: Procedures
     const [searchQuery, setSearchQuery] = useState("");
@@ -31,203 +53,109 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
         procedures: string[];
     }>({ instructions: [], investigations: [], procedures: [] });
 
-    // Custom Items (User added or from saved state that aren't in master)
-    const [customItems, setCustomItems] = useState<{
-        instructions: string[];
-        investigations: string[];
-        procedures: string[];
-    }>({ instructions: [], investigations: [], procedures: [] });
-
-    const [selections, setSelections] = useState<{
-        instructions: Set<string>;
-        investigations: Set<string>;
-        procedures: Set<string>;
-    }>({
-        instructions: new Set(),
-        investigations: new Set(),
-        procedures: new Set(),
-    });
-    const [loading, setLoading] = useState(true);
-    const [isLoaded, setIsLoaded] = useState(false);
-
-    const [isFinalized, setIsFinalized] = useState(false);
-
-    // --- Fetch Data ---
+    // --- Fetch Master Data ---
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchMaster = async () => {
+            const cacheKey = 'OPD_MASTER_DATA_CACHE';
+
+            // 1. Try Load from Cache
             try {
-                // 1. Fetch Master Data
-                const { data: masterDataRes } = await supabase
-                    .from('opd_datasets')
-                    .select('dataname, datajson');
-
-                const newMasterData: { instructions: string[]; investigations: string[]; procedures: string[]; } = { instructions: [], investigations: [], procedures: [] };
-                if (masterDataRes) {
-                    masterDataRes.forEach((row: any) => {
-                        let list: string[] = [];
-                        try {
-                            if (Array.isArray(row.datajson)) list = row.datajson;
-                            else if (typeof row.datajson === 'string') list = JSON.parse(row.datajson);
-                        } catch (e) { console.error("JSON Parse Error", e); }
-
-                        if (row.dataname === 'Instructions') newMasterData.instructions = list as any;
-                        else if (row.dataname === 'Investigations') newMasterData.investigations = list as any;
-                        else if (row.dataname === 'Procedures') newMasterData.procedures = list as any;
-                    });
-                    setMasterData(newMasterData);
+                const cached = localStorage.getItem(cacheKey);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    setMasterData(prev => ({
+                        instructions: parsed.instructions || [],
+                        investigations: parsed.investigations || [],
+                        procedures: parsed.procedures || []
+                    }));
                 }
+            } catch (e) { console.error("Cache read error", e); }
 
-                // 2. Fetch Status & Server Data
-                const { data: serverData, error } = await supabase
-                    .from('opd_registration')
-                    .select('is_finalized, instructions_list_json, investigations_list_json, procedures_list_json')
-                    .eq('id', opdId)
-                    .single();
+            // 2. Fetch Fresh from Network
+            const { data: masterDataRes } = await supabase
+                .from('opd_datasets')
+                .select('dataname, datajson');
 
-                if (error) throw error;
+            const newMasterData: { instructions: string[]; investigations: string[]; procedures: string[]; } = { instructions: [], investigations: [], procedures: [] };
+            if (masterDataRes) {
+                masterDataRes.forEach((row: any) => {
+                    let list: string[] = [];
+                    try {
+                        if (Array.isArray(row.datajson)) list = row.datajson;
+                        else if (typeof row.datajson === 'string') list = JSON.parse(row.datajson);
+                    } catch (e) { console.error("JSON Parse Error", e); }
 
-                const finalized = serverData?.is_finalized || false;
-                const serverLists = {
-                    instructions: new Set<string>(serverData?.instructions_list_json || []),
-                    investigations: new Set<string>(serverData?.investigations_list_json || []),
-                    procedures: new Set<string>(serverData?.procedures_list_json || []),
-                };
-                setIsFinalized(finalized);
+                    if (row.dataname === 'Instructions') newMasterData.instructions = list as any;
+                    else if (row.dataname === 'Investigations') newMasterData.investigations = list as any;
+                    else if (row.dataname === 'Procedures') newMasterData.procedures = list as any;
+                });
+                setMasterData(newMasterData);
 
-                let initialSelections = serverLists;
-
-                // 3. Decide Source (Draft vs Finalized)
-                if (!finalized) {
-                    // Draft: Prioritize Local Storage
-                    const saved = localStorage.getItem(`draft_instructions_${opdId}`);
-                    if (saved) {
-                        try {
-                            const parsed = JSON.parse(saved);
-                            initialSelections = {
-                                instructions: new Set(parsed.instructions),
-                                investigations: new Set(parsed.investigations),
-                                procedures: new Set(parsed.procedures),
-                            };
-                        } catch (e) {
-                            console.error("Local draft corrupt", e);
-                        }
-                    } else {
-                        // Sync to local if no draft
-                        const serializable = {
-                            instructions: Array.from(serverLists.instructions),
-                            investigations: Array.from(serverLists.investigations),
-                            procedures: Array.from(serverLists.procedures),
-                        };
-                        localStorage.setItem(`draft_instructions_${opdId}`, JSON.stringify(serializable));
-                    }
-                }
-
-                setSelections(initialSelections);
-
-                // 4. Populate Custom Items (Items in Selections but not in MasterData)
-                const newCustomItems = { ...customItems };
-
-                // Helper to diff
-                const updateCustomFor = (key: 'instructions' | 'investigations' | 'procedures') => {
-                    const masterSet = new Set(newMasterData[key]);
-                    const selectedList = Array.from(initialSelections[key]);
-                    const custom = selectedList.filter(item => !masterSet.has(item));
-                    if (custom.length > 0) {
-                        newCustomItems[key] = custom;
-                    }
-                };
-
-                updateCustomFor('instructions');
-                updateCustomFor('investigations');
-                updateCustomFor('procedures');
-
-                setCustomItems(newCustomItems);
-                setIsLoaded(true);
-
-            } catch (err) {
-                console.error("Error fetching data:", err);
-                setIsLoaded(true);
-            } finally {
-                setLoading(false);
+                // 3. Update Cache
+                try {
+                    const currentCache = localStorage.getItem(cacheKey) ? JSON.parse(localStorage.getItem(cacheKey)!) : {};
+                    const updatedCache = {
+                        ...currentCache,
+                        instructions: newMasterData.instructions,
+                        investigations: newMasterData.investigations,
+                        procedures: newMasterData.procedures
+                    };
+                    localStorage.setItem(cacheKey, JSON.stringify(updatedCache));
+                } catch (e) { console.error("Cache write error", e); }
             }
         };
-
-        fetchData();
-    }, [opdId]);
-
-    // --- Save Drafts ---
-    useEffect(() => {
-        if (isLoaded) {
-            const serializable = {
-                instructions: Array.from(selections.instructions),
-                investigations: Array.from(selections.investigations),
-                procedures: Array.from(selections.procedures),
-            };
-            localStorage.setItem(`draft_instructions_${opdId}`, JSON.stringify(serializable));
-        }
-    }, [selections, opdId, isLoaded]);
+        fetchMaster();
+    }, []);
 
     // --- Helpers ---
+    const currentContextList = useMemo(() => {
+        if (selectedSubTab === 0) return instructions;
+        if (selectedSubTab === 1) return investigations;
+        return procedures;
+    }, [selectedSubTab, instructions, investigations, procedures]);
+
+    const addAction = (item: string) => {
+        if (selectedSubTab === 0) addInstruction(item);
+        else if (selectedSubTab === 1) addInvestigation(item);
+        else addProcedure(item);
+    };
+
+    const removeAction = (item: string) => {
+        if (selectedSubTab === 0) removeInstruction(item);
+        else if (selectedSubTab === 1) removeInvestigation(item);
+        else removeProcedure(item);
+    };
+
     const addCustomItem = () => {
         if (!searchQuery.trim()) return;
-        const key = selectedSubTab === 0 ? 'instructions' : selectedSubTab === 1 ? 'investigations' : 'procedures';
-
-        // Add to selections
-        toggleSelection(searchQuery.trim());
-
-        // Add to custom items list so it stays visible
-        setCustomItems(prev => ({
-            ...prev,
-            [key]: [...prev[key], searchQuery.trim()]
-        }));
-
+        const item = searchQuery.trim();
+        addAction(item);
         setSearchQuery("");
     };
 
-    const currentList = useMemo(() => {
-        let master: string[] = [];
-        let custom: string[] = [];
-
-        if (selectedSubTab === 0) {
-            master = masterData.instructions;
-            custom = customItems.instructions;
-        } else if (selectedSubTab === 1) {
-            master = masterData.investigations;
-            custom = customItems.investigations;
+    const toggleSelection = (item: string) => {
+        if (currentContextList.includes(item)) {
+            removeAction(item);
         } else {
-            master = masterData.procedures;
-            custom = customItems.procedures;
+            addAction(item);
         }
+    };
 
-        // Merge and unique
+    const currentList = useMemo(() => {
+        // Master list + Any currently selected items that are NOT in master (custom)
+        let master: string[] = [];
+        if (selectedSubTab === 0) master = masterData.instructions;
+        else if (selectedSubTab === 1) master = masterData.investigations;
+        else master = masterData.procedures;
+
+        const custom = currentContextList.filter(i => !master.includes(i));
         const combined = Array.from(new Set([...master, ...custom]));
 
         if (searchQuery) {
             return combined.filter(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
         }
         return combined;
-    }, [selectedSubTab, masterData, customItems, searchQuery]);
-
-    const currentSelectedSet = useMemo(() => {
-        if (selectedSubTab === 0) return selections.instructions;
-        if (selectedSubTab === 1) return selections.investigations;
-        return selections.procedures;
-    }, [selectedSubTab, selections]);
-
-    const toggleSelection = (item: string) => {
-        setSelections(prev => {
-            const newSet = new Set(currentSelectedSet);
-            if (newSet.has(item)) newSet.delete(item);
-            else newSet.add(item);
-
-            const newSelections = { ...prev };
-            if (selectedSubTab === 0) newSelections.instructions = newSet;
-            else if (selectedSubTab === 1) newSelections.investigations = newSet;
-            else newSelections.procedures = newSet;
-
-            return newSelections;
-        });
-    };
+    }, [selectedSubTab, masterData, currentContextList, searchQuery]);
 
     return (
         <div className="flex flex-col h-full overflow-hidden">
@@ -255,13 +183,12 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
             </div>
 
             {/* Selection Bar */}
-            {currentSelectedSet.size > 0 && (
+            {currentContextList.length > 0 && (
                 <div className="bg-blue-50 border-b border-slate-200 px-4 py-1.5 flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-blue-600">
                         <CheckCircle className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-black uppercase tracking-wider">{currentSelectedSet.size} Selected</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider">{currentContextList.length} Selected</span>
                     </div>
-                    <span className="text-[9px] text-slate-400 italic font-medium">Auto-saved</span>
                 </div>
             )}
 
@@ -278,6 +205,43 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
                     </button>
                 )}
 
+                {/* AI Suggestions Section */}
+                {(selectedSubTab === 0 ? suggestedInstructions :
+                    selectedSubTab === 1 ? suggestedInvestigations :
+                        suggestedProcedures)?.length! > 0 && !searchQuery && (
+                        <div className="mb-2">
+                            <div className="flex items-center gap-1.5 mb-1.5 px-1">
+                                <div className="w-1 h-1 rounded-full bg-purple-500 animate-pulse" />
+                                <span className="text-[9px] font-black text-purple-600 uppercase tracking-wider">Suggested</span>
+                            </div>
+                            <div className="space-y-1.5">
+                                {(selectedSubTab === 0 ? suggestedInstructions :
+                                    selectedSubTab === 1 ? suggestedInvestigations :
+                                        suggestedProcedures)?.map((item: string, idx: number) => {
+                                            const isSelected = currentContextList.includes(item);
+                                            if (isSelected) return null; // Don't show in suggestions if already picked
+                                            return (
+                                                <div
+                                                    key={`sug-${idx}`}
+                                                    onClick={() => toggleSelection(item)}
+                                                    className="flex items-center gap-2.5 p-2.5 rounded-lg border border-purple-100 bg-purple-50/30 hover:bg-purple-50 transition-all cursor-pointer"
+                                                >
+                                                    <div className="w-4 h-4 rounded-full border-2 border-purple-200 flex items-center justify-center">
+                                                        <Plus className="w-2.5 h-2.5 text-purple-400" />
+                                                    </div>
+                                                    <span className="text-[11px] font-bold text-slate-800">{item}</span>
+                                                </div>
+                                            );
+                                        })}
+                            </div>
+                            <div className="my-3 border-t border-slate-100 relative">
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-50 px-2 text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                    All Items
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                 {currentList.length === 0 && !searchQuery ? (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
                         <List className="w-10 h-10 mb-3 opacity-20" />
@@ -285,7 +249,9 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
                     </div>
                 ) : (
                     currentList.map((item, idx) => {
-                        const isSelected = currentSelectedSet.has(item);
+                        // Filter out if in suggestions to avoid duplication? No, keep it simple for now or filter.
+                        // Ideally we remove from main list if shown in suggestions, similar to DiagnosisTab.
+                        const isSelected = currentContextList.includes(item);
                         return (
                             <div
                                 key={idx}

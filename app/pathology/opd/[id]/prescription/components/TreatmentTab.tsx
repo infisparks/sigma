@@ -8,6 +8,11 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { usePrescription } from "../context/PrescriptionContext";
+import { PrescriptionEntry, TimingSchedule } from "../types";
+
 // --- Theme ---
 const TxTheme = {
     primary: "text-blue-600",
@@ -19,40 +24,25 @@ const TxTheme = {
     border: "border-slate-200",
 };
 
-// --- Models ---
-interface TimingSchedule {
-    bb: boolean; ab: boolean;
-    bl: boolean; al: boolean;
-    bd: boolean; ad: boolean;
-}
-
-interface PrescriptionEntry {
-    id: string;
-    name: string;
-    type: string;
-    dosage: string;
-    duration: string;
-    note: string;
-    timing: TimingSchedule;
-}
-
 interface TreatmentTabProps {
     opdId: number;
     patientId: string; // For history fetching
 }
 
 export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
+    // --- Context ---
+    const { medicines, addMedicine, removeMedicine, updateMedicine, setMedicines, suggestedMedicines } = usePrescription();
+
     // --- State ---
     const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
-    const [medicines, setMedicines] = useState<PrescriptionEntry[]>([]);
     const [selectedMedId, setSelectedMedId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
 
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [historyList, setHistoryList] = useState<any[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
-    const [isLoaded, setIsLoaded] = useState(false);
 
+    // Derived
     const selectedMed = medicines.find(m => m.id === selectedMedId);
 
     // --- Search Logic (Debounced) ---
@@ -66,12 +56,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                         .ilike('name', `${searchQuery}%`)
                         .limit(30);
 
-                    if (error) {
-                        console.error("Supabase search error:", error);
-                    }
-
                     if (data) {
-                        console.log("Found medicines:", data.length);
                         setSearchResults(data);
                     }
                 } catch (err) {
@@ -80,14 +65,12 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
             } else if (searchQuery.length === 0) {
                 // Load random default medicines
                 try {
-                    // Fetch a random chunk from the first 5000 records to show variety
                     const randomOffset = Math.floor(Math.random() * 5000);
-                    const { data, error } = await supabase
+                    const { data } = await supabase
                         .from('clinic_medicine')
                         .select('id, name, medicine:original_medicine_id(type, manufacturer_name)')
                         .range(randomOffset, randomOffset + 29);
 
-                    if (error) console.error("Default fetch error:", error);
                     if (data) setSearchResults(data);
                 } catch (err) {
                     console.error("Default fetch exception:", err);
@@ -98,65 +81,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    const [isFinalized, setIsFinalized] = useState(false);
-
-    // --- Load Data (Industry Expert Logic) ---
-    useEffect(() => {
-        const loadData = async () => {
-            try {
-                // 1. Fetch Status & Server Data
-                const { data: serverData, error } = await supabase
-                    .from('opd_registration')
-                    .select('is_finalized, rx_list_json')
-                    .eq('id', opdId)
-                    .single();
-
-                if (error) throw error;
-
-                const serverList = serverData?.rx_list_json || [];
-                const finalized = serverData?.is_finalized || false;
-                setIsFinalized(finalized);
-
-                // 2. Decide Source
-                if (finalized) {
-                    // If finalized, STRICTLY load from server. Ignore local drafts.
-                    setMedicines(serverList);
-                } else {
-                    // If draft, prioritize Local Storage (to prevent data loss on refresh)
-                    const localDraft = localStorage.getItem(`draft_rx_${opdId}`);
-
-                    if (localDraft) {
-                        try {
-                            setMedicines(JSON.parse(localDraft));
-                        } catch (e) {
-                            // Corrupt local data? Fallback to server
-                            console.error("Local draft corrupt, falling back to server", e);
-                            setMedicines(serverList);
-                        }
-                    } else {
-                        // No local draft? Initialize with server data (e.g. continuing from another device)
-                        setMedicines(serverList);
-                        // And sync to local immediately to start the draft session
-                        localStorage.setItem(`draft_rx_${opdId}`, JSON.stringify(serverList));
-                    }
-                }
-            } catch (e) {
-                console.error("Error loading medicines:", e);
-            } finally {
-                setIsLoaded(true);
-            }
-        };
-
-        loadData();
-    }, [opdId]);
-
-    useEffect(() => {
-        // Auto-save to Local Storage (Only if NOT    useEffect(() => {
-        if (isLoaded) {
-            localStorage.setItem(`draft_rx_${opdId}`, JSON.stringify(medicines));
-        }
-    }, [medicines, opdId, isLoaded]);
-
+    // --- History Logic ---
     useEffect(() => {
         if (activeTab === 'history') {
             fetchHistory();
@@ -186,7 +111,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
     };
 
     // --- Actions ---
-    const addMedicine = (name: string, type: string = 'TAB') => {
+    const handleAddMedicine = (name: string, type: string = 'TAB') => {
         const newMed: PrescriptionEntry = {
             id: Date.now().toString() + Math.random().toString().slice(2),
             name,
@@ -196,23 +121,26 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
             note: "",
             timing: { bb: false, ab: false, bl: false, al: false, bd: false, ad: false }
         };
-        setMedicines(prev => [...prev, newMed]);
+        addMedicine(newMed);
         setSelectedMedId(newMed.id);
         setSearchQuery("");
+        // Switch back to search results? No, maybe keep it.
     };
 
-    const updateMedicine = (id: string, updates: Partial<PrescriptionEntry>) => {
-        setMedicines(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+    // Wrapper for updateMedicine context action to match local signature if needed
+    const handleUpdateMedicine = (id: string, updates: Partial<PrescriptionEntry>) => {
+        updateMedicine(id, updates);
     };
 
-    const updateTiming = (id: string, key: keyof TimingSchedule, val: boolean) => {
-        setMedicines(prev => prev.map(m =>
-            m.id === id ? { ...m, timing: { ...m.timing, [key]: val } } : m
-        ));
+    const handleUpdateTiming = (id: string, key: keyof TimingSchedule, val: boolean) => {
+        const med = medicines.find(m => m.id === id);
+        if (med) {
+            updateMedicine(id, { timing: { ...med.timing, [key]: val } });
+        }
     };
 
-    const removeMedicine = (id: string) => {
-        setMedicines(prev => prev.filter(m => m.id !== id));
+    const handleRemoveMedicine = (id: string) => {
+        removeMedicine(id);
         if (selectedMedId === id) setSelectedMedId(null);
     };
 
@@ -221,7 +149,9 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
             ...item,
             id: Date.now().toString() + Math.random().toString(), // New ID
         }));
-        setMedicines(prev => [...prev, ...newItems]);
+        // Append or replace? Append is better.
+        // But setMedicines replaces. I need to append.
+        newItems.forEach(item => addMedicine(item));
         setActiveTab('current');
     };
 
@@ -294,7 +224,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && searchQuery) addMedicine(searchQuery);
+                                            if (e.key === 'Enter' && searchQuery) handleAddMedicine(searchQuery);
                                         }}
                                         className="w-full pl-8 pr-2 py-2 bg-white border border-slate-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-100 shadow-sm"
                                     />
@@ -303,12 +233,36 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                 {/* Suggestions Grid */}
                                 <div className="flex-1 overflow-y-auto">
                                     <div className="flex flex-wrap gap-1.5 content-start">
+                                        {/* AI Suggested Medicines (Top Priority) */}
+                                        {(!searchQuery || searchQuery.length < 2) && suggestedMedicines && suggestedMedicines.length > 0 && (
+                                            <div className="w-full mb-2">
+                                                <div className="text-[10px] font-black text-purple-600 mb-1.5 flex items-center gap-1.5">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                                                    SUGGESTED
+                                                </div>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {suggestedMedicines
+                                                        .filter(m => !medicines.some(added => added.name === m))
+                                                        .map((mName: string, i: number) => (
+                                                            <button
+                                                                key={`ai-${i}`}
+                                                                onClick={() => handleAddMedicine(mName)} // Default to TAB, can be refined if we store type in AI
+                                                                className="px-2 py-1.5 bg-purple-50 border border-purple-100 rounded-md text-[10px] font-bold text-slate-700 hover:bg-purple-100 hover:border-purple-300 transition-colors shadow-sm text-left"
+                                                            >
+                                                                {mName}
+                                                            </button>
+                                                        ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Search Results */}
                                         {searchResults
                                             .filter(m => !medicines.some(added => added.name === m.name)) // Filter out added
                                             .map((m, i) => (
                                                 <button
                                                     key={i}
-                                                    onClick={() => addMedicine(m.name, m.medicine?.type || 'TAB')}
+                                                    onClick={() => handleAddMedicine(m.name, m.medicine?.type || 'TAB')}
                                                     className="px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[10px] font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm text-left max-w-full"
                                                 >
                                                     <span className="block font-bold leading-tight">{m.name}</span>
@@ -317,7 +271,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                             ))}
                                         {searchQuery && (
                                             <button
-                                                onClick={() => addMedicine(searchQuery)}
+                                                onClick={() => handleAddMedicine(searchQuery)}
                                                 className="px-2 py-1 bg-blue-100 border border-blue-200 rounded-md text-[10px] font-bold text-blue-700 hover:bg-blue-200 transition-colors"
                                             >
                                                 Add "{searchQuery}"
@@ -384,7 +338,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                     <h2 className="text-lg font-black text-slate-900 leading-tight">{selectedMed.name}</h2>
                                 </div>
                             </div>
-                            <button onClick={() => removeMedicine(selectedMed.id)} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-500 rounded-md transition-colors">
+                            <button onClick={() => handleRemoveMedicine(selectedMed.id)} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-500 rounded-md transition-colors">
                                 <Trash2 className="w-4 h-4" />
                             </button>
                         </div>
@@ -398,7 +352,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                     {["1/4", "1/2", "1", "1½", "2", "3"].map(d => (
                                         <button
                                             key={d}
-                                            onClick={() => updateMedicine(selectedMed.id, { dosage: d })}
+                                            onClick={() => handleUpdateMedicine(selectedMed.id, { dosage: d })}
                                             className={cn(
                                                 "w-10 h-10 rounded-full border flex items-center justify-center text-[11px] font-black transition-all",
                                                 selectedMed.dosage === d
@@ -421,24 +375,24 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                         icon={Clock}
                                         before={selectedMed.timing.bb}
                                         after={selectedMed.timing.ab}
-                                        onToggleBefore={() => updateTiming(selectedMed.id, 'bb', !selectedMed.timing.bb)}
-                                        onToggleAfter={() => updateTiming(selectedMed.id, 'ab', !selectedMed.timing.ab)}
+                                        onToggleBefore={() => handleUpdateTiming(selectedMed.id, 'bb', !selectedMed.timing.bb)}
+                                        onToggleAfter={() => handleUpdateTiming(selectedMed.id, 'ab', !selectedMed.timing.ab)}
                                     />
                                     <TimingBlock
                                         label="Lunch"
                                         icon={Clock}
                                         before={selectedMed.timing.bl}
                                         after={selectedMed.timing.al}
-                                        onToggleBefore={() => updateTiming(selectedMed.id, 'bl', !selectedMed.timing.bl)}
-                                        onToggleAfter={() => updateTiming(selectedMed.id, 'al', !selectedMed.timing.al)}
+                                        onToggleBefore={() => handleUpdateTiming(selectedMed.id, 'bl', !selectedMed.timing.bl)}
+                                        onToggleAfter={() => handleUpdateTiming(selectedMed.id, 'al', !selectedMed.timing.al)}
                                     />
                                     <TimingBlock
                                         label="Dinner"
                                         icon={Clock}
                                         before={selectedMed.timing.bd}
                                         after={selectedMed.timing.ad}
-                                        onToggleBefore={() => updateTiming(selectedMed.id, 'bd', !selectedMed.timing.bd)}
-                                        onToggleAfter={() => updateTiming(selectedMed.id, 'ad', !selectedMed.timing.ad)}
+                                        onToggleBefore={() => handleUpdateTiming(selectedMed.id, 'bd', !selectedMed.timing.bd)}
+                                        onToggleAfter={() => handleUpdateTiming(selectedMed.id, 'ad', !selectedMed.timing.ad)}
                                     />
                                 </div>
                             </div>
@@ -450,7 +404,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                     {["3d", "5d", "7d", "10d", "15d", "1m", "3m"].map(d => (
                                         <button
                                             key={d}
-                                            onClick={() => updateMedicine(selectedMed.id, { duration: d })}
+                                            onClick={() => handleUpdateMedicine(selectedMed.id, { duration: d })}
                                             className={cn(
                                                 "px-3 py-1.5 rounded-md text-[10px] font-black border transition-all",
                                                 selectedMed.duration === d
@@ -470,7 +424,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                 <input
                                     type="text"
                                     value={selectedMed.note}
-                                    onChange={(e) => updateMedicine(selectedMed.id, { note: e.target.value })}
+                                    onChange={(e) => handleUpdateMedicine(selectedMed.id, { note: e.target.value })}
                                     placeholder="..."
                                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-100"
                                 />

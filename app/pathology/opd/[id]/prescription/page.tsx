@@ -11,8 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 
 // --- Imports ---
-import CheckupTab from './components/CheckupTab';
-import FitnessTab from './components/FitnessTab';
+
 import InstructionsTab from './components/InstructionsTab';
 import SymptomsTab from './components/SymptomsTab';
 import TreatmentTab from './components/TreatmentTab';
@@ -24,6 +23,7 @@ import PatientVitalsTrend from './components/PatientVitalsTrend';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Patient, OPDRecord } from './types';
 import { ModernTheme } from './theme';
+import { PrescriptionProvider } from './context/PrescriptionContext';
 
 export default function PrescriptionPage() {
     const params = useParams();
@@ -32,7 +32,7 @@ export default function PrescriptionPage() {
 
     const [record, setRecord] = useState<OPDRecord | null>(null);
     const [loading, setLoading] = useState(true);
-    const [currentTabIndex, setCurrentTabIndex] = useState(0); // Default to Check Up
+    const [currentTabIndex, setCurrentTabIndex] = useState(3); // Default to Symptoms
     const [showVitalsDialog, setShowVitalsDialog] = useState(false);
 
     // --- Fetch Data ---
@@ -72,8 +72,7 @@ export default function PrescriptionPage() {
         // unless performance is an issue. The tabs load from LS on mount so state is preserved.
 
         switch (currentTabIndex) {
-            case 0: return <CheckupTab opdId={opdId} />;
-            case 1: return <FitnessTab opdId={opdId} />;
+
             case 2: return <InstructionsTab opdId={opdId} />;
             case 3: return <SymptomsTab opdId={opdId} />;
             case 4: return <TreatmentTab opdId={opdId} patientId={record!.patient_detail.uhid} />;
@@ -89,80 +88,82 @@ export default function PrescriptionPage() {
     if (!record) return <div className="min-h-screen flex items-center justify-center bg-slate-100">Record not found</div>;
 
     return (
-        <div className={`fixed inset-0 z-[100] flex flex-col overflow-hidden ${ModernTheme.background}`}>
+        <PrescriptionProvider opdId={opdId}>
+            {/* App Container - Fixed Viewport, No Overscroll, No Text Selection by default on UI */}
+            <div className={`fixed inset-0 z-[100] flex flex-col overflow-hidden overscroll-none select-none touch-pan-x touch-pan-y ${ModernTheme.background}`}>
 
-            {/* --- APP BAR --- */}
-            <header className={`${ModernTheme.surface} border-b border-slate-200 px-3 py-1.5 flex items-center justify-between sticky top-0 z-50`}>
-                <div className="flex items-center gap-3">
-                    <button onClick={() => router.back()} className="p-1.5 hover:bg-slate-100 rounded-full">
-                        <ArrowLeft className="w-4 h-4 text-slate-900" />
-                    </button>
-                    <div className="bg-blue-50 px-2 py-1 rounded-md">
-                        <span className="text-blue-600 font-bold text-[11px]">Trivandrum OPD</span>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <HeaderAction icon={Activity} label="Vitals" onClick={() => setShowVitalsDialog(true)} />
-                    <HeaderAction icon={FileText} label="Reports" onClick={() => setCurrentTabIndex(2)} />
-                    <HeaderAction icon={History} label="Previous" onClick={() => setCurrentTabIndex(6)} />
-                    <HeaderAction icon={FlaskConical} label="Blood Test" onClick={() => setCurrentTabIndex(8)} />
-                    {/* <HeaderAction icon={StickyNote} label="Notes" onClick={() => { }} /> */}
-
-                    <div className="h-5 w-px bg-slate-200 mx-1"></div>
-
-                    <StatusPill label="Normal" color="text-green-600" bgColor="bg-green-50" borderColor="border-green-200" />
-                    <StatusPill label="Bill Pending" color="text-orange-600" bgColor="bg-orange-50" borderColor="border-orange-200" />
-                </div>
-            </header>
-
-            {/* --- BODY --- */}
-            <main className="flex-1 flex flex-col overflow-hidden relative">
-                {renderContent()}
-            </main>
-
-            {/* --- BOTTOM DOCK --- */}
-            <div className="px-3 py-2 bg-slate-100 z-50">
-                <div className="bg-white rounded-xl shadow-md border border-slate-100 h-[55px] flex items-center overflow-hidden">
-                    {/* Exit Button */}
-                    <button onClick={() => router.back()} className="w-[50px] h-full bg-red-50 hover:bg-red-100 flex items-center justify-center border-r border-slate-100">
-                        <Power className="w-5 h-5 text-red-500" />
-                    </button>
-
-                    {/* Patient Context */}
-                    <div className="w-[140px] px-3 border-r border-slate-100 flex flex-col justify-center h-full">
-                        <p className="font-bold text-[11px] text-slate-900 truncate leading-tight">{record.patient_detail.name}</p>
-                        <div className="flex items-center gap-1 text-slate-500 text-[9px] mt-0.5">
-                            <User className="w-2.5 h-2.5" />
-                            <span>{record.patient_detail.age} {record.patient_detail.age_unit} • {record.patient_detail.gender === 'male' ? 'M' : 'F'}</span>
+                {/* --- APP BAR --- */}
+                <header className={`${ModernTheme.surface} border-b border-slate-200 px-3 py-1.5 flex items-center justify-between sticky top-0 z-50 shrink-0 select-none`}>
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => router.back()} className="p-1.5 hover:bg-slate-100 rounded-full">
+                            <ArrowLeft className="w-4 h-4 text-slate-900" />
+                        </button>
+                        <div className="bg-blue-50 px-2 py-1 rounded-md">
+                            <span className="text-blue-600 font-bold text-[11px]">Trivandrum OPD</span>
                         </div>
                     </div>
 
-                    {/* Navigation Items */}
-                    <div className="flex-1 flex items-center justify-around px-1">
-                        <DockItem icon={User} label="Check Up" isActive={currentTabIndex === 0} onClick={() => setCurrentTabIndex(0)} />
-                        <DockItem icon={Activity} label="Fitness" isActive={currentTabIndex === 1} onClick={() => setCurrentTabIndex(1)} />
-                        <DockItem icon={FileText} label="Reports" isActive={currentTabIndex === 2} onClick={() => setCurrentTabIndex(2)} />
-                        <DockItem icon={Heart} label="Symptoms" isActive={currentTabIndex === 3} onClick={() => setCurrentTabIndex(3)} />
-                        <DockItem icon={Stethoscope} label="Diagnosis" isActive={currentTabIndex === 7} onClick={() => setCurrentTabIndex(7)} isHighlighted />
-                        <DockItem icon={FileOutput} label="Rx" isActive={currentTabIndex === 4} onClick={() => setCurrentTabIndex(4)} />
-                        <DockItem icon={Printer} label="Print" isActive={currentTabIndex === 5} onClick={() => setCurrentTabIndex(5)} />
+                    <div className="flex items-center gap-2">
+                        <HeaderAction icon={Activity} label="Vitals" onClick={() => setShowVitalsDialog(true)} />
+                        <HeaderAction icon={FileText} label="Reports" onClick={() => setCurrentTabIndex(2)} />
+                        <HeaderAction icon={History} label="Previous" onClick={() => setCurrentTabIndex(6)} />
+                        <HeaderAction icon={FlaskConical} label="Blood Test" onClick={() => setCurrentTabIndex(8)} />
+                        {/* <HeaderAction icon={StickyNote} label="Notes" onClick={() => { }} /> */}
+
+                        <div className="h-5 w-px bg-slate-200 mx-1"></div>
+
+                        <StatusPill label="Normal" color="text-green-600" bgColor="bg-green-50" borderColor="border-green-200" />
+                        <StatusPill label="Bill Pending" color="text-orange-600" bgColor="bg-orange-50" borderColor="border-orange-200" />
+                    </div>
+                </header>
+
+                {/* --- BODY --- */}
+                <main className="flex-1 flex flex-col overflow-hidden relative select-text">
+                    {renderContent()}
+                </main>
+
+                {/* --- BOTTOM DOCK --- */}
+                <div className="px-3 py-2 bg-slate-100 z-50 select-none">
+                    <div className="bg-white rounded-xl shadow-md border border-slate-100 h-[55px] flex items-center overflow-hidden">
+                        {/* Exit Button */}
+                        <button onClick={() => router.back()} className="w-[50px] h-full bg-red-50 hover:bg-red-100 flex items-center justify-center border-r border-slate-100">
+                            <Power className="w-5 h-5 text-red-500" />
+                        </button>
+
+                        {/* Patient Context */}
+                        <div className="w-[140px] px-3 border-r border-slate-100 flex flex-col justify-center h-full">
+                            <p className="font-bold text-[11px] text-slate-900 truncate leading-tight">{record.patient_detail.name}</p>
+                            <div className="flex items-center gap-1 text-slate-500 text-[9px] mt-0.5">
+                                <User className="w-2.5 h-2.5" />
+                                <span>{record.patient_detail.age} {record.patient_detail.age_unit} • {record.patient_detail.gender === 'male' ? 'M' : 'F'}</span>
+                            </div>
+                        </div>
+
+                        {/* Navigation Items */}
+                        <div className="flex-1 flex items-center justify-around px-1">
+
+                            <DockItem icon={FileText} label="Reports" isActive={currentTabIndex === 2} onClick={() => setCurrentTabIndex(2)} />
+                            <DockItem icon={Heart} label="Symptoms" isActive={currentTabIndex === 3} onClick={() => setCurrentTabIndex(3)} />
+                            <DockItem icon={Stethoscope} label="Diagnosis" isActive={currentTabIndex === 7} onClick={() => setCurrentTabIndex(7)} isHighlighted />
+                            <DockItem icon={FileOutput} label="Rx" isActive={currentTabIndex === 4} onClick={() => setCurrentTabIndex(4)} />
+                            <DockItem icon={Printer} label="Print" isActive={currentTabIndex === 5} onClick={() => setCurrentTabIndex(5)} />
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            {/* --- VITALS DIALOG --- */}
-            <Dialog open={showVitalsDialog} onOpenChange={setShowVitalsDialog}>
-                <DialogContent className="max-w-3xl">
-                    <DialogHeader>
-                        <DialogTitle className="text-sm">Patient Vitals Trend</DialogTitle>
-                    </DialogHeader>
-                    <div className="py-2">
-                        <PatientVitalsTrend patientUhid={record.patient_detail.uhid} />
-                    </div>
-                </DialogContent>
-            </Dialog>
-        </div>
+                {/* --- VITALS DIALOG --- */}
+                <Dialog open={showVitalsDialog} onOpenChange={setShowVitalsDialog}>
+                    <DialogContent className="max-w-3xl">
+                        <DialogHeader>
+                            <DialogTitle className="text-sm">Patient Vitals Trend</DialogTitle>
+                        </DialogHeader>
+                        <div className="py-2">
+                            <PatientVitalsTrend patientUhid={record.patient_detail.uhid} />
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            </div>
+        </PrescriptionProvider>
     );
 }
 

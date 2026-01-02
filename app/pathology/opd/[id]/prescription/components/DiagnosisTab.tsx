@@ -9,6 +9,8 @@ import { supabase } from "@/lib/supabase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { usePrescription } from "../context/PrescriptionContext";
+import { DiagnosisDetail, CustomOptionGroup } from "../types";
 
 // --- Theme ---
 const AppColors = {
@@ -23,201 +25,93 @@ const AppColors = {
     accentCyan: "text-cyan-600",
 };
 
-// --- Models ---
-interface CustomOptionGroup {
-    title: string;
-    options: string[];
-}
-
-interface DiagnosisDetail {
-    name: string;
-    note: string;
-    location?: string; // For "Location" field in screenshot
-    status?: string; // For "To rule out", "Suspected", etc.
-    customGroups: CustomOptionGroup[];
-    selectedCustomOptions: Set<string>;
-}
-
 interface DiagnosisTabProps {
     opdId: number;
 }
 
 export default function DiagnosisTab({ opdId }: DiagnosisTabProps) {
+    // --- Context ---
+    const { diagnoses, addDiagnosis, removeDiagnosis, updateDiagnosis, isLoading, suggestedDiagnoses } = usePrescription();
+
     // --- State ---
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedDiagnosisForDetail, setSelectedDiagnosisForDetail] = useState<string | null>(null);
-    const [selectedDiagnosisDetails, setSelectedDiagnosisDetails] = useState<Record<string, DiagnosisDetail>>({});
 
     const [rawDiagnoses, setRawDiagnoses] = useState<string[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [isLoaded, setIsLoaded] = useState(false);
-
     const [isOptionDialogOpen, setIsOptionDialogOpen] = useState(false);
-    const [isFinalized, setIsFinalized] = useState(false);
 
-    // --- Fetch Data ---
+    // --- Fetch Master Data ---
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchMasterData = async () => {
+            const cacheKey = 'OPD_MASTER_DIAGNOSIS_CACHE';
+
+            // 1. Try Cache
             try {
-                // 1. Load Master Data
-                const { data: masterData } = await supabase.from('opd_datasets').select('dataname, datajson');
-                if (masterData) {
-                    masterData.forEach((row: any) => {
-                        const list = Array.isArray(row.datajson) ? row.datajson : [];
-                        if (row.dataname === 'Diagnosis') setRawDiagnoses(list);
-                    });
+                const cached = localStorage.getItem(cacheKey);
+                if (cached) {
+                    setRawDiagnoses(JSON.parse(cached));
                 }
+            } catch (e) { console.error("Cache read error", e); }
 
-                // 2. Load Status & Server Data
-                const { data: serverData, error } = await supabase
-                    .from('opd_registration')
-                    .select('is_finalized, diagnosis_list_json')
-                    .eq('id', opdId)
-                    .single();
-
-                if (error) throw error;
-
-                const finalized = serverData?.is_finalized || false;
-                const serverList = serverData?.diagnosis_list_json || [];
-                setIsFinalized(finalized);
-
-                // Helper to convert List (Server/JSON) -> Record (Local State)
-                const parseListToRecord = (list: any[]) => {
-                    const record: Record<string, DiagnosisDetail> = {};
-                    list.forEach((item: any) => {
-                        record[item.name] = {
-                            ...item,
-                            selectedCustomOptions: new Set(item.selectedCustomOptions || [])
-                        };
-                    });
-                    return record;
-                };
-
-                // Helper to parse Local Storage JSON -> Record
-                const parseLocalJSON = (jsonStr: string) => {
-                    const parsed = JSON.parse(jsonStr);
-                    for (const key in parsed) {
-                        parsed[key].selectedCustomOptions = new Set(parsed[key].selectedCustomOptions || []);
-                    }
-                    return parsed;
-                };
-
-                // 3. Decide Source
-                if (finalized) {
-                    // Finalized: Strictly load from server
-                    setSelectedDiagnosisDetails(parseListToRecord(serverList));
-                } else {
-                    // Draft: Prioritize Local Storage
-                    const savedDetails = localStorage.getItem(`draft_diagnosis_details_${opdId}`);
-
-                    if (savedDetails) {
+            // 2. Fetch Network
+            const { data: masterData } = await supabase.from('opd_datasets').select('dataname, datajson');
+            if (masterData) {
+                masterData.forEach((row: any) => {
+                    const list = Array.isArray(row.datajson) ? row.datajson : [];
+                    if (row.dataname === 'Diagnosis') {
+                        setRawDiagnoses(list);
+                        // 3. Update Cache
                         try {
-                            setSelectedDiagnosisDetails(parseLocalJSON(savedDetails));
-                        } catch (e) {
-                            console.error("Local draft corrupt", e);
-                            setSelectedDiagnosisDetails(parseListToRecord(serverList));
-                        }
-                    } else {
-                        // No local draft? Initialize from server (sync)
-                        const initialData = parseListToRecord(serverList);
-                        setSelectedDiagnosisDetails(initialData);
-
-                        // Sync to local immediately
-                        const serializable = Object.fromEntries(
-                            Object.entries(initialData).map(([k, v]) => [k, { ...v, selectedCustomOptions: Array.from(v.selectedCustomOptions) }])
-                        );
-                        localStorage.setItem(`draft_diagnosis_details_${opdId}`, JSON.stringify(serializable));
+                            localStorage.setItem(cacheKey, JSON.stringify(list));
+                        } catch (e) { console.error("Cache write error", e); }
                     }
-                }
-
-                setIsLoaded(true);
-            } catch (e) {
-                console.error("Error fetching diagnosis data", e);
-
-                // Fallback: Try to load from local storage on error (e.g. missing column)
-                try {
-                    const savedDetails = localStorage.getItem(`draft_diagnosis_details_${opdId}`);
-                    if (savedDetails) {
-                        const parsed = JSON.parse(savedDetails);
-                        for (const key in parsed) {
-                            parsed[key].selectedCustomOptions = new Set(parsed[key].selectedCustomOptions || []);
-                        }
-                        setSelectedDiagnosisDetails(parsed);
-                    }
-                } catch (err) {
-                    console.error("Error loading draft fallback", err);
-                }
-
-                setIsLoaded(true);
-            } finally {
-                setLoading(false);
+                });
             }
         };
-        fetchData();
-    }, [opdId]);
-
-    useEffect(() => {
-        if (isLoaded) {
-            const serializableDetails = Object.fromEntries(
-                Object.entries(selectedDiagnosisDetails).map(([key, detail]) => [
-                    key,
-                    {
-                        ...detail,
-                        selectedCustomOptions: Array.from(detail.selectedCustomOptions)
-                    }
-                ])
-            );
-            localStorage.setItem(`draft_diagnosis_details_${opdId}`, JSON.stringify(serializableDetails));
-            localStorage.setItem(`draft_diagnosis_${opdId}`, JSON.stringify(Object.keys(selectedDiagnosisDetails)));
-        }
-    }, [selectedDiagnosisDetails, opdId, isLoaded]);
+        fetchMasterData();
+    }, []);
 
     // --- Logic ---
     const selectDiagnosis = (label: string) => {
-        if (!selectedDiagnosisDetails[label]) {
-            setSelectedDiagnosisDetails(prev => ({
-                ...prev,
-                [label]: {
-                    name: label,
-                    note: '',
-                    location: '',
-                    status: 'Suspected', // Default status
-                    customGroups: [],
-                    selectedCustomOptions: new Set()
-                }
-            }));
+        if (!diagnoses[label]) {
+            addDiagnosis({
+                name: label,
+                note: '',
+                location: '',
+                status: 'Suspected',
+                customGroups: [],
+                selectedCustomOptions: []
+            });
         }
         setSelectedDiagnosisForDetail(label);
     };
 
-    const removeDiagnosis = (label: string) => {
-        const newDetails = { ...selectedDiagnosisDetails };
-        delete newDetails[label];
-        setSelectedDiagnosisDetails(newDetails);
-
+    const handleRemoveDiagnosis = (label: string) => {
+        removeDiagnosis(label);
         if (selectedDiagnosisForDetail === label) {
             setSelectedDiagnosisForDetail(null);
         }
     };
 
-    const updateDetail = (label: string, field: keyof DiagnosisDetail, value: any) => {
-        setSelectedDiagnosisDetails(prev => ({
-            ...prev,
-            [label]: { ...prev[label], [field]: value }
-        }));
+    const handleUpdateDetail = (label: string, field: keyof DiagnosisDetail, value: any) => {
+        updateDiagnosis(label, { [field]: value });
     };
 
     const toggleCustomOption = (label: string, option: string) => {
-        const currentSet = new Set(selectedDiagnosisDetails[label].selectedCustomOptions);
-        if (currentSet.has(option)) currentSet.delete(option);
-        else currentSet.add(option);
-        updateDetail(label, 'selectedCustomOptions', currentSet);
+        const currentOptions = diagnoses[label]?.selectedCustomOptions || [];
+        const isSelected = currentOptions.includes(option);
+
+        let newOptions;
+        if (isSelected) newOptions = currentOptions.filter(o => o !== option);
+        else newOptions = [...currentOptions, option];
+
+        updateDiagnosis(label, { selectedCustomOptions: newOptions });
     };
 
     const addCustomGroup = (group: CustomOptionGroup) => {
         if (!selectedDiagnosisForDetail) return;
-        const currentGroups = [...selectedDiagnosisDetails[selectedDiagnosisForDetail].customGroups, group];
-        updateDetail(selectedDiagnosisForDetail, 'customGroups', currentGroups);
+        const currentGroups = [...diagnoses[selectedDiagnosisForDetail].customGroups, group];
+        updateDiagnosis(selectedDiagnosisForDetail, { customGroups: currentGroups });
     };
 
     // --- Add New Item Logic ---
@@ -229,51 +123,52 @@ export default function DiagnosisTab({ opdId }: DiagnosisTabProps) {
         // 1. Optimistic Local Update
         setRawDiagnoses(prev => [...prev, newItemName]);
 
-        // Select the new item immediately
+        // Select immediately
         selectDiagnosis(newItemName);
         setSearchQuery("");
 
-        // 2. Persist to Database (Master List)
+        // 2. Persist to Master DB
         try {
-            const { data: currentData, error: fetchError } = await supabase
+            const { data: currentData } = await supabase
                 .from('opd_datasets')
                 .select('datajson')
                 .eq('dataname', dbName)
                 .single();
 
-            if (fetchError) throw fetchError;
-
-            let list: string[] = [];
-            if (Array.isArray(currentData?.datajson)) {
-                list = currentData.datajson;
-            }
-
-            // Only update if not exists
+            const list: string[] = Array.isArray(currentData?.datajson) ? currentData.datajson : [];
             if (!list.includes(newItemName)) {
-                const updatedList = [...list, newItemName];
-                const { error: updateError } = await supabase
-                    .from('opd_datasets')
-                    .update({ datajson: updatedList })
-                    .eq('dataname', dbName);
-
-                if (updateError) throw updateError;
+                await supabase.from('opd_datasets').update({ datajson: [...list, newItemName] }).eq('dataname', dbName);
             }
         } catch (e) {
-            console.error(`Failed to add new ${dbName} to database`, e);
-            // Optional: Revert local state or show toast error
+            console.error(`Failed to add new ${dbName}`, e);
         }
     };
 
-    // Filter List
+    // Filter List Logic
+    const suggestedList = suggestedDiagnoses
+        ? suggestedDiagnoses.filter((s: string) => !diagnoses[s] && (!searchQuery || s.toLowerCase().includes(searchQuery.toLowerCase())))
+        : [];
+
     const currentList = (() => {
         let source = rawDiagnoses;
+
+        // 1. Filter by Search
         if (searchQuery) {
             source = source.filter(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
         }
-        return source.filter(s => !selectedDiagnosisDetails[s]);
+
+        // 2. Filter out Active Selections
+        source = source.filter(s => !diagnoses[s]);
+
+        // 3. Filter out Suggestions (to avoid duplicates if we show them separately)
+        if (suggestedList.length > 0) {
+            source = source.filter(s => !suggestedList.includes(s));
+        }
+
+        return source;
     })();
 
-    if (loading) return <div className="flex items-center justify-center h-full">Loading...</div>;
+    if (isLoading) return <div className="flex items-center justify-center h-full">Loading...</div>;
 
     return (
         <div className={`flex h-full ${AppColors.bg}`}>
@@ -294,21 +189,21 @@ export default function DiagnosisTab({ opdId }: DiagnosisTabProps) {
                 </div>
 
                 {/* Active Selections */}
-                {Object.keys(selectedDiagnosisDetails).length > 0 && (
+                {Object.keys(diagnoses).length > 0 && (
                     <div className="border-b border-slate-100">
                         <div className="px-3 py-1.5 bg-blue-50/50 flex items-center gap-1.5">
                             <div className="bg-blue-100 p-0.5 rounded-full"><Check className="w-2.5 h-2.5 text-blue-600" /></div>
-                            <span className="text-[9px] font-bold text-slate-500 tracking-wider uppercase">Active ({Object.keys(selectedDiagnosisDetails).length})</span>
+                            <span className="text-[9px] font-bold text-slate-500 tracking-wider uppercase">Active ({Object.keys(diagnoses).length})</span>
                         </div>
                         <div className="p-3 max-h-[140px] overflow-y-auto">
                             <div className="flex flex-wrap gap-1.5">
-                                {Object.values(selectedDiagnosisDetails).map(detail => (
+                                {Object.values(diagnoses).map(detail => (
                                     <SelectedChip
                                         key={detail.name}
                                         detail={detail}
                                         isViewing={selectedDiagnosisForDetail === detail.name}
                                         onClick={() => setSelectedDiagnosisForDetail(detail.name)}
-                                        onRemove={() => removeDiagnosis(detail.name)}
+                                        onRemove={() => handleRemoveDiagnosis(detail.name)}
                                     />
                                 ))}
                             </div>
@@ -334,6 +229,29 @@ export default function DiagnosisTab({ opdId }: DiagnosisTabProps) {
                         </button>
                     )}
 
+                    {/* AI Suggestions Section */}
+                    {suggestedList.length > 0 && (
+                        <div className="mb-4">
+                            <div className="flex items-center gap-1.5 mb-2 px-1">
+                                <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                                <span className="text-[9px] font-black text-purple-600 uppercase tracking-wider">Suggested</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {suggestedList.map(s => (
+                                    <button
+                                        key={s}
+                                        onClick={() => selectDiagnosis(s)}
+                                        className="px-2.5 py-1.5 bg-purple-50 border border-purple-200 rounded-full text-[10px] font-bold text-slate-800 hover:bg-purple-100 transition-colors shadow-sm"
+                                    >
+                                        {s}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* All / Search Results */}
+                    {suggestedList.length > 0 && <div className="px-1 mb-2 mt-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">All Diagnoses</div>}
                     <div className="flex flex-wrap gap-1.5">
                         {currentList.map(s => (
                             <button
@@ -350,11 +268,11 @@ export default function DiagnosisTab({ opdId }: DiagnosisTabProps) {
 
             {/* --- RIGHT PANEL (Details) --- */}
             <div className="flex-1 bg-slate-50/50 flex flex-col">
-                {selectedDiagnosisForDetail ? (
+                {selectedDiagnosisForDetail && diagnoses[selectedDiagnosisForDetail] ? (
                     <DetailPanel
-                        detail={selectedDiagnosisDetails[selectedDiagnosisForDetail]}
-                        onUpdate={(field, val) => updateDetail(selectedDiagnosisForDetail, field, val)}
-                        onRemove={() => removeDiagnosis(selectedDiagnosisForDetail)}
+                        detail={diagnoses[selectedDiagnosisForDetail]}
+                        onUpdate={(field, val) => handleUpdateDetail(selectedDiagnosisForDetail, field, val)}
+                        onRemove={() => handleRemoveDiagnosis(selectedDiagnosisForDetail)}
                         onToggleCustom={(opt) => toggleCustomOption(selectedDiagnosisForDetail, opt)}
                         onAddGroup={() => setIsOptionDialogOpen(true)}
                     />
@@ -489,7 +407,7 @@ function DetailPanel({ detail, onUpdate, onRemove, onToggleCustom, onAddGroup }:
                         {/* Duration/Years */}
                         <div className="flex flex-wrap gap-1.5">
                             {['6y', '7y', '8y', '9y', '10y', '11y', '12y', '13y', '14y', '15y', '16y', '17y', '18y', '19y', '20y', '>20y'].map(opt => {
-                                const isSel = detail.selectedCustomOptions.has(opt);
+                                const isSel = detail.selectedCustomOptions.includes(opt);
                                 return (
                                     <button
                                         key={opt}
@@ -508,7 +426,7 @@ function DetailPanel({ detail, onUpdate, onRemove, onToggleCustom, onAddGroup }:
                         {/* Statuses */}
                         <div className="flex flex-wrap gap-1.5">
                             {['Recently Diagnosed', 'Uncontrolled', 'Controlled', 'Borderline', 'On treatment', 'Not on treatment'].map(opt => {
-                                const isSel = detail.selectedCustomOptions.has(opt);
+                                const isSel = detail.selectedCustomOptions.includes(opt);
                                 return (
                                     <button
                                         key={opt}
@@ -530,7 +448,7 @@ function DetailPanel({ detail, onUpdate, onRemove, onToggleCustom, onAddGroup }:
                                 <p className="text-[10px] font-bold text-slate-900 mb-2">{group.title}</p>
                                 <div className="flex flex-wrap gap-1.5">
                                     {group.options.map(opt => {
-                                        const isSel = detail.selectedCustomOptions.has(opt);
+                                        const isSel = detail.selectedCustomOptions.includes(opt);
                                         return (
                                             <button
                                                 key={opt}
