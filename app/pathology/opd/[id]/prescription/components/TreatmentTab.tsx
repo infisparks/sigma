@@ -61,8 +61,8 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
             if (searchQuery.length >= 2) {
                 try {
                     const { data, error } = await supabase
-                        .from('medicine')
-                        .select('id, name, type, manufacturer_name')
+                        .from('clinic_medicine')
+                        .select('id, name, medicine:original_medicine_id(type, manufacturer_name)')
                         .ilike('name', `${searchQuery}%`)
                         .limit(30);
 
@@ -83,8 +83,8 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                     // Fetch a random chunk from the first 5000 records to show variety
                     const randomOffset = Math.floor(Math.random() * 5000);
                     const { data, error } = await supabase
-                        .from('medicine')
-                        .select('id, name, type, manufacturer_name')
+                        .from('clinic_medicine')
+                        .select('id, name, medicine:original_medicine_id(type, manufacturer_name)')
                         .range(randomOffset, randomOffset + 29);
 
                     if (error) console.error("Default fetch error:", error);
@@ -308,11 +308,11 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                             .map((m, i) => (
                                                 <button
                                                     key={i}
-                                                    onClick={() => addMedicine(m.name, m.type || 'TAB')}
+                                                    onClick={() => addMedicine(m.name, m.medicine?.type || 'TAB')}
                                                     className="px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[10px] font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm text-left max-w-full"
                                                 >
                                                     <span className="block font-bold leading-tight">{m.name}</span>
-                                                    {m.manufacturer_name && <span className="block text-[8px] text-slate-400 leading-tight">{m.manufacturer_name}</span>}
+                                                    {m.medicine?.manufacturer_name && <span className="block text-[8px] text-slate-400 leading-tight">{m.medicine.manufacturer_name}</span>}
                                                 </button>
                                             ))}
                                         {searchQuery && (
