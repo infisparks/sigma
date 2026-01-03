@@ -282,7 +282,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
             name: `${doctorName} Consultation (${watchedFields.visitCategory})`,
             charges: currentTotalFees,
             doctor: doctorName,
-            details: watchedFields.referringDoctorName ? `Ref: ${watchedFields.referringDoctorName}` : 'Self'
+            details: watchedFields.visitCategory // Show only Visit Type (First Visit/Follow Up)
         }];
 
         const regDate = getDateFromISO(record.created_at);
@@ -363,7 +363,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                 {/* Title */}
                                 <div><Label className="text-xs">Title</Label>
                                     <Select value={watchedFields.title} onValueChange={(v) => setValue("title", v)}><SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                        <SelectContent>{[".", "MR", "MRS", "MAST", "MISS", "MS", "BABY", "SMT", "BABY OF", "DR"].map((t) => (<SelectItem key={t} value={t}>{t === "." ? "NoTitle" : t}</SelectItem>))}</SelectContent></Select></div>
+                                        <SelectContent className="z-[200]">{[".", "MR", "MRS", "MAST", "MISS", "MS", "BABY", "SMT", "BABY OF", "DR"].map((t) => (<SelectItem key={t} value={t}>{t === "." ? "NoTitle" : t}</SelectItem>))}</SelectContent></Select></div>
 
                                 {/* Name */}
                                 <div><Label className="text-xs">Full Name</Label>
@@ -379,13 +379,13 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                         <Input type="number" {...register("age", { required: true, valueAsNumber: true })} className="h-8" placeholder="Age" /></div>
                                     <div><Label className="text-xs">Unit</Label>
                                         <Select value={watchedFields.dayType} onValueChange={(v) => setValue("dayType", v as any)}><SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                            <SelectContent> <SelectItem value="year">Yr</SelectItem> <SelectItem value="month">Mon</SelectItem> <SelectItem value="day">Day</SelectItem> </SelectContent></Select></div>
+                                            <SelectContent className="z-[200]"> <SelectItem value="year">Yr</SelectItem> <SelectItem value="month">Mon</SelectItem> <SelectItem value="day">Day</SelectItem> </SelectContent></Select></div>
                                 </div>
 
                                 {/* Gender */}
                                 <div><Label className="text-xs">Gender</Label>
                                     <Select value={watchedFields.gender} onValueChange={(v) => setValue("gender", v)}><SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                        <SelectContent><SelectItem value="male">Male</SelectItem><SelectItem value="female">Female</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+                                        <SelectContent className="z-[200]"><SelectItem value="male">Male</SelectItem><SelectItem value="female">Female</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
 
                                 {/* Address */}
                                 <div><Label className="text-xs">Address</Label>
@@ -407,7 +407,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                             onValueChange={(v) => setValue("treatingDoctorId", Number(v))}
                                         >
                                             <SelectTrigger className="h-9"><SelectValue placeholder="Select Treating Doctor" /></SelectTrigger>
-                                            <SelectContent className="max-h-60 overflow-y-auto">
+                                            <SelectContent className="max-h-60 overflow-y-auto z-[200]">
                                                 {doctorList.map((d) => (
                                                     <SelectItem key={d.id} value={String(d.id)}>{d.doctor_name}</SelectItem>
                                                 ))}
@@ -423,7 +423,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                             onValueChange={(v) => setValue("visitCategory", v as any)}
                                         >
                                             <SelectTrigger className="h-9"><SelectValue placeholder="Select Visit Type" /></SelectTrigger>
-                                            <SelectContent>
+                                            <SelectContent className="z-[200]">
                                                 <SelectItem value="First Visit">First Visit</SelectItem>
                                                 <SelectItem value="Follow Up">Follow Up</SelectItem>
                                             </SelectContent>
@@ -511,7 +511,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                                 <Label className="xs">Mode</Label>
                                                 <Select value={watchedFields.paymentEntries[idx]?.paymentMode} onValueChange={(v) => setValue(`paymentEntries.${idx}.paymentMode` as any, v as any)}>
                                                     <SelectTrigger className="h-8"> <SelectValue /> </SelectTrigger>
-                                                    <SelectContent><SelectItem value="online">Online</SelectItem><SelectItem value="cash">Cash</SelectItem></SelectContent>
+                                                    <SelectContent className="z-[200]"><SelectItem value="online">Online</SelectItem><SelectItem value="cash">Cash</SelectItem></SelectContent>
                                                 </Select>
                                             </div>
                                         </div>

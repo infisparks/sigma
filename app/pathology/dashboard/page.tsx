@@ -16,6 +16,7 @@ import {
   downloadMultipleBills,
 } from "./lib/dashboard-utils"
 import type { Registration, DashboardMetrics, PaymentHistory } from "./types/dashboard"
+import { openUniversalBillInNewTabProgrammatically, type BillServiceItem, type UniversalBillData, type PatientBillInfo } from "../patient-entry/universal-bill-generator"
 
 /**
  * Helper to get YYYY-MM-DD date string in Asia/Kolkata timezone
@@ -656,9 +657,70 @@ export default function Dashboard() {
     }
   }, [isFiltersExpanded, isFilterContentMounted])
 
-  const handleDownloadBill = useCallback(() => {
+  const handleDownloadBill = useCallback(async () => {
     if (selectedRegistration) {
-      downloadBill(selectedRegistration)
+      try {
+        // 1. Prepare Services
+        const services: BillServiceItem[] = (selectedRegistration.bloodTests || []).map((t: any) => ({
+          type: 'Pathology',
+          name: t.testName || t.name || "Test",
+          charges: Number(t.price || t.cost || 0),
+          doctor: selectedRegistration.doctor_name || "",
+          details: "" // Standard pathology has no extra details here usually
+        }));
+
+        // 2. Prepare Payments
+        const rawHistory = selectedRegistration.paymentHistory as any;
+        const historyList = rawHistory?.paymentHistory && Array.isArray(rawHistory.paymentHistory)
+          ? rawHistory.paymentHistory
+          : [];
+
+        const paymentEntries = historyList.map((p: any) => ({
+          amount: Number(p.amount || 0),
+          paymentMode: String(p.paymentMode || 'cash').toLowerCase() as 'online' | 'cash' | 'card',
+          time: p.time || new Date().toISOString()
+        }));
+
+        // Fallback if no history but amountPaid exists and is non-zero (legacy data support)
+        if (paymentEntries.length === 0 && (selectedRegistration.amountPaid || 0) > 0) {
+          paymentEntries.push({
+            amount: Number(selectedRegistration.amountPaid),
+            paymentMode: 'cash',
+            time: selectedRegistration.createdAt
+          });
+        }
+
+        // 3. Prepare Patient Info
+        const patientInfo: PatientBillInfo = {
+          uhid: selectedRegistration.patientId || "",
+          name: selectedRegistration.name || "Unknown",
+          contact: String(selectedRegistration.contact || ""),
+          age: Number(selectedRegistration.age || 0),
+          dayType: (selectedRegistration.day_type as any) || 'year',
+          gender: selectedRegistration.gender || 'Male',
+          address: selectedRegistration.address || "-",
+          title: selectedRegistration.title || "MR"
+        };
+
+        // 4. Construct Bill Data
+        const billData: UniversalBillData = {
+          patientInfo,
+          registrationId: Number(selectedRegistration.bill_no || selectedRegistration.id), // Prefer bill_no if available
+          date: new Date(selectedRegistration.createdAt),
+          time: new Date(selectedRegistration.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          referredBy: selectedRegistration.doctor_name || "Self",
+          discount: Number(selectedRegistration.discountAmount || 0),
+          services,
+          paymentEntries,
+          sendWhatsApp: false
+        };
+
+        await openUniversalBillInNewTabProgrammatically(billData, []);
+
+      } catch (e) {
+        console.error("Error generating bill:", e);
+        alert("Failed to generate bill");
+      }
     }
   }, [selectedRegistration])
 

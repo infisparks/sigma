@@ -67,8 +67,8 @@ interface GeneratePdfArgs {
 async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Promise<jsPDF> {
     const { patientInfo, registrationId, date, time, referredBy, discount, services, paymentEntries } = billData;
 
-    // CHANGED: A5 Landscape configuration
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a5" })
+    // CHANGED: A5 Portrait configuration
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" })
     const pageWidth = doc.internal.pageSize.getWidth()
     const pageHeight = doc.internal.pageSize.getHeight()
 
@@ -136,7 +136,7 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
 
     // Patient Info columns
     const col1X = 17;
-    const col2X = pageWidth / 2 + 10;
+    const col2X = pageWidth / 2 + 5;
 
     // Row 1
     doc.setFont("helvetica", "bold"); doc.text("Name:", col1X, yPos);
@@ -167,6 +167,9 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
 
     yPos += 3; // Spacer
 
+    // Determine layout mode
+    const isOPD = services.length > 0 && services.every(s => s.type === 'OPD');
+
     // Table header helper
     const drawTableHeader = (y: number) => {
         doc.setFontSize(9)
@@ -176,9 +179,14 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
         doc.rect(15, y - 4, pageWidth - 30, 6, "F")
 
         doc.text("SN", 17, y)
-        doc.text("Service Name", 30, y)
-        doc.text("Details", 90, y)
-        doc.text("Physician", 135, y)
+        if (isOPD) {
+            doc.text("Physician", 30, y)         // Replaces Service Name
+            doc.text("Visit Type", 90, y)        // Replaces Details
+        } else {
+            doc.text("Service Name", 25, y)
+            // Removed Details Column
+            // Removed Physician Column for Pathology
+        }
         doc.text("Amount", pageWidth - 17, y, { align: "right" })
 
         doc.setTextColor(0, 0, 0);
@@ -206,14 +214,38 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
             doc.rect(15, yPos - 4, pageWidth - 30, 6, "F")
         }
 
-        const serviceName = m.name.length > 35 ? `${m.name.slice(0, 35)}…` : m.name;
-        const doctorInfo = m.doctor ? `Dr. ${getDoctorName(m.doctor)}` : "-";
-        const amt = Number(m.charges) || 0
+        // Clean up Doctor Name
+        const rawDocName = getDoctorName(m.doctor || "");
+        let doctorDisplay = "-";
+        if (m.doctor) {
+            const nameWithoutPrefix = rawDocName.replace(/^Dr\.?\s*/i, "");
+            doctorDisplay = `Dr. ${nameWithoutPrefix}`;
+        }
 
+        const amt = Number(m.charges) || 0
         doc.text(String(i + 1), 17, yPos)
-        doc.text(serviceName, 30, yPos)
-        doc.text(m.details ? (m.details.length > 25 ? m.details.slice(0, 25) + ".." : m.details) : "-", 90, yPos)
-        doc.text(doctorInfo.length > 18 ? `${doctorInfo.slice(0, 18)}…` : doctorInfo, 135, yPos)
+
+        if (isOPD) {
+            // OPD Specific Layout
+            // Physician Column
+            doc.text(doctorDisplay.length > 30 ? `${doctorDisplay.slice(0, 30)}…` : doctorDisplay, 30, yPos);
+
+            // Visit Type (from Details)
+            let visitType = m.details || "Consultation";
+            if (visitType.length > 20) visitType = visitType.slice(0, 20) + "..";
+            doc.text(visitType, 90, yPos);
+
+        } else {
+            // Standard Pathology Layout
+            let serviceName = m.name;
+            // Truncate strings - Expanded for Service Name (Full Width)
+            const itemText = serviceName.length > 65 ? `${serviceName.slice(0, 65)}…` : serviceName;
+
+            doc.text(itemText, 25, yPos)
+            // Removed Details text
+            // Removed Physician text
+        }
+
         doc.text(amt.toFixed(2), pageWidth - 17, yPos, { align: "right" })
         totalCharges += amt
         yPos += 6
@@ -244,7 +276,7 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
     // Wrap words if too long? usually fits in A5 landscape width
     doc.text(`In Words: ${capitalize(toWords(Math.floor(totalPaid)))} Rupees Only`, 15, yPos + 5)
 
-    const summaryX = pageWidth - 80;
+    const summaryX = pageWidth - 70; // Adjusted for tight portrait width
     const valX = pageWidth - 17;
 
     doc.setFont("helvetica", "bold")
