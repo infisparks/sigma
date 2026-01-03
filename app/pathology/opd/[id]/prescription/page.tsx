@@ -80,6 +80,13 @@ export default function PrescriptionPage() {
             case 6: return <PreviousVisitsTab currentOpdId={opdId} patientUhid={record!.patient_detail.uhid} />;
             case 7: return <DiagnosisTab opdId={opdId} />;
             case 8: return <BloodTestTab patientUhid={record!.patient_detail.uhid} />;
+            case 9: return (
+                <div className="flex-1 p-4 bg-slate-100 overflow-auto flex items-start justify-center">
+                    <div className="w-full max-w-5xl">
+                        <PatientVitalsTrend patientUhid={record!.patient_detail.uhid} />
+                    </div>
+                </div>
+            );
             default: return <div className="flex items-center justify-center h-full text-slate-400">Select a tab</div>;
         }
     };
@@ -104,14 +111,12 @@ export default function PrescriptionPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <HeaderAction icon={Activity} label="Vitals" onClick={() => setShowVitalsDialog(true)} />
+                        {/* <HeaderAction icon={Activity} label="Vitals" onClick={() => setCurrentTabIndex(9)} /> */}
+                        {/* Moved Vitals to Bottom Dock for better visibility as requested */}
                         <HeaderAction icon={FileText} label="Reports" onClick={() => setCurrentTabIndex(2)} />
                         <HeaderAction icon={History} label="Previous" onClick={() => setCurrentTabIndex(6)} />
                         <HeaderAction icon={FlaskConical} label="Blood Test" onClick={() => setCurrentTabIndex(8)} />
-                        {/* <HeaderAction icon={StickyNote} label="Notes" onClick={() => { }} /> */}
-
                         <div className="h-5 w-px bg-slate-200 mx-1"></div>
-
                         <StatusPill label="Normal" color="text-green-600" bgColor="bg-green-50" borderColor="border-green-200" />
                         <StatusPill label="Bill Pending" color="text-orange-600" bgColor="bg-orange-50" borderColor="border-orange-200" />
                     </div>
@@ -141,6 +146,7 @@ export default function PrescriptionPage() {
 
                         {/* Navigation Items */}
                         <div className="flex-1 flex items-center justify-around px-1">
+                            <DockItem icon={Activity} label="Vitals" isActive={currentTabIndex === 9} onClick={() => setCurrentTabIndex(9)} />
                             <DockItem icon={Heart} label="Symptoms" isActive={currentTabIndex === 3} onClick={() => setCurrentTabIndex(3)} />
                             <DockItem icon={Stethoscope} label="Diagnosis" isActive={currentTabIndex === 7} onClick={() => setCurrentTabIndex(7)} isHighlighted />
                             <DockItem icon={FileOutput} label="Rx" isActive={currentTabIndex === 4} onClick={() => setCurrentTabIndex(4)} />
@@ -149,18 +155,6 @@ export default function PrescriptionPage() {
                         </div>
                     </div>
                 </div>
-
-                {/* --- VITALS DIALOG --- */}
-                <Dialog open={showVitalsDialog} onOpenChange={setShowVitalsDialog}>
-                    <DialogContent className="max-w-3xl">
-                        <DialogHeader>
-                            <DialogTitle className="text-sm">Patient Vitals Trend</DialogTitle>
-                        </DialogHeader>
-                        <div className="py-2">
-                            <PatientVitalsTrend patientUhid={record.patient_detail.uhid} />
-                        </div>
-                    </DialogContent>
-                </Dialog>
             </div>
         </PrescriptionProvider>
     );

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { usePrescription } from "../context/PrescriptionContext";
+import { toast } from "sonner";
 
 // --- Theme ---
 const PreviewTheme = {
@@ -117,10 +118,8 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
             // We just trigger the save.
             await contextSaveAndFinalize();
 
-            // Reload/Navigate handled by Context or just reload here to be safe/show fresh state?
             // Context reload only sets "isFinalized". Reloading page is often safer for "Receipt" mode.
-            // window.location.reload(); // Removed to allow printing without refresh
-            alert("Prescription saved successfully!");
+            toast.success("Prescription Finalized & Saved!");
 
         } catch (e) {
             console.error("Save failed", e);

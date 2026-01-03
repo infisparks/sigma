@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Heart, Activity, Monitor } from 'lucide-react';
+import { RefreshCw, Heart, Activity, Monitor, Droplet } from 'lucide-react';
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
@@ -20,7 +20,7 @@ export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendPr
         try {
             const { data, error } = await supabase
                 .from('opd_registration')
-                .select('created_at, bp, pulse, weight')
+                .select('created_at, bp, pulse, weight, spo2')
                 .eq('uhid', patientUhid)
                 .order('created_at', { ascending: false })
                 .limit(10);
@@ -52,7 +52,7 @@ export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendPr
     const dataWidth = "w-[90px]";
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden w-full max-w-full">
             {/* Header */}
             <div className="px-5 py-4 flex justify-between items-center border-b border-slate-100">
                 <div>
@@ -78,17 +78,18 @@ export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendPr
                     <p className="text-sm">No vitals recorded yet</p>
                 </div>
             ) : (
-                <div className="flex">
+                <div className="flex w-full max-w-full">
                     {/* Fixed Labels */}
                     <div className={cn(labelWidth, "shrink-0 border-r border-slate-200 bg-white z-10")}>
                         <div className={cn(rowHeight, "pl-5 pt-5 text-[11px] font-bold text-slate-400 tracking-wider")}>VISIT DATE</div>
                         <LabelRow icon={Heart} color="text-red-400" label="Blood Pressure" height={rowHeight} />
                         <LabelRow icon={Activity} color="text-blue-400" label="Pulse Rate" height={rowHeight} />
+                        <LabelRow icon={Droplet} color="text-cyan-500" label="SpO2" height={rowHeight} />
                         <LabelRow icon={Monitor} color="text-orange-400" label="Body Weight" height={rowHeight} />
                     </div>
 
                     {/* Scrollable Data */}
-                    <div className="flex-1 overflow-x-auto" ref={scrollRef}>
+                    <div className="flex-1 overflow-x-auto min-w-0" ref={scrollRef}>
                         <div className="flex">
                             {vitalsData.map((data, idx) => {
                                 const isLatest = idx === 0;
@@ -105,6 +106,7 @@ export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendPr
                                         {/* Data Cells */}
                                         <DataCell value={data.bp} unit="" isBold height={rowHeight} />
                                         <DataCell value={data.pulse} unit="bpm" height={rowHeight} />
+                                        <DataCell value={data.spo2} unit="%" height={rowHeight} />
                                         <DataCell value={data.weight} unit="kg" height={rowHeight} />
                                     </div>
                                 );
