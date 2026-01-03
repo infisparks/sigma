@@ -144,6 +144,7 @@ export default function OPDPrescriptionPage() {
       
       toast.success("Prescription saved successfully!");
       await fetchPatientAndPrescriptionData();
+      
     } catch (err: any) {
       toast.error(`Failed to save: ${err.message}`);
     } finally {
