@@ -119,7 +119,8 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
 
             // Reload/Navigate handled by Context or just reload here to be safe/show fresh state?
             // Context reload only sets "isFinalized". Reloading page is often safer for "Receipt" mode.
-            window.location.reload();
+            // window.location.reload(); // Removed to allow printing without refresh
+            alert("Prescription saved successfully!");
 
         } catch (e) {
             console.error("Save failed", e);

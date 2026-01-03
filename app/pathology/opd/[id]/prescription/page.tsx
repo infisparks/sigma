@@ -141,11 +141,10 @@ export default function PrescriptionPage() {
 
                         {/* Navigation Items */}
                         <div className="flex-1 flex items-center justify-around px-1">
-
-                            <DockItem icon={FileText} label="Reports" isActive={currentTabIndex === 2} onClick={() => setCurrentTabIndex(2)} />
                             <DockItem icon={Heart} label="Symptoms" isActive={currentTabIndex === 3} onClick={() => setCurrentTabIndex(3)} />
                             <DockItem icon={Stethoscope} label="Diagnosis" isActive={currentTabIndex === 7} onClick={() => setCurrentTabIndex(7)} isHighlighted />
                             <DockItem icon={FileOutput} label="Rx" isActive={currentTabIndex === 4} onClick={() => setCurrentTabIndex(4)} />
+                            <DockItem icon={FileText} label="Reports" isActive={currentTabIndex === 2} onClick={() => setCurrentTabIndex(2)} />
                             <DockItem icon={Printer} label="Print" isActive={currentTabIndex === 5} onClick={() => setCurrentTabIndex(5)} />
                         </div>
                     </div>
@@ -202,17 +201,24 @@ function SegmentTab({ title, index, selectedIndex, onSelect }: { title: string, 
 }
 
 function DockItem({ icon: Icon, label, isActive, onClick, isHighlighted }: { icon: any, label: string, isActive: boolean, onClick: () => void, isHighlighted?: boolean }) {
-    const activeColor = isHighlighted ? "text-orange-500" : "text-blue-600";
+    const activeColor = isHighlighted ? "text-orange-600" : "text-blue-700";
+    const inactiveColor = "text-slate-500";
 
     return (
-        <button onClick={onClick} className="flex flex-col items-center gap-0.5 p-1 transition-all">
+        <button onClick={onClick} className="flex flex-col items-center justify-center gap-1 p-1 transition-all w-16">
             <div className={cn(
                 "p-1.5 rounded-lg transition-all",
-                isActive ? (isHighlighted ? "bg-orange-50" : "bg-blue-50") : "bg-transparent"
+                isActive ? (isHighlighted ? "bg-orange-100" : "bg-blue-100") : "bg-transparent"
             )}>
-                <Icon className={cn("w-4 h-4", isActive ? activeColor : "text-slate-400")} />
+                <Icon className={cn("w-5 h-5", isActive ? activeColor : inactiveColor)} />
             </div>
-            {isActive && <span className={cn("text-[9px] font-bold", activeColor)}>{label}</span>}
+            {/* Show label always, but bigger and clearer */}
+            <span className={cn(
+                "text-[10px] sm:text-[11px] font-bold tracking-tight", // Slightly bigger text
+                isActive ? activeColor : inactiveColor
+            )}>
+                {label}
+            </span>
         </button>
     );
 }

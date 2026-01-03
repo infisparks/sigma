@@ -158,7 +158,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
     return (
         <div className={`flex h-full ${TxTheme.background}`}>
             {/* --- LEFT PANEL --- */}
-            <div className={`w-[280px] flex flex-col border-r ${TxTheme.border} ${TxTheme.surface}`}>
+            <div className={`w-[380px] flex flex-col border-r ${TxTheme.border} ${TxTheme.surface}`}>
                 {/* Tabs */}
                 <div className="p-3 border-b border-slate-100">
                     <div className="flex bg-slate-100 p-0.5 rounded-lg">

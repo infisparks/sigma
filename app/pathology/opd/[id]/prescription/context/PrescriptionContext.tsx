@@ -402,7 +402,7 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
             }
 
             setState(prev => ({ ...prev, isFinalized: true, isSaving: false }));
-            alert("Prescription Saved & Finalized Successfully!");
+            // alert("Prescription Saved & Finalized Successfully!");
 
             // Reload to sync backend state (optional but good practice)
             await loadData();
