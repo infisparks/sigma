@@ -63,33 +63,79 @@ interface GeneratePdfArgs {
 
 // --- Core PDF Generation Logic ---
 
+// Helper to load image
+const loadImage = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.src = url;
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) { reject("Could not get canvas context"); return; }
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL("image/png"));
+        };
+        img.onerror = (err) => reject(err);
+    });
+};
+
 // Core function to generate the jsPDF document
 async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Promise<jsPDF> {
     const { patientInfo, registrationId, date, time, referredBy, discount, services, paymentEntries } = billData;
 
-    // CHANGED: A5 Portrait configuration
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" })
+    // Load logo
+    let logoData: string | null = null;
+    try {
+        logoData = await loadImage("/bill-logo.png");
+    } catch (e) {
+        console.error("Failed to load bill logo", e);
+    }
+
+    // CHANGED: A5 Landscape configuration
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a5" })
     const pageWidth = doc.internal.pageSize.getWidth()
     const pageHeight = doc.internal.pageSize.getHeight()
 
+    let headerHeight = 20; // Default if no logo - reduced
+
     // --- Custom Header Function ---
     const drawHeader = () => {
-        // Logo / Title
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(22);
-        doc.setTextColor(41, 128, 185); // Professional Blue
-        doc.text("CIGMA", 15, 15);
+        if (logoData) {
+            const imgProps = doc.getImageProperties(logoData);
+            // User requested "small in left". 
+            // Fix width to something small like 35mm.
+            const pdfWidth = 80;
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-        // Subtitle
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(127, 140, 141); // Grey
-        doc.text("Clinic and Diagnostic Center", 15, 20);
+            // Draw user logo
+            doc.addImage(logoData, 'PNG', 15, 5, pdfWidth, pdfHeight);
+
+            // We can add clinic text next to it if needed, but per request "show loo in small in left",
+            // and previous context implies the logo has text.
+            // If the logo is tiny, we might want to re-add the text header? 
+            // Let's rely on the logo for now, but keep header height compact.
+            headerHeight = Math.max(pdfHeight + 8, 15);
+        } else {
+            // Logo / Title Fallback
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14); // Reduced from 22
+            doc.setTextColor(41, 128, 185); // Professional Blue
+            doc.text("CIGMA", 15, 10);
+
+            // Subtitle
+            doc.setFontSize(8); // Reduced from 10
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(127, 140, 141); // Grey
+            doc.text("Clinic and Diagnostic Center", 15, 14);
+            headerHeight = 18;
+        }
 
         // Divider Line
         doc.setDrawColor(41, 128, 185);
         doc.setLineWidth(0.5);
-        doc.line(15, 25, pageWidth - 15, 25);
+        doc.line(15, headerHeight, pageWidth - 15, headerHeight);
 
         doc.setTextColor(0, 0, 0); // Reset text color
     };
@@ -107,32 +153,32 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
         return String(doctorIdentifier);
     }
 
-    let yPos = 32; // Start content below the header
+    let yPos = headerHeight + 6; // Compact spacing
 
     // Date & Time (Top Right relative to header)
-    doc.setFontSize(9)
+    doc.setFontSize(8) // Reduced from 9
     doc.setFont("helvetica", "normal")
     doc.text(
         `Date: ${format(date, "dd/MM/yyyy")} | Time: ${time}`,
         pageWidth - 15,
-        18,
+        10, // Fixed top position
         { align: "right" }
     )
 
     // Bill Number and UHID display
-    doc.setFontSize(10)
+    doc.setFontSize(9) // Reduced from 10
     doc.setFont("helvetica", "bold")
     doc.text(`Bill No: ${String(registrationId || 'N/A')}`, 15, yPos);
     doc.text(`UHID: ${patientInfo.uhid || '-'}`, 70, yPos);
-    yPos += 8;
+    yPos += 6; // Reduced from 8
 
     // Patient Info header
-    doc.setFontSize(10)
+    doc.setFontSize(9) // Reduced from 10
     doc.setFont("helvetica", "bold")
     doc.setFillColor(236, 240, 241) // Light grey/blue
-    doc.rect(15, yPos - 3, pageWidth - 30, 6, "F")
-    doc.text("PATIENT DETAILS", 17, yPos + 1)
-    yPos += 8
+    doc.rect(15, yPos - 3, pageWidth - 30, 5, "F") // Reduced rect height
+    doc.text("PATIENT DETAILS", 17, yPos + 0.5)
+    yPos += 6 // Reduced from 8
 
     // Patient Info columns
     const col1X = 17;
@@ -144,7 +190,7 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
 
     doc.setFont("helvetica", "bold"); doc.text("Phone:", col2X, yPos);
     doc.setFont("helvetica", "normal"); doc.text(String(patientInfo.contact), col2X + 18, yPos);
-    yPos += 5;
+    yPos += 4.5; // Reduced from 5
 
     // Row 2
     doc.setFont("helvetica", "bold"); doc.text("Age/Sex:", col1X, yPos);
@@ -154,7 +200,7 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
 
     doc.setFont("helvetica", "bold"); doc.text("Ref. By:", col2X, yPos);
     doc.setFont("helvetica", "normal"); doc.text(String(referredBy), col2X + 18, yPos);
-    yPos += 5;
+    yPos += 4.5; // Reduced from 5
 
     // Row 3 (Address)
     if (patientInfo.address) {
@@ -162,30 +208,29 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
         doc.setFont("helvetica", "normal");
         const addressText = String(patientInfo.address.length > 55 ? `${patientInfo.address.slice(0, 55)}...` : patientInfo.address);
         doc.text(addressText, col1X + 18, yPos);
-        yPos += 5;
+        yPos += 4.5; // Reduced from 5
     }
 
-    yPos += 3; // Spacer
+    yPos += 2; // Spacer
 
     // Determine layout mode
     const isOPD = services.length > 0 && services.every(s => s.type === 'OPD');
 
     // Table header helper
     const drawTableHeader = (y: number) => {
-        doc.setFontSize(9)
+        doc.setFontSize(8) // Reduced from 9
         doc.setFont("helvetica", "bold")
         doc.setFillColor(41, 128, 185); // Professional Blue
         doc.setTextColor(255, 255, 255);
-        doc.rect(15, y - 4, pageWidth - 30, 6, "F")
+        doc.rect(15, y - 3.5, pageWidth - 30, 5, "F") // Reduced rect height
 
         doc.text("SN", 17, y)
         if (isOPD) {
-            doc.text("Physician", 30, y)         // Replaces Service Name
-            doc.text("Visit Type", 90, y)        // Replaces Details
+            doc.text("Physician", 30, y)
+            doc.text("Visit Type", 110, y)
         } else {
-            doc.text("Service Name", 25, y)
-            // Removed Details Column
-            // Removed Physician Column for Pathology
+            doc.text("Service Name", 30, y)
+            doc.text("Type", 130, y)
         }
         doc.text("Amount", pageWidth - 17, y, { align: "right" })
 
@@ -193,25 +238,25 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
     }
 
     drawTableHeader(yPos);
-    yPos += 6;
+    yPos += 5; // Reduced from 6
 
     doc.setFont("helvetica", "normal")
     let totalCharges = 0
 
     services.forEach((m: BillServiceItem, i: number) => {
         // Page break logic
-        if (yPos > pageHeight - 35) { // Leave space for summary
+        if (yPos > pageHeight - 30) { // Reduced bottom margin trigger
             doc.addPage()
             drawHeader();
-            yPos = 35;
+            yPos = headerHeight + 8;
             drawTableHeader(yPos);
-            yPos += 6;
+            yPos += 5;
             doc.setFont("helvetica", "normal")
         }
 
         if (i % 2 === 0) {
             doc.setFillColor(242, 243, 244)
-            doc.rect(15, yPos - 4, pageWidth - 30, 6, "F")
+            doc.rect(15, yPos - 3.5, pageWidth - 30, 5, "F")
         }
 
         // Clean up Doctor Name
@@ -226,80 +271,73 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
         doc.text(String(i + 1), 17, yPos)
 
         if (isOPD) {
-            // OPD Specific Layout
-            // Physician Column
-            doc.text(doctorDisplay.length > 30 ? `${doctorDisplay.slice(0, 30)}…` : doctorDisplay, 30, yPos);
-
-            // Visit Type (from Details)
+            doc.text(doctorDisplay.length > 45 ? `${doctorDisplay.slice(0, 45)}…` : doctorDisplay, 30, yPos);
             let visitType = m.details || "Consultation";
-            if (visitType.length > 20) visitType = visitType.slice(0, 20) + "..";
-            doc.text(visitType, 90, yPos);
-
+            if (visitType.length > 30) visitType = visitType.slice(0, 30) + "..";
+            doc.text(visitType, 110, yPos);
         } else {
-            // Standard Pathology Layout
             let serviceName = m.name;
-            // Truncate strings - Expanded for Service Name (Full Width)
-            const itemText = serviceName.length > 65 ? `${serviceName.slice(0, 65)}…` : serviceName;
+            const itemText = serviceName.length > 55 ? `${serviceName.slice(0, 55)}…` : serviceName;
+            doc.text(itemText, 30, yPos)
 
-            doc.text(itemText, 25, yPos)
-            // Removed Details text
-            // Removed Physician text
+            let typeText = m.details || "-";
+            if (typeText.length > 25) typeText = typeText.slice(0, 25) + "..";
+            doc.text(typeText, 130, yPos);
         }
 
         doc.text(amt.toFixed(2), pageWidth - 17, yPos, { align: "right" })
         totalCharges += amt
-        yPos += 6
+        yPos += 5 // Reduced from 6
     })
 
     yPos += 2;
 
     // Check availability for summary
-    if (yPos > pageHeight - 40) {
+    if (yPos > pageHeight - 35) {
         doc.addPage();
         drawHeader();
-        yPos = 35;
+        yPos = headerHeight + 8;
     }
 
     doc.setDrawColor(200, 200, 200);
     doc.line(15, yPos, pageWidth - 15, yPos);
-    yPos += 5;
+    yPos += 4; // reduced from 5
 
     const totalPaid = paymentEntries.reduce((sum, p) => sum + (p.amount || 0), 0);
     const net = totalCharges - discount
     const due = net - totalPaid
 
     // Amount in Words
-    doc.setFontSize(9)
+    doc.setFontSize(8) // Reduced from 9
     doc.setFont("helvetica", "italic")
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-    // Wrap words if too long? usually fits in A5 landscape width
-    doc.text(`In Words: ${capitalize(toWords(Math.floor(totalPaid)))} Rupees Only`, 15, yPos + 5)
+    doc.text(`In Words: ${capitalize(toWords(Math.floor(totalPaid)))} Rupees Only`, 15, yPos + 4)
 
-    const summaryX = pageWidth - 70; // Adjusted for tight portrait width
+    const summaryX = pageWidth - 70;
     const valX = pageWidth - 17;
 
     doc.setFont("helvetica", "bold")
     doc.text("Total Charges:", summaryX, yPos)
     doc.setFont("helvetica", "normal")
     doc.text(totalCharges.toFixed(2), valX, yPos, { align: "right" })
-    yPos += 5;
+    yPos += 4;
 
     if (discount > 0) {
         doc.setFont("helvetica", "bold")
         doc.text("Discount:", summaryX, yPos)
         doc.text(discount.toFixed(2), valX, yPos, { align: "right" })
-        yPos += 5;
+        yPos += 4;
     }
 
     doc.setFont("helvetica", "bold")
     doc.text("Net Amount:", summaryX, yPos)
     doc.text(net.toFixed(2), valX, yPos, { align: "right" })
-    yPos += 5;
+    yPos += 4;
 
     doc.text("Paid Amount:", summaryX, yPos)
     doc.text(totalPaid.toFixed(2), valX, yPos, { align: "right" })
-    yPos += 5;
+    yPos += 4;
 
     if (due > 0) {
         doc.setTextColor(192, 57, 43); // Red
@@ -309,8 +347,8 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
     }
 
     // Footer
-    const footerY = pageHeight - 10;
-    doc.setFontSize(8);
+    const footerY = pageHeight - 8; // reduced margin
+    doc.setFontSize(7); // Reduced from 8
     doc.setFont("helvetica", "normal");
     doc.text("Generated by CIGMA Clinic System", 15, footerY);
 

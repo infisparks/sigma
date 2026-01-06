@@ -79,7 +79,7 @@ interface DoctorFee { // Doctor type with fees
   first_visit_fee: number;
   follow_up_fee: number;
 }
-interface BloodTestRow { id: number; test_name: string; price: number; outsource: boolean; estimated_time_mm: string | null; }
+interface BloodTestRow { id: number; test_name: string; price: number; outsource: boolean; estimated_time_mm: string | null; type?: string; }
 interface PackageType { id: number; package_name: string; tests: any[]; discountamount: number; }
 interface PatientSuggestion { id: number; name: string; number: number; uhid: string; title?: string; age: number; age_unit: "year" | "month" | "day"; gender: string; address?: string; }
 interface OpdRegistration { opd_id: number; date: string; refer_by: string; }
@@ -323,7 +323,7 @@ export default function UnifiedPatientEntry() {
           setDoctorList((doctorConfig?.data as DoctorFee[]) ?? []);
         }
 
-        const { data: bloods, error: bErr } = await supabase.from(TABLE.BLOOD).select("id, test_name, price, outsource, estimated_time_mm").order("test_name")
+        const { data: bloods, error: bErr } = await supabase.from(TABLE.BLOOD).select("id, test_name, price, outsource, estimated_time_mm, type").order("test_name")
         throwIfError(bErr)
         setBloodRows(bloods ?? [])
 

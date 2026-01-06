@@ -60,6 +60,7 @@ export interface BloodTestFormInputs {
   testName: string
   price: number
   tpa_price?: number
+  type: "blood_test" | "xray_standard" | "xray_procedure" | "sonography" | "color_doppler"
   parameters: BloodTestParameter[]
   subheadings: BloodTestSubheading[]
   isOutsource?: boolean
@@ -75,6 +76,7 @@ export interface TestData {
   testName: string
   price: number
   tpa_price?: number
+  type: "blood_test" | "xray_standard" | "xray_procedure" | "sonography" | "color_doppler"
   isOutsource: boolean
   parameters: BloodTestParameter[]
   subheadings: BloodTestSubheading[]
@@ -98,10 +100,10 @@ function formatDuration(minutesStr: string | undefined | null) {
   if (!minutesStr) return "-"
   const totalMinutes = parseInt(minutesStr, 10)
   if (isNaN(totalMinutes) || totalMinutes === 0) return "-"
-  
+
   const hours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
-  
+
   if (hours > 0 && minutes > 0) return `${hours} hr ${minutes} min`
   if (hours > 0) return `${hours} hr`
   return `${minutes} min`
@@ -133,7 +135,7 @@ const ParameterEditor: React.FC<ParameterEditorProps> = ({ index, control, regis
   })
 
   const paramNameErr = getFieldErrorMessage(errors, ["parameters", index.toString(), "name"])
-  
+
   return (
     <div className="border p-4 rounded mb-4 bg-gray-50">
       <div className="flex justify-between items-center">
@@ -174,21 +176,21 @@ const ParameterEditor: React.FC<ParameterEditorProps> = ({ index, control, regis
       {/* Formula & Default */}
       <div className="flex gap-2 mt-2">
         <div className="w-1/2">
-            <label className="block text-xs">Formula (optional)</label>
-            <input
+          <label className="block text-xs">Formula (optional)</label>
+          <input
             type="text"
             {...register(`parameters.${index}.formula`)}
             placeholder="e.g. TOTAL - DIRECT"
             className="w-full border rounded px-2 py-1"
-            />
+          />
         </div>
         <div className="w-1/2">
-            <label className="block text-xs">Default Value</label>
-            <input
+          <label className="block text-xs">Default Value</label>
+          <input
             type="text"
             {...register(`parameters.${index}.defaultValue`)}
             className="w-full border rounded px-2 py-1"
-            />
+          />
         </div>
       </div>
 
@@ -230,31 +232,31 @@ const ParameterEditor: React.FC<ParameterEditorProps> = ({ index, control, regis
           <FaPlusCircle className="mr-1" /> Add Suggestion
         </button>
       </div>
-      
+
       {/* Ranges - Male */}
       <div className="mt-4">
-         <h4 className="text-xs font-medium">Male Ranges</h4>
-         {maleRangesArray.fields.map((field, mIndex) => (
-             <div key={field.id} className="flex items-center space-x-2 mt-1">
-                 <input type="text" {...register(`parameters.${index}.range.male.${mIndex}.rangeKey`)} className="w-1/2 border rounded px-2 py-1" placeholder="Range Key" />
-                 <input type="text" {...register(`parameters.${index}.range.male.${mIndex}.rangeValue`)} className="w-1/2 border rounded px-2 py-1" placeholder="Value" />
-                 <button type="button" onClick={() => maleRangesArray.remove(mIndex)} className="text-red-500"><FaTrash /></button>
-             </div>
-         ))}
-         <button type="button" onClick={() => maleRangesArray.append({ rangeKey: "", rangeValue: "" })} className="mt-2 inline-flex items-center px-2 py-1 border border-blue-600 text-blue-600 rounded text-xs hover:bg-blue-50"><FaPlus className="mr-1" /> Add Range</button>
+        <h4 className="text-xs font-medium">Male Ranges</h4>
+        {maleRangesArray.fields.map((field, mIndex) => (
+          <div key={field.id} className="flex items-center space-x-2 mt-1">
+            <input type="text" {...register(`parameters.${index}.range.male.${mIndex}.rangeKey`)} className="w-1/2 border rounded px-2 py-1" placeholder="Range Key" />
+            <input type="text" {...register(`parameters.${index}.range.male.${mIndex}.rangeValue`)} className="w-1/2 border rounded px-2 py-1" placeholder="Value" />
+            <button type="button" onClick={() => maleRangesArray.remove(mIndex)} className="text-red-500"><FaTrash /></button>
+          </div>
+        ))}
+        <button type="button" onClick={() => maleRangesArray.append({ rangeKey: "", rangeValue: "" })} className="mt-2 inline-flex items-center px-2 py-1 border border-blue-600 text-blue-600 rounded text-xs hover:bg-blue-50"><FaPlus className="mr-1" /> Add Range</button>
       </div>
-      
+
       {/* Ranges - Female */}
-       <div className="mt-4">
-         <h4 className="text-xs font-medium">Female Ranges</h4>
-         {femaleRangesArray.fields.map((field, fIndex) => (
-             <div key={field.id} className="flex items-center space-x-2 mt-1">
-                 <input type="text" {...register(`parameters.${index}.range.female.${fIndex}.rangeKey`)} className="w-1/2 border rounded px-2 py-1" placeholder="Range Key" />
-                 <input type="text" {...register(`parameters.${index}.range.female.${fIndex}.rangeValue`)} className="w-1/2 border rounded px-2 py-1" placeholder="Value" />
-                 <button type="button" onClick={() => femaleRangesArray.remove(fIndex)} className="text-red-500"><FaTrash /></button>
-             </div>
-         ))}
-         <button type="button" onClick={() => femaleRangesArray.append({ rangeKey: "", rangeValue: "" })} className="mt-2 inline-flex items-center px-2 py-1 border border-blue-600 text-blue-600 rounded text-xs hover:bg-blue-50"><FaPlus className="mr-1" /> Add Range</button>
+      <div className="mt-4">
+        <h4 className="text-xs font-medium">Female Ranges</h4>
+        {femaleRangesArray.fields.map((field, fIndex) => (
+          <div key={field.id} className="flex items-center space-x-2 mt-1">
+            <input type="text" {...register(`parameters.${index}.range.female.${fIndex}.rangeKey`)} className="w-1/2 border rounded px-2 py-1" placeholder="Range Key" />
+            <input type="text" {...register(`parameters.${index}.range.female.${fIndex}.rangeValue`)} className="w-1/2 border rounded px-2 py-1" placeholder="Value" />
+            <button type="button" onClick={() => femaleRangesArray.remove(fIndex)} className="text-red-500"><FaTrash /></button>
+          </div>
+        ))}
+        <button type="button" onClick={() => femaleRangesArray.append({ rangeKey: "", rangeValue: "" })} className="mt-2 inline-flex items-center px-2 py-1 border border-blue-600 text-blue-600 rounded text-xs hover:bg-blue-50"><FaPlus className="mr-1" /> Add Range</button>
       </div>
     </div>
   )
@@ -274,56 +276,56 @@ interface SubheadingEditorProps {
 }
 
 const SubheadingEditor: React.FC<SubheadingEditorProps> = ({ index, control, register, errors, remove, getValues, setValue }) => {
-    const paramNamesArray = useFieldArray({ control, name: `subheadings.${index}.parameterNames` })
-    const globalParameters = useWatch({ control, name: "parameters" }) || []
+  const paramNamesArray = useFieldArray({ control, name: `subheadings.${index}.parameterNames` })
+  const globalParameters = useWatch({ control, name: "parameters" }) || []
 
-    const handleParameterChange = (pIndex: number, newValue: string) => {
-        if (!newValue) return
-        const allSubheadings = getValues("subheadings") || []
-        for (let shIndex = 0; shIndex < allSubheadings.length; shIndex++) {
-          if (shIndex === index) continue
-          const paramNames = allSubheadings[shIndex]?.parameterNames.map((p) => p.name) || []
-          if (paramNames.includes(newValue)) {
-            alert(`Parameter "${newValue}" is already used in another subheading!`)
-            setValue(`subheadings.${index}.parameterNames.${pIndex}.name`, "")
-            return
-          }
-        }
+  const handleParameterChange = (pIndex: number, newValue: string) => {
+    if (!newValue) return
+    const allSubheadings = getValues("subheadings") || []
+    for (let shIndex = 0; shIndex < allSubheadings.length; shIndex++) {
+      if (shIndex === index) continue
+      const paramNames = allSubheadings[shIndex]?.parameterNames.map((p) => p.name) || []
+      if (paramNames.includes(newValue)) {
+        alert(`Parameter "${newValue}" is already used in another subheading!`)
+        setValue(`subheadings.${index}.parameterNames.${pIndex}.name`, "")
+        return
+      }
     }
+  }
 
-    return (
-        <div className="border p-4 rounded mb-4 bg-gray-100">
-            <div className="flex justify-between items-center">
-                <h3 className="text-sm font-semibold">Subheading #{index + 1}</h3>
-                <button type="button" onClick={() => remove(index)} className="text-red-500 hover:text-red-700"><FaTrash /></button>
-            </div>
-            <div className="mt-2">
-                <label className="block text-xs">Title</label>
-                <input type="text" {...register(`subheadings.${index}.title`, { required: "Required" })} className="w-full border rounded px-2 py-1" />
-            </div>
-            <div className="mt-2 flex items-center space-x-2">
-                <input type="checkbox" {...register(`subheadings.${index}.is100`)} id={`is100-${index}`} />
-                <label htmlFor={`is100-${index}`} className="text-xs">Sum to 100%</label>
-            </div>
-            <div className="mt-2">
-                <h4 className="text-xs font-medium">Parameters</h4>
-                {paramNamesArray.fields.map((field, pIndex) => (
-                    <div key={field.id} className="flex items-center space-x-2 mt-1">
-                         <select 
-                            {...register(`subheadings.${index}.parameterNames.${pIndex}.name`, {
-                                onChange: (e) => handleParameterChange(pIndex, e.target.value)
-                            })} 
-                            className="w-full border rounded px-2 py-1">
-                            <option value="">Select Parameter</option>
-                            {globalParameters.map((param, idx) => <option key={idx} value={param.name}>{param.name}</option>)}
-                         </select>
-                         <button type="button" onClick={() => paramNamesArray.remove(pIndex)} className="text-red-500"><FaTrash /></button>
-                    </div>
-                ))}
-                 <button type="button" onClick={() => paramNamesArray.append({ name: "" })} className="mt-2 inline-flex items-center px-2 py-1 border border-blue-600 text-blue-600 rounded text-xs hover:bg-blue-50"><FaPlus className="mr-1" /> Add Parameter</button>
-            </div>
-        </div>
-    )
+  return (
+    <div className="border p-4 rounded mb-4 bg-gray-100">
+      <div className="flex justify-between items-center">
+        <h3 className="text-sm font-semibold">Subheading #{index + 1}</h3>
+        <button type="button" onClick={() => remove(index)} className="text-red-500 hover:text-red-700"><FaTrash /></button>
+      </div>
+      <div className="mt-2">
+        <label className="block text-xs">Title</label>
+        <input type="text" {...register(`subheadings.${index}.title`, { required: "Required" })} className="w-full border rounded px-2 py-1" />
+      </div>
+      <div className="mt-2 flex items-center space-x-2">
+        <input type="checkbox" {...register(`subheadings.${index}.is100`)} id={`is100-${index}`} />
+        <label htmlFor={`is100-${index}`} className="text-xs">Sum to 100%</label>
+      </div>
+      <div className="mt-2">
+        <h4 className="text-xs font-medium">Parameters</h4>
+        {paramNamesArray.fields.map((field, pIndex) => (
+          <div key={field.id} className="flex items-center space-x-2 mt-1">
+            <select
+              {...register(`subheadings.${index}.parameterNames.${pIndex}.name`, {
+                onChange: (e) => handleParameterChange(pIndex, e.target.value)
+              })}
+              className="w-full border rounded px-2 py-1">
+              <option value="">Select Parameter</option>
+              {globalParameters.map((param, idx) => <option key={idx} value={param.name}>{param.name}</option>)}
+            </select>
+            <button type="button" onClick={() => paramNamesArray.remove(pIndex)} className="text-red-500"><FaTrash /></button>
+          </div>
+        ))}
+        <button type="button" onClick={() => paramNamesArray.append({ name: "" })} className="mt-2 inline-flex items-center px-2 py-1 border border-blue-600 text-blue-600 rounded text-xs hover:bg-blue-50"><FaPlus className="mr-1" /> Add Parameter</button>
+      </div>
+    </div>
+  )
 }
 
 // ------------------------------------------------------------------
@@ -336,7 +338,7 @@ interface TestModalProps {
 }
 
 const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated }) => {
-  
+
   // Calculate initial hours and minutes from total minutes (if exists)
   const initialTotalMinutes = testData?.estimated_time_mm ? parseInt(testData.estimated_time_mm, 10) : 0
   const initialHours = isNaN(initialTotalMinutes) ? 0 : Math.floor(initialTotalMinutes / 60)
@@ -346,41 +348,43 @@ const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated 
     () =>
       testData
         ? {
-            testName: testData.testName,
-            price: testData.price,
-            tpa_price: testData.tpa_price ?? undefined,
-            parameters: testData.parameters,
-            subheadings: testData.subheadings.map((sh) => ({
-              title: sh.title,
-              parameterNames: sh.parameterNames,
-              is100: sh.is100 || false,
-            })),
-            isOutsource: testData.isOutsource || false,
-            interpretation: testData.interpretation || "",
-            estimatedHours: initialHours,
-            estimatedMinutes: initialMinutes
-          }
+          testName: testData.testName,
+          price: testData.price,
+          tpa_price: testData.tpa_price ?? undefined,
+          type: testData.type || "blood_test", // Added type
+          parameters: testData.parameters,
+          subheadings: testData.subheadings.map((sh) => ({
+            title: sh.title,
+            parameterNames: sh.parameterNames,
+            is100: sh.is100 || false,
+          })),
+          isOutsource: testData.isOutsource || false,
+          interpretation: testData.interpretation || "",
+          estimatedHours: initialHours,
+          estimatedMinutes: initialMinutes
+        }
         : {
-            testName: "",
-            price: 0,
-            tpa_price: undefined,
-            parameters: [
-              {
-                name: "",
-                unit: "",
-                valueType: "text",
-                formula: "",
-                iscomment: false,
-                suggestions: [],
-                range: { male: [{ rangeKey: "", rangeValue: "" }], female: [{ rangeKey: "", rangeValue: "" }] },
-              },
-            ],
-            subheadings: [],
-            isOutsource: false,
-            interpretation: "",
-            estimatedHours: 0,
-            estimatedMinutes: 0
-          },
+          testName: "",
+          price: 0,
+          tpa_price: undefined,
+          type: "blood_test", // Default type
+          parameters: [
+            {
+              name: "",
+              unit: "",
+              valueType: "text",
+              formula: "",
+              iscomment: false,
+              suggestions: [],
+              range: { male: [{ rangeKey: "", rangeValue: "" }], female: [{ rangeKey: "", rangeValue: "" }] },
+            },
+          ],
+          subheadings: [],
+          isOutsource: false,
+          interpretation: "",
+          estimatedHours: 0,
+          estimatedMinutes: 0
+        },
     [testData, initialHours, initialMinutes],
   )
 
@@ -392,6 +396,7 @@ const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated 
     getValues,
     setValue,
     reset,
+    watch,
   } = useForm<BloodTestFormInputs>({ defaultValues })
 
   const paramFields = useFieldArray({ control, name: "parameters" })
@@ -444,7 +449,7 @@ const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated 
     const dummyBloodtestDetail: Record<string, BloodTestData> = {
       [currentFormData.testName.toLowerCase().replace(/\s+/g, "_").replace(/[.#$[\]()]/g, "").replace(/\//g, "")]: {
         testId: "dummy-id",
-        parameters: dummyParameters as any, 
+        parameters: dummyParameters as any,
         subheadings: dummySubheadings as any,
         reportedOn: new Date().toISOString(),
         enteredBy: "Dummy User",
@@ -455,7 +460,7 @@ const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated 
     };
 
     const dummyPatientData: PatientData = {
-      id: 1, 
+      id: 1,
       name: "Preview Patient",
       age: 30,
       gender: "Male",
@@ -477,15 +482,15 @@ const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated 
     try {
       const blob = await generateReportPdf(
         dummyPatientData,
-        Object.keys(dummyPatientData.bloodtest || {}), 
-        [], 
-        {}, 
-        {}, 
-        "normal", 
-        true, 
-        true, 
-        undefined, 
-        false, 
+        Object.keys(dummyPatientData.bloodtest || {}),
+        [],
+        {},
+        {},
+        "normal",
+        true,
+        true,
+        undefined,
+        false,
       );
       const url = URL.createObjectURL(blob);
       setPdfUrl(url);
@@ -507,15 +512,26 @@ const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated 
         price: data.price,
         tpa_price: data.tpa_price,
         outsource: data.isOutsource,
-        parameter: data.parameters,
-        sub_heading: data.subheadings.map((sh) => ({
+        type: data.type, // Save type
+        estimated_time_mm: String(totalMinutes) // Save as string to match DB schema
+      }
+
+      // Only add parameters and subheadings if it's a blood_test
+      if (data.type === 'blood_test') {
+        payload.parameter = data.parameters
+        payload.sub_heading = data.subheadings.map((sh) => ({
           title: sh.title,
           parameterNames: sh.parameterNames.map((p) => p.name),
           is100: sh.is100,
-        })),
-        interpretation: data.interpretation,
-        estimated_time_mm: String(totalMinutes) // Save as string to match DB schema
+        }))
+        payload.interpretation = data.interpretation
+      } else {
+        // For other types, we might want to clear these or just send empty/null
+        payload.parameter = []
+        payload.sub_heading = []
+        payload.interpretation = null
       }
+
       if (data.tpa_price !== undefined && data.tpa_price !== null) {
         payload.tpa_price = data.tpa_price
       }
@@ -570,7 +586,7 @@ const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated 
         interpretation: parsed.interpretation,
         estimated_time_mm: "1100" // Default for JSON paste if not provided
       }
-      
+
       if (parsed.tpa_price !== undefined && parsed.tpa_price !== null) { payload.tpa_price = parsed.tpa_price }
 
       if (testData) {
@@ -614,29 +630,29 @@ const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated 
             {testData ? <><FaEdit className="mr-2" /> Edit Test</> : <><FaPlusCircle className="mr-2" /> New Test</>}
           </h2>
           <div className="flex items-center gap-2">
-             {/* Save and Delete Buttons Moved Here */}
-             {testData && (
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="inline-flex items-center px-3 py-1 bg-red-100 border border-red-200 text-red-600 rounded hover:bg-red-200 text-sm"
-                >
-                  <FaTrash className="mr-1" /> Delete
-                </button>
-              )}
-              {!isJsonEditor && (
-                <button
-                    type="submit"
-                    form="blood-test-form" // Link to the form ID
-                    className="inline-flex items-center px-4 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 shadow text-sm font-medium"
-                >
-                    <FaSave className="mr-1" />
-                    {testData ? "Save Changes" : "Create Test"}
-                </button>
-              )}
-              <button onClick={onClose} className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded ml-2 text-sm">
-                Close
+            {/* Save and Delete Buttons Moved Here */}
+            {testData && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="inline-flex items-center px-3 py-1 bg-red-100 border border-red-200 text-red-600 rounded hover:bg-red-200 text-sm"
+              >
+                <FaTrash className="mr-1" /> Delete
               </button>
+            )}
+            {!isJsonEditor && (
+              <button
+                type="submit"
+                form="blood-test-form" // Link to the form ID
+                className="inline-flex items-center px-4 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 shadow text-sm font-medium"
+              >
+                <FaSave className="mr-1" />
+                {testData ? "Save Changes" : "Create Test"}
+              </button>
+            )}
+            <button onClick={onClose} className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded ml-2 text-sm">
+              Close
+            </button>
           </div>
         </div>
 
@@ -669,54 +685,66 @@ const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated 
         ) : (
           /* FORM mode */
           <form id="blood-test-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            
+
+            {/* Type Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">Service Type</label>
+              <select {...register("type")} className="w-full border rounded px-3 py-2 bg-gray-50">
+                <option value="blood_test">Blood Test / Pathology</option>
+                <option value="xray_standard">X-Ray (Standard)</option>
+                <option value="xray_procedure">X-Ray (Procedure)</option>
+                <option value="sonography">Sonography / Ultrasound</option>
+                <option value="color_doppler">Color Doppler</option>
+              </select>
+            </div>
+
             {/* Row 1: Name and Price */}
             <div className="flex gap-4">
-                <div className="flex-1">
-                    <label className="block text-sm font-medium">Test Name</label>
-                    <input type="text" {...register("testName", { required: "Required" })} className="w-full border rounded px-3 py-2" />
-                </div>
-                <div className="w-1/4">
-                    <label className="block text-sm font-medium">Price (₹)</label>
-                    <input type="number" step="0.01" {...register("price", { required: "Required", valueAsNumber: true })} className="w-full border rounded px-3 py-2" />
-                </div>
-                <div className="w-1/4">
-                    <label className="block text-sm font-medium">TPA (Opt)</label>
-                    <input type="number" step="0.01" {...register("tpa_price", { valueAsNumber: true })} className="w-full border rounded px-3 py-2" />
-                </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium">Test / Service Name</label>
+                <input type="text" {...register("testName", { required: "Required" })} className="w-full border rounded px-3 py-2" />
+              </div>
+              <div className="w-1/4">
+                <label className="block text-sm font-medium">Price (₹)</label>
+                <input type="number" step="0.01" {...register("price", { required: "Required", valueAsNumber: true })} className="w-full border rounded px-3 py-2" />
+              </div>
+              <div className="w-1/4">
+                <label className="block text-sm font-medium">TPA (Opt)</label>
+                <input type="number" step="0.01" {...register("tpa_price", { valueAsNumber: true })} className="w-full border rounded px-3 py-2" />
+              </div>
             </div>
 
             {/* Row 2: Estimated Time */}
             <div className="p-3 bg-blue-50 rounded-md border border-blue-100">
-                <label className="block text-sm font-medium mb-2 flex items-center text-blue-900">
-                    <FaClock className="mr-2" /> Estimated Completion Time
-                </label>
-                <div className="flex gap-4 items-center">
-                    <div className="flex items-center gap-2">
-                        <input 
-                            type="number" 
-                            min="0"
-                            placeholder="0"
-                            {...register("estimatedHours")} 
-                            className="w-20 border rounded px-3 py-2 text-right" 
-                        />
-                        <span className="text-sm text-gray-600">Hours</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <input 
-                            type="number" 
-                            min="0" 
-                            max="59"
-                            placeholder="0"
-                            {...register("estimatedMinutes")} 
-                            className="w-20 border rounded px-3 py-2 text-right" 
-                        />
-                        <span className="text-sm text-gray-600">Minutes</span>
-                    </div>
-                    <div className="text-xs text-gray-500 ml-2 italic">
-                        (Saves as total minutes to database)
-                    </div>
+              <label className="block text-sm font-medium mb-2 flex items-center text-blue-900">
+                <FaClock className="mr-2" /> Estimated Completion Time
+              </label>
+              <div className="flex gap-4 items-center">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    {...register("estimatedHours")}
+                    className="w-20 border rounded px-3 py-2 text-right"
+                  />
+                  <span className="text-sm text-gray-600">Hours</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    placeholder="0"
+                    {...register("estimatedMinutes")}
+                    className="w-20 border rounded px-3 py-2 text-right"
+                  />
+                  <span className="text-sm text-gray-600">Minutes</span>
+                </div>
+                <div className="text-xs text-gray-500 ml-2 italic">
+                  (Saves as total minutes to database)
+                </div>
+              </div>
             </div>
 
             {/* Outsource */}
@@ -727,35 +755,40 @@ const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated 
               </label>
             </div>
 
-            {/* Parameters */}
-            <div>
-              <label className="block text-sm font-medium">Global Parameters</label>
-              {paramFields.fields.map((field, idx) => (
-                <ParameterEditor key={field.id} index={idx} control={control} register={register} errors={errors as FieldErrorsImpl<BloodTestFormInputs>} remove={paramFields.remove} />
-              ))}
-              <button type="button" onClick={() => paramFields.append({ name: "", unit: "", valueType: "text", formula: "", iscomment: false, range: { male: [{ rangeKey: "", rangeValue: "" }], female: [{ rangeKey: "", rangeValue: "" }] }, suggestions: [] } as BloodTestParameter)} className="mt-2 inline-flex items-center px-3 py-1 border border-blue-600 text-blue-600 rounded hover:bg-blue-50">
-                <FaPlus className="mr-1" /> Add Parameter
-              </button>
-            </div>
+            {/* CONDITIONALLY RENDER COMPLEX FIELDS ONLY FOR BLOOD TESTS */}
+            {watch("type") === 'blood_test' && (
+              <>
+                {/* Parameters */}
+                <div className="border-t pt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Global Parameters (Pathology Only)</label>
+                  {paramFields.fields.map((field, idx) => (
+                    <ParameterEditor key={field.id} index={idx} control={control} register={register} errors={errors as FieldErrorsImpl<BloodTestFormInputs>} remove={paramFields.remove} />
+                  ))}
+                  <button type="button" onClick={() => paramFields.append({ name: "", unit: "", valueType: "text", formula: "", iscomment: false, range: { male: [{ rangeKey: "", rangeValue: "" }], female: [{ rangeKey: "", rangeValue: "" }] }, suggestions: [] } as BloodTestParameter)} className="mt-2 inline-flex items-center px-3 py-1 border border-blue-600 text-blue-600 rounded hover:bg-blue-50">
+                    <FaPlus className="mr-1" /> Add Parameter
+                  </button>
+                </div>
 
-            {/* Subheadings */}
-            <div>
-              <label className="block text-sm font-medium">Subheadings</label>
-              <div className="space-y-4">
-                {subheadingFields.fields.map((field, idx) => (
-                  <SubheadingEditor key={field.id} index={idx} control={control} register={register} errors={errors as FieldErrorsImpl<BloodTestFormInputs>} remove={subheadingFields.remove} getValues={getValues} setValue={setValue} />
-                ))}
-              </div>
-              <button type="button" onClick={() => subheadingFields.append({ title: "", parameterNames: [], is100: false } as BloodTestSubheading)} className="mt-2 inline-flex items-center px-3 py-1 border border-blue-600 text-blue-600 rounded hover:bg-blue-50">
-                <FaPlus className="mr-1" /> Add Subheading
-              </button>
-            </div>
+                {/* Subheadings */}
+                <div>
+                  <label className="block text-sm font-medium">Subheadings</label>
+                  <div className="space-y-4">
+                    {subheadingFields.fields.map((field, idx) => (
+                      <SubheadingEditor key={field.id} index={idx} control={control} register={register} errors={errors as FieldErrorsImpl<BloodTestFormInputs>} remove={subheadingFields.remove} getValues={getValues} setValue={setValue} />
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => subheadingFields.append({ title: "", parameterNames: [], is100: false } as BloodTestSubheading)} className="mt-2 inline-flex items-center px-3 py-1 border border-blue-600 text-blue-600 rounded hover:bg-blue-50">
+                    <FaPlus className="mr-1" /> Add Subheading
+                  </button>
+                </div>
 
-            {/* Interpretation */}
-            <div>
-              <label className="block text-sm font-medium">Interpretation</label>
-              <textarea {...register("interpretation")} className="w-full border rounded px-3 py-2 h-24" placeholder="Enter test interpretation..." />
-            </div>
+                {/* Interpretation */}
+                <div>
+                  <label className="block text-sm font-medium">Interpretation</label>
+                  <textarea {...register("interpretation")} className="w-full border rounded px-3 py-2 h-24" placeholder="Enter test interpretation..." />
+                </div>
+              </>
+            )}
           </form>
         )}
       </div>
@@ -779,7 +812,7 @@ const InterpretationModal: React.FC<InterpretationModalProps> = ({ testData, onC
   const [isSaving, setIsSaving] = useState(false);
   const handleSaveInterpretation = async () => {
     if (!testData) return; setIsSaving(true);
-    try { const { error } = await supabase.from("zblood_test").update({ interpretation: interpretationText }).eq("id", testData.id); if (error) throw error; alert("Saved!"); onInterpretationSaved(); } 
+    try { const { error } = await supabase.from("zblood_test").update({ interpretation: interpretationText }).eq("id", testData.id); if (error) throw error; alert("Saved!"); onInterpretationSaved(); }
     catch (error: any) { alert(`Error: ${error.message}`); } finally { setIsSaving(false); }
   };
   return (
@@ -821,7 +854,7 @@ export default function BloodTestsPage() {
       // Added estimated_time_mm to select query
       const { data, error } = await supabase
         .from("zblood_test")
-        .select("id, test_name, price, tpa_price, outsource, parameter, sub_heading, created_at, interpretation, estimated_time_mm")
+        .select("id, test_name, price, tpa_price, outsource, parameter, sub_heading, created_at, interpretation, estimated_time_mm, type")
         .order("test_name")
 
       if (error) throw error
@@ -832,6 +865,7 @@ export default function BloodTestsPage() {
         price: item.price,
         tpa_price: item.tpa_price ?? undefined,
         isOutsource: item.outsource,
+        type: item.type || "blood_test", // Map type
         parameters: item.parameter || [],
         subheadings: (item.sub_heading || []).map((sh: any) => ({
           title: sh.title,
@@ -855,7 +889,7 @@ export default function BloodTestsPage() {
   const openEdit = (test: TestData) => { setSelectedTest(test); setShowModal(true); }
   const openCreate = () => { setSelectedTest(null); setShowModal(true); }
   const closeModal = () => { setShowModal(false); setSelectedTest(null); fetchBloodTests(); }
-  
+
   const openInterpretationModal = (test: TestData) => { setSelectedTestForInterpretation(test); setShowInterpretationModal(true); }
   const closeInterpretationModal = () => { setShowInterpretationModal(false); setSelectedTestForInterpretation(null); fetchBloodTests(); }
 
@@ -895,7 +929,8 @@ export default function BloodTestsPage() {
                       <TableHead>Price (₹)</TableHead>
                       {/* Added Est. Time Column */}
                       <TableHead>Est. Time</TableHead>
-                      <TableHead>Type</TableHead>
+                      <TableHead>Service Type</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Parameters</TableHead>
                       <TableHead>Subheadings</TableHead>
                       <TableHead>Actions</TableHead>
@@ -908,11 +943,12 @@ export default function BloodTestsPage() {
                         <TableCell>₹{test.price}</TableCell>
                         {/* Display Formatted Duration */}
                         <TableCell>
-                             <div className="flex items-center text-gray-600">
-                                <FaClock className="mr-2 text-gray-400 h-3 w-3" />
-                                {formatDuration(test.estimated_time_mm)}
-                             </div>
+                          <div className="flex items-center text-gray-600">
+                            <FaClock className="mr-2 text-gray-400 h-3 w-3" />
+                            {formatDuration(test.estimated_time_mm)}
+                          </div>
                         </TableCell>
+                        <TableCell><Badge variant="outline">{test.type?.replace(/_/g, " ")}</Badge></TableCell>
                         <TableCell><Badge variant={test.isOutsource ? "destructive" : "default"}>{test.isOutsource ? "Outsource" : "InHouse"}</Badge></TableCell>
                         <TableCell>{test.parameters?.length || 0} params</TableCell>
                         <TableCell>{test.subheadings?.length || 0} sections</TableCell>

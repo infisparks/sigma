@@ -208,9 +208,11 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
     const addTestById = (id: number) => {
         const t = bloodRows.find((x: any) => x.id === id);
         if (!t) return;
-        appendBloodTest({ testId: t.id, testName: t.test_name, price: t.price, testType: t.outsource ? "outsource" : "inhospital" });
+        // Include serviceType from the fetched row
+        appendBloodTest({ testId: t.id, testName: t.test_name, price: t.price, testType: t.outsource ? "outsource" : "inhospital", serviceType: t.type || "blood_test" });
         setSearchText("");
     }
+
     const removeAllTests = () => { for (let i = bloodTestFields.length - 1; i >= 0; i--) removeBloodTest(i) }
     const addAllTests = () => { unselectedTests.forEach((t: any) => addTestById(t.id)) }
     const addPaymentEntry = () => {
@@ -279,7 +281,7 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                 name: t.testName,
                 charges: t.price,
                 doctor: data.doctorName,
-                details: t.testType.charAt(0).toUpperCase() + t.testType.slice(1) // InHouse/Outsource
+                details: (t.serviceType || "blood_test").replace(/_/g, " ").toUpperCase() // Display Service Type
             }));
 
             const billData: UniversalBillData = {
@@ -442,7 +444,10 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                                 <Search className="h-4 w-4 absolute right-3 top-2.5 text-gray-400" />
                                 {searchText.trim() && (<ul className="absolute z-10 w-full bg-white border border-gray-300 mt-1 rounded-md max-h-32 overflow-y-auto text-sm shadow-lg">
                                     {unselectedTests.filter((t: any) => t.test_name.toLowerCase().includes(searchText.toLowerCase())).map((t: any) => (
-                                        <li key={t.id} className="px-2 py-1 hover:bg-gray-100 cursor-pointer" onClick={() => addTestById(t.id)}>{t.test_name} - ₹{t.price}</li>))}
+                                        <li key={t.id} className="px-2 py-1 hover:bg-gray-100 cursor-pointer" onClick={() => addTestById(t.id)}>
+                                            <span className="font-semibold text-xs bg-gray-200 px-1 rounded mr-2">{t.type?.replace(/_/g, " ") || "Blood Test"}</span>
+                                            {t.test_name} - ₹{t.price}
+                                        </li>))}
                                 </ul>)}
                             </div>
                         </div>
@@ -451,19 +456,25 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-[50%] py-1 px-2">Test Name</TableHead>
-                                    <TableHead className="w-[20%] py-1 px-2">Price (₹)</TableHead>
-                                    <TableHead className="w-[20%] py-1 px-2">Type</TableHead>
+                                    <TableHead className="w-[40%] py-1 px-2">Test Name</TableHead>
+                                    <TableHead className="w-[15%] py-1 px-2">Price (₹)</TableHead>
+                                    <TableHead className="w-[15%] py-1 px-2">Service Type</TableHead>
+                                    <TableHead className="w-[20%] py-1 px-2">Source</TableHead>
                                     <TableHead className="w-[10%] py-1 px-2" />
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {bloodTestFields.length === 0 ? (<TableRow><TableCell colSpan={4} className="text-center py-2 text-gray-500">No tests selected</TableCell></TableRow>) : (
+                                {bloodTestFields.length === 0 ? (<TableRow><TableCell colSpan={5} className="text-center py-2 text-gray-500">No tests selected</TableCell></TableRow>) : (
                                     bloodTestFields.map((field, idx) => (
                                         <TableRow key={field.id}>
                                             <TableCell className="py-1 px-2">{watch(`bloodTests.${idx}.testName`)}</TableCell>
                                             <TableCell className="py-1 px-2">
                                                 <Input type="number" {...control.register(`bloodTests.${idx}.price` as `bloodTests.${number}.price`, { valueAsNumber: true })} className="h-7 w-20" disabled={(watch(`bloodTests.${idx}.testName`) || "").trim().toLowerCase() !== "histopathology"} />
+                                            </TableCell>
+                                            <TableCell className="py-1 px-2">
+                                                <span className="text-xs font-semibold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
+                                                    {(watch(`bloodTests.${idx}.serviceType` as any) || "blood_test").replace(/_/g, " ")}
+                                                </span>
                                             </TableCell>
                                             <TableCell className="py-1 px-2">
                                                 <Select value={watch(`bloodTests.${idx}.testType`)} onValueChange={(v) => setValue(`bloodTests.${idx}.testType` as `bloodTests.${number}.testType`, v as any)}>

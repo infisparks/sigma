@@ -83,7 +83,7 @@ interface BloodValuesFormInputs {
   tests: TestValueEntry[]
 }
 
-export type IndexedParam = TestParameterValue & { originalIndex: number }
+
 
 /* ───────────── Helpers ───────────── */
 
@@ -149,6 +149,33 @@ const getFormulaDependencies = (formula: string): string[] => {
   const keywords = new Set(["Math", "abs", "round", "floor", "ceil", "min", "max", "log", "pow", "sqrt"])
   return Array.from(new Set(matches?.filter((m) => !keywords.has(m)) || []))
 }
+
+export type IndexedParam = TestParameterValue & { originalIndex: number }
+
+interface TestValueEntry {
+  testId: string
+  testName: string
+  testType: string
+  serviceType?: string // Added serviceType
+  parameters: TestParameterValue[]
+  subheadings?: SubHeading[]
+  selectedParameters?: string[]
+}
+
+// ... (rest of the file until the component render logic) ...
+/* 
+   I need to update the data fetching logic inside useEffect.
+   And I need to update the render loop.
+   Since I cannot replace multiple disparate blocks easily in one go without a huge context, 
+   I will split this into two calls or use a larger block. 
+   
+   The fetch logic is around line 375.
+   The render logic is around line 1180+ (wait, render loop is in `return` statement).
+   Actually the `ParamRow` component usage is inside `BloodValuesForm`.
+   
+   Let's replace the FETCH logic first.
+*/
+
 
 /* ─────────────────── PDF Preview Helper ─────────────────── */
 const getFormDataForPreview = (
@@ -369,10 +396,11 @@ const BloodValuesForm: React.FC = () => {
           const genderKey = patient.gender?.toLowerCase() === "male" ? "male" : "female"
           console.log(`Patient age: ${patient.age} ${patient.age_unit}, calculated age in days: ${ageDays}`)
 
+
           const originalTestNames = (bookedTests || []).map((t: any) => t.testName)
           const { data: bloodTests, error: bloodTestError } = await supabase
             .from("zblood_test")
-            .select(`id, test_name, interpretation, parameter, sub_heading`) // Fetch definition details here
+            .select(`id, test_name, interpretation, parameter, sub_heading, type`) // Added type
             .in("test_name", originalTestNames)
 
           if (bloodTestError) throw new Error(`Failed to fetch blood tests: ${bloodTestError.message}`)
@@ -416,6 +444,7 @@ const BloodValuesForm: React.FC = () => {
                 testId: bt.testId,
                 testName: bt.testName,
                 testType: bt.testType,
+                serviceType: "blood_test", // Default
                 parameters: [],
                 subheadings: [],
                 selectedParameters: bt.selectedParameters,
@@ -486,9 +515,10 @@ const BloodValuesForm: React.FC = () => {
             })
 
             return {
-              testId: testDef.id, // Use the actual ID from zblood_test
+              testId: testDef.id,
               testName: bt.testName,
               testType: bt.testType,
+              serviceType: testDef.type || "blood_test", // Map serviceType
               parameters: params,
               subheadings: subheadings,
               selectedParameters: bt.selectedParameters,
@@ -819,6 +849,10 @@ const BloodValuesForm: React.FC = () => {
             <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
               <div className="flex-1 overflow-y-auto space-y-1.5 pb-1">
                 {testsWatch.map((test, tIdx) => {
+                  const serviceType = (test.serviceType || "blood_test").toLowerCase();
+                  const isBloodTest = serviceType === "blood_test" || serviceType === "blood test";
+
+                  // Outsource Check
                   if (test.testType?.toLowerCase() === "outsource") {
                     return (
                       <Card key={test.testId} className="mb-1.5 border-l-4 border-yellow-500 bg-yellow-50 shadow-sm">
@@ -834,6 +868,25 @@ const BloodValuesForm: React.FC = () => {
                       </Card>
                     )
                   }
+
+                  // Non-Blood Test Check (e.g. Sonography, X-Ray)
+                  if (!isBloodTest) {
+                    return (
+                      <Card key={test.testId} className="mb-1.5 border-l-4 border-purple-500 bg-purple-50 shadow-sm">
+                        <CardContent className="p-2">
+                          <div className="flex items-center gap-1.5 text-purple-800">
+                            <Droplet className="h-3.5 w-3.5" />
+                            <h3 className="font-semibold text-sm">{test.testName} <span className="text-xs font-normal opacity-75">({serviceType.replace(/_/g, " ")})</span></h3>
+                          </div>
+                          <p className="mt-0.5 text-xs text-purple-800">
+                            Results for this service can be uploaded or managed in the report section. Parameter entry is not applicable.
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )
+                  }
+
+                  // Standard Blood Test Render (In-House)
                   const sh = test.subheadings || []
                   const shNames = sh.flatMap((x) => x.parameterNames)
                   const globals = test.parameters

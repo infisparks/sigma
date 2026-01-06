@@ -301,10 +301,12 @@ export default function Dashboard() {
           discountAmount: registrationRow.discount_amount || 0,
           amountPaid: registrationRow.amount_paid || 0,
           doctor_name: registrationRow.doctor_name,
-          bloodTests: (registrationRow.bloodtest_data || []).map((test: any) => ({
-            ...test,
-            testName: String(test.testName || ""),
-          })),
+          bloodTests: (registrationRow.bloodtest_data || [])
+            .map((test: any) => ({
+              ...test,
+              testName: String(test.testName || ""),
+            }))
+            .filter((t: any) => !t.serviceType || t.serviceType === 'blood_test'),
           bloodtest: registrationRow.bloodtest_detail || {},
           sampleCollectedAt: registrationRow.samplecollected_time,
           paymentHistory: registrationRow.amount_paid_history || null,
@@ -323,7 +325,7 @@ export default function Dashboard() {
           bill_no: registrationRow.bill_no || undefined,
           is_enterbydoctor: registrationRow.is_enterbydoctor === true, // Added field
         }
-      })
+      }).filter((r) => r.bloodTests.length > 0)
 
       const sortedRegistrations = mappedData.sort((a, b) => {
         const rankDiff = getRank(a) - getRank(b)
@@ -500,10 +502,13 @@ export default function Dashboard() {
           discountAmount: registrationRow.discount_amount || 0,
           amountPaid: registrationRow.amount_paid || 0,
           doctor_name: registrationRow.doctor_name,
-          bloodTests: (registrationRow.bloodtest_data || []).map((test: any) => ({
-            ...test,
-            testName: String(test.testName || ""),
-          })),
+          bloodTests: (registrationRow.bloodtest_data || [])
+
+            .map((test: any) => ({
+              ...test,
+              testName: String(test.testName || ""),
+            }))
+            .filter((t: any) => !t.serviceType || t.serviceType === 'blood_test'),
           bloodtest: registrationRow.bloodtest_detail || {},
           sampleCollectedAt: registrationRow.samplecollected_time,
           paymentHistory: registrationRow.amount_paid_history || null,
@@ -519,9 +524,9 @@ export default function Dashboard() {
           total_day: patientDetail.total_day,
           title: patientDetail.title,
           tpa: registrationRow.tpa === true,
-          is_enterbydoctor: registrationRow.is_enterbydoctor === true,
+          is_enterbydoctor: registrationRow.is_enterbydoctor === true, // Added field
         }
-      })
+      }).filter((r) => r.bloodTests.length > 0)
 
       const sorted = mappedData.sort((a, b) => {
         const rankDiff = getRank(a) - getRank(b)
