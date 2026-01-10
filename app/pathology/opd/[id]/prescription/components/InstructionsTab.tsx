@@ -8,6 +8,8 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { usePrescription } from "../context/PrescriptionContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 // --- Theme Constants ---
 const ModernTheme = {
@@ -45,6 +47,8 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
     // --- State ---
     const [selectedSubTab, setSelectedSubTab] = useState(0); // 0: Instructions, 1: Investigations, 2: Procedures
     const [searchQuery, setSearchQuery] = useState("");
+
+    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, name: string } | null>(null);
 
     // Master Data (from DB)
     const [masterData, setMasterData] = useState<{
@@ -253,32 +257,94 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
                         // Ideally we remove from main list if shown in suggestions, similar to DiagnosisTab.
                         const isSelected = currentContextList.includes(item);
                         return (
-                            <div
+                            <ItemCard
                                 key={idx}
+                                item={item}
+                                isSelected={isSelected}
                                 onClick={() => toggleSelection(item)}
-                                className={cn(
-                                    "flex items-center gap-2.5 p-2.5 rounded-lg border transition-all cursor-pointer",
-                                    isSelected
-                                        ? "bg-blue-50 border-blue-200 shadow-sm"
-                                        : "bg-white border-slate-200 hover:border-blue-200"
-                                )}
-                            >
-                                <div className={cn(
-                                    "w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors",
-                                    isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300"
-                                )}>
-                                    {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
-                                </div>
-                                <span className={cn(
-                                    "text-[11px] font-bold",
-                                    isSelected ? "text-slate-900" : "text-slate-600"
-                                )}>{item}</span>
-                            </div>
+                                onLongPress={() => isSelected && setDeleteConfirm({ isOpen: true, name: item })}
+                            />
                         );
                     })
                 )}
             </div>
+
+            {deleteConfirm && (
+                <DeleteConfirmation
+                    isOpen={deleteConfirm.isOpen}
+                    itemName={deleteConfirm.name}
+                    onClose={() => setDeleteConfirm(null)}
+                    onConfirm={() => removeAction(deleteConfirm.name)}
+                />
+            )}
         </div>
+    );
+}
+
+function ItemCard({ item, isSelected, onClick, onLongPress }: { item: string, isSelected: boolean, onClick: () => void, onLongPress: () => void }) {
+    const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+    const isLongPress = React.useRef(false);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        isLongPress.current = false;
+        timerRef.current = setTimeout(() => {
+            isLongPress.current = true;
+            onLongPress();
+        }, 500);
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            if (!isLongPress.current && e.type !== 'pointerleave') {
+                onClick();
+            }
+        }
+    };
+
+    return (
+        <div
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            onContextMenu={(e) => e.preventDefault()}
+            className={cn(
+                "flex items-center gap-2.5 p-2.5 rounded-lg border transition-all cursor-pointer select-none touch-none",
+                isSelected
+                    ? "bg-blue-50 border-blue-200 shadow-sm"
+                    : "bg-white border-slate-200 hover:border-blue-200"
+            )}
+        >
+            <div className={cn(
+                "w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors",
+                isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300"
+            )}>
+                {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
+            </div>
+            <span className={cn(
+                "text-[11px] font-bold",
+                isSelected ? "text-slate-900" : "text-slate-600"
+            )}>{item}</span>
+        </div>
+    );
+}
+
+function DeleteConfirmation({ isOpen, onClose, onConfirm, itemName }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, itemName: string }) {
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[300px]">
+                <DialogHeader>
+                    <DialogTitle className="text-sm font-bold">Delete Item?</DialogTitle>
+                </DialogHeader>
+                <div className="py-2">
+                    <p className="text-xs text-slate-500">Do you want to delete <span className="font-bold text-slate-700">"{itemName}"</span> from this prescription?</p>
+                </div>
+                <div className="flex justify-end gap-2 mt-2">
+                    <Button variant="ghost" size="sm" onClick={onClose} className="text-xs h-8">No</Button>
+                    <Button variant="destructive" size="sm" onClick={() => { onConfirm(); onClose(); }} className="text-xs h-8">Yes, Delete</Button>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 

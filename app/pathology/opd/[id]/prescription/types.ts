@@ -71,3 +71,11 @@ export interface PrescriptionEntry {
     note: string;
     timing: TimingSchedule;
 }
+
+export interface Vitals {
+    bp?: string;
+    pulse?: string;
+    weight?: string;
+    spo2?: string;
+    temp?: string;
+}

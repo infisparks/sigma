@@ -44,6 +44,8 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
     const [rawFindings, setRawFindings] = useState<string[]>([]);
     const [isOptionDialogOpen, setIsOptionDialogOpen] = useState(false);
 
+    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, name: string } | null>(null);
+
     // --- Fetch Master Data Only ---
     useEffect(() => {
         const fetchMasterData = async () => {
@@ -230,6 +232,7 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
                                         isSym={isSymptom(detail.name)}
                                         onClick={() => setSelectedSymptomForDetail(detail.name)}
                                         onRemove={() => handleRemoveSymptom(detail.name)}
+                                        onLongPress={() => setDeleteConfirm({ isOpen: true, name: detail.name })}
                                     />
                                 ))}
                             </div>
@@ -296,21 +299,58 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
                 onClose={() => setIsOptionDialogOpen(false)}
                 onSave={addCustomGroup}
             />
+
+            {deleteConfirm && (
+                <DeleteConfirmation
+                    isOpen={deleteConfirm.isOpen}
+                    itemName={deleteConfirm.name}
+                    onClose={() => setDeleteConfirm(null)}
+                    onConfirm={() => handleRemoveSymptom(deleteConfirm.name)}
+                />
+            )}
         </div>
     );
 }
 
 // --- Sub Components ---
 
-function SelectedChip({ detail, isViewing, isSym, onClick, onRemove }: { detail: SymptomDetail, isViewing: boolean, isSym: boolean, onClick: () => void, onRemove: () => void }) {
+function SelectedChip({
+    detail, isViewing, isSym, onClick, onRemove, onLongPress
+}: {
+    detail: SymptomDetail, isViewing: boolean, isSym: boolean,
+    onClick: () => void, onRemove: () => void, onLongPress: () => void
+}) {
     const activeColor = isSym ? "bg-pink-500 border-pink-500 text-white" : "bg-orange-500 border-orange-500 text-white";
     const inactiveColor = isSym ? "bg-pink-50 border-pink-200 text-pink-700" : "bg-orange-50 border-orange-200 text-orange-700";
 
+    const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+    const isLongPress = React.useRef(false);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        isLongPress.current = false;
+        timerRef.current = setTimeout(() => {
+            isLongPress.current = true;
+            onLongPress();
+        }, 500);
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            if (!isLongPress.current && e.type !== 'pointerleave') {
+                onClick();
+            }
+        }
+    };
+
     return (
         <div
-            onClick={onClick}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            onContextMenu={(e) => e.preventDefault()}
             className={cn(
-                "flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg border text-[10px] font-bold cursor-pointer transition-all shadow-sm",
+                "flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg border text-[10px] font-bold cursor-pointer transition-all shadow-sm select-none touch-none",
                 isViewing ? activeColor : inactiveColor
             )}
         >
@@ -319,6 +359,25 @@ function SelectedChip({ detail, isViewing, isSym, onClick, onRemove }: { detail:
                 <X className="w-2.5 h-2.5" />
             </button>
         </div>
+    );
+}
+
+function DeleteConfirmation({ isOpen, onClose, onConfirm, itemName }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, itemName: string }) {
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[300px]">
+                <DialogHeader>
+                    <DialogTitle className="text-sm font-bold">Delete Item?</DialogTitle>
+                </DialogHeader>
+                <div className="py-2">
+                    <p className="text-xs text-slate-500">Do you want to delete <span className="font-bold text-slate-700">"{itemName}"</span> from this prescription?</p>
+                </div>
+                <div className="flex justify-end gap-2 mt-2">
+                    <Button variant="ghost" size="sm" onClick={onClose} className="text-xs h-8">No</Button>
+                    <Button variant="destructive" size="sm" onClick={() => { onConfirm(); onClose(); }} className="text-xs h-8">Yes, Delete</Button>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 

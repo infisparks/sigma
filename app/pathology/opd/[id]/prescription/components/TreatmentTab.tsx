@@ -10,8 +10,11 @@ import { supabase } from "@/lib/supabase";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { usePrescription } from "../context/PrescriptionContext";
 import { PrescriptionEntry, TimingSchedule } from "../types";
+import { useMedicineMaster } from "../hooks/useMedicineMaster";
 
 // --- Theme ---
 const TxTheme = {
@@ -31,7 +34,14 @@ interface TreatmentTabProps {
 
 export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
     // --- Context ---
-    const { medicines, addMedicine, removeMedicine, updateMedicine, setMedicines, suggestedMedicines } = usePrescription();
+    const {
+        medicines, addMedicine, removeMedicine,
+        updateMedicine, setMedicines, suggestedMedicines,
+        isOnline, hasLocalChanges, lastSavedAt
+    } = usePrescription();
+
+    // --- Hooks ---
+    const { searchMedicines, isSyncing, isLoading: masterLoading, addToMaster } = useMedicineMaster();
 
     // --- State ---
     const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
@@ -42,44 +52,15 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
     const [historyList, setHistoryList] = useState<any[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
 
+    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, id: string, name: string } | null>(null);
+
     // Derived
     const selectedMed = medicines.find(m => m.id === selectedMedId);
 
-    // --- Search Logic (Debounced) ---
+    // --- Search Logic (Instant from Cache) ---
     useEffect(() => {
-        const timer = setTimeout(async () => {
-            if (searchQuery.length >= 2) {
-                try {
-                    const { data, error } = await supabase
-                        .from('clinic_medicine')
-                        .select('id, name, medicine:original_medicine_id(type, manufacturer_name)')
-                        .ilike('name', `${searchQuery}%`)
-                        .limit(30);
-
-                    if (data) {
-                        setSearchResults(data);
-                    }
-                } catch (err) {
-                    console.error("Search exception:", err);
-                }
-            } else if (searchQuery.length === 0) {
-                // Load random default medicines
-                try {
-                    const randomOffset = Math.floor(Math.random() * 5000);
-                    const { data } = await supabase
-                        .from('clinic_medicine')
-                        .select('id, name, medicine:original_medicine_id(type, manufacturer_name)')
-                        .range(randomOffset, randomOffset + 29);
-
-                    if (data) setSearchResults(data);
-                } catch (err) {
-                    console.error("Default fetch exception:", err);
-                }
-            }
-        }, 300); // 300ms debounce
-
-        return () => clearTimeout(timer);
-    }, [searchQuery]);
+        setSearchResults(searchMedicines(searchQuery));
+    }, [searchQuery, searchMedicines]);
 
     // --- History Logic ---
     useEffect(() => {
@@ -112,6 +93,11 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
 
     // --- Actions ---
     const handleAddMedicine = (name: string, type: string = 'TAB') => {
+        // Track if this is a new medicine to persist it to master
+        if (isOnline) {
+            addToMaster(name);
+        }
+
         const newMed: PrescriptionEntry = {
             id: Date.now().toString() + Math.random().toString().slice(2),
             name,
@@ -124,7 +110,6 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
         addMedicine(newMed);
         setSelectedMedId(newMed.id);
         setSearchQuery("");
-        // Switch back to search results? No, maybe keep it.
     };
 
     // Wrapper for updateMedicine context action to match local signature if needed
@@ -179,6 +164,40 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto">
+                    {/* Status Bar */}
+                    <div className="px-3 py-1 flex items-center justify-between bg-white border-b border-slate-200">
+                        <div className="flex items-center gap-2.5">
+                            <div className="flex items-center gap-1.5">
+                                <div className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" : "bg-red-500 animate-pulse")} />
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">
+                                    {isOnline ? 'System Online' : 'Offline Mode'}
+                                </span>
+                            </div>
+                            {lastSavedAt && (
+                                <span className="text-[9px] text-slate-400 font-medium">
+                                    Saved at {new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {isSyncing && (
+                                <div className="flex items-center gap-1 bg-blue-50 px-1.5 py-0.5 rounded cursor-default">
+                                    <div className="w-2 h-2 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                    <span className="text-[8px] font-black text-blue-600 uppercase">Indexing Medicines</span>
+                                </div>
+                            )}
+                            {!isOnline && hasLocalChanges && (
+                                <span className="text-[8px] font-black text-amber-600 uppercase px-1.5 py-0.5 bg-amber-50 rounded border border-amber-100">Local Changes Active</span>
+                            )}
+                            {isOnline && !hasLocalChanges && (
+                                <div className="flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                    <Check className="w-2 h-2 text-emerald-600" />
+                                    <span className="text-[8px] font-black text-emerald-600 uppercase">Synced</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     {activeTab === 'current' ? (
                         <div className="flex flex-col h-full">
                             {/* --- Active List (Top - Reduced Height) --- */}
@@ -194,18 +213,13 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                 ) : (
                                     <div className="space-y-1.5">
                                         {medicines.map(med => (
-                                            <div
+                                            <MedicineCard
                                                 key={med.id}
+                                                med={med}
+                                                isSelected={selectedMedId === med.id}
                                                 onClick={() => setSelectedMedId(med.id)}
-                                                className={cn(
-                                                    "p-2 rounded-lg border cursor-pointer transition-all flex items-center gap-2",
-                                                    selectedMedId === med.id ? "bg-blue-50 border-blue-200 shadow-sm" : "bg-white border-slate-200 hover:border-blue-200"
-                                                )}
-                                            >
-                                                <div className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-500">{med.type}</div>
-                                                <div className="flex-1 font-bold text-[11px] text-slate-900 leading-tight">{med.name}</div>
-                                                {selectedMedId === med.id && <Edit3 className="w-3 h-3 text-blue-600 shrink-0" />}
-                                            </div>
+                                                onLongPress={() => setDeleteConfirm({ isOpen: true, id: med.id, name: med.name })}
+                                            />
                                         ))}
                                     </div>
                                 )}
@@ -258,14 +272,14 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
 
                                         {/* Search Results */}
                                         {searchResults
-                                            .filter(m => !medicines.some(added => added.name === m.name)) // Filter out added
+                                            .filter(m => !medicines.some(added => added.name === (m.medicine_name || m.name))) // Filter out added
                                             .map((m, i) => (
                                                 <button
                                                     key={i}
-                                                    onClick={() => handleAddMedicine(m.name, m.medicine?.type || 'TAB')}
+                                                    onClick={() => handleAddMedicine(m.medicine_name || m.name, m.medicine?.type || 'TAB')}
                                                     className="px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[10px] font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm text-left max-w-full"
                                                 >
-                                                    <span className="block font-bold leading-tight">{m.name}</span>
+                                                    <span className="block font-bold leading-tight">{m.medicine_name || m.name}</span>
                                                     {m.medicine?.manufacturer_name && <span className="block text-[8px] text-slate-400 leading-tight">{m.medicine.manufacturer_name}</span>}
                                                 </button>
                                             ))}
@@ -441,6 +455,15 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                     </div>
                 )}
             </div>
+
+            {deleteConfirm && (
+                <DeleteConfirmation
+                    isOpen={deleteConfirm.isOpen}
+                    itemName={deleteConfirm.name}
+                    onClose={() => setDeleteConfirm(null)}
+                    onConfirm={() => handleRemoveMedicine(deleteConfirm.id)}
+                />
+            )}
         </div>
     );
 }
@@ -453,6 +476,64 @@ function SectionHeader({ title, icon: Icon }: { title: string, icon: any }) {
             <Icon className="w-3 h-3" />
             <span className="text-[9px] font-black tracking-widest uppercase">{title}</span>
         </div>
+    );
+}
+
+function MedicineCard({ med, isSelected, onClick, onLongPress }: { med: any, isSelected: boolean, onClick: () => void, onLongPress: () => void }) {
+    const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+    const isLongPress = React.useRef(false);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        isLongPress.current = false;
+        timerRef.current = setTimeout(() => {
+            isLongPress.current = true;
+            onLongPress();
+        }, 500);
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            if (!isLongPress.current && e.type !== 'pointerleave') {
+                onClick();
+            }
+        }
+    };
+
+    return (
+        <div
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            onContextMenu={(e) => e.preventDefault()}
+            className={cn(
+                "p-2 rounded-lg border cursor-pointer transition-all flex items-center gap-2 select-none touch-none",
+                isSelected ? "bg-blue-50 border-blue-200 shadow-sm" : "bg-white border-slate-200 hover:border-blue-200"
+            )}
+        >
+            <div className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-500">{med.type}</div>
+            <div className="flex-1 font-bold text-[11px] text-slate-900 leading-tight">{med.name}</div>
+            {isSelected && <Edit3 className="w-3 h-3 text-blue-600 shrink-0" />}
+        </div>
+    );
+}
+
+function DeleteConfirmation({ isOpen, onClose, onConfirm, itemName }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, itemName: string }) {
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[300px]">
+                <DialogHeader>
+                    <DialogTitle className="text-sm font-bold">Delete Item?</DialogTitle>
+                </DialogHeader>
+                <div className="py-2">
+                    <p className="text-xs text-slate-500">Do you want to delete <span className="font-bold text-slate-700">"{itemName}"</span> from this prescription?</p>
+                </div>
+                <div className="flex justify-end gap-2 mt-2">
+                    <Button variant="ghost" size="sm" onClick={onClose} className="text-xs h-8">No</Button>
+                    <Button variant="destructive" size="sm" onClick={() => { onConfirm(); onClose(); }} className="text-xs h-8">Yes, Delete</Button>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 

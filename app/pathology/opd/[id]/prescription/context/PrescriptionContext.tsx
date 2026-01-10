@@ -6,16 +6,18 @@ import {
     SymptomDetail,
     DiagnosisDetail,
     PrescriptionEntry,
-    TimingSchedule
+    TimingSchedule,
+    Vitals
 } from '../types';
 
-// --- State Shape ---
 interface PrescriptionState {
     // Meta
     isLoading: boolean;
     isSaving: boolean;
     isFinalized: boolean; // From DB
     lastSavedAt: string | null;
+    isOnline: boolean;
+    hasLocalChanges: boolean;
 
     // Data - Clinical
     symptoms: Record<string, SymptomDetail>;
@@ -32,6 +34,7 @@ interface PrescriptionState {
     followUpDuration: string;
     followUpNote: string;
     referringDoctor: string;
+    vitals: Vitals;
     // AI Suggestions
     suggestedDiagnoses: string[];
     suggestedMedicines: string[];
@@ -95,6 +98,9 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
         isSaving: false,
         isFinalized: false,
         lastSavedAt: null,
+        isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+        hasLocalChanges: false,
+        vitals: {},
         symptoms: {},
         diagnoses: {},
         medicines: [],
@@ -111,6 +117,55 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
         suggestedInstructions: [],
         suggestedProcedures: [],
     });
+
+    const STORAGE_KEY = `prescription_draft_${opdId}`;
+
+    // --- Offline Connectivity ---
+    useEffect(() => {
+        const handleOnline = () => setState(prev => ({ ...prev, isOnline: true }));
+        const handleOffline = () => setState(prev => ({ ...prev, isOnline: false }));
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
+
+    // --- Local Storage Persistence ---
+    // Save to local storage on every change
+    useEffect(() => {
+        if (state.isLoading || state.isFinalized) return;
+
+        const timer = setTimeout(() => {
+            const dataToSave = {
+                symptoms: state.symptoms,
+                diagnoses: state.diagnoses,
+                medicines: state.medicines,
+                instructions: state.instructions,
+                investigations: state.investigations,
+                procedures: state.procedures,
+                clinicalNote: state.clinicalNote,
+                followUpDuration: state.followUpDuration,
+                followUpNote: state.followUpNote,
+                referringDoctor: state.referringDoctor,
+                updatedAt: new Date().toISOString()
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+            setState(prev => ({
+                ...prev,
+                hasLocalChanges: true,
+                lastSavedAt: dataToSave.updatedAt
+            }));
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [
+        state.symptoms, state.diagnoses, state.medicines,
+        state.instructions, state.investigations, state.procedures,
+        state.clinicalNote, state.followUpDuration, state.followUpNote,
+        state.referringDoctor, state.isLoading, state.isFinalized
+    ]);
 
     // --- AI Prediction Engine ---
     useEffect(() => {
@@ -200,6 +255,31 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
     // --- Load Data ---
     const loadData = async () => {
         setState(prev => ({ ...prev, isLoading: true }));
+
+        // 1. Try Load from Local Storage first for instant UI
+        const savedDraft = localStorage.getItem(STORAGE_KEY);
+        if (savedDraft) {
+            try {
+                const parsed = JSON.parse(savedDraft);
+                setState(prev => ({
+                    ...prev,
+                    symptoms: parsed.symptoms || {},
+                    diagnoses: parsed.diagnoses || {},
+                    medicines: parsed.medicines || [],
+                    instructions: parsed.instructions || [],
+                    investigations: parsed.investigations || [],
+                    procedures: parsed.procedures || [],
+                    clinicalNote: parsed.clinicalNote || "",
+                    followUpDuration: parsed.followUpDuration || "",
+                    followUpNote: parsed.followUpNote || "",
+                    referringDoctor: parsed.referringDoctor || "",
+                    vitals: parsed.vitals || {},
+                }));
+            } catch (e) {
+                console.error("Failed to parse local draft", e);
+            }
+        }
+
         try {
             const { data, error } = await supabase
                 .from('opd_registration')
@@ -210,22 +290,63 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
             if (error) throw error;
 
             if (data) {
-                setState(prev => ({
-                    ...prev,
-                    isFinalized: data.is_finalized || false,
-                    lastSavedAt: data.finalized_at || null,
-                    symptoms: normalizeListToRecord(data.symptoms_list_json),
-                    diagnoses: normalizeListToRecord(data.diagnosis_list_json),
-                    medicines: data.rx_list_json || [],
-                    instructions: data.instructions_list_json || [],
-                    investigations: data.investigations_list_json || [],
-                    procedures: data.procedures_list_json || [],
-                    clinicalNote: data.clinical_notes || "",
-                    followUpDuration: data.follow_up_duration || "",
-                    followUpNote: data.follow_up_note || "",
-                    referringDoctor: data.referring_doctor_name || "",
-                    isLoading: false
-                }));
+                // If it's finalized, DB data ALWAYS wins and we clear local draft
+                if (data.is_finalized) {
+                    localStorage.removeItem(STORAGE_KEY);
+                    setState(prev => ({
+                        ...prev,
+                        isFinalized: true,
+                        lastSavedAt: data.finalized_at || null,
+                        symptoms: normalizeListToRecord(data.symptoms_list_json),
+                        diagnoses: normalizeListToRecord(data.diagnosis_list_json),
+                        medicines: data.rx_list_json || [],
+                        instructions: data.instructions_list_json || [],
+                        investigations: data.investigations_list_json || [],
+                        procedures: data.procedures_list_json || [],
+                        clinicalNote: data.clinical_notes || "",
+                        followUpNote: data.follow_up_note || "",
+                        referringDoctor: data.referring_doctor_name || "",
+                        vitals: {
+                            bp: data.bp,
+                            pulse: data.pulse,
+                            weight: data.weight,
+                            spo2: data.spo2,
+                            temp: data.temp
+                        },
+                        isLoading: false,
+                        hasLocalChanges: false
+                    }));
+                } else {
+                    // If not finalized, we should decide whether to overwrite local draft.
+                    // For "Industry Grade", usually DB wins but we can be smart.
+                    // If DB has data and local doesn't, DB wins.
+                    // If local has data, maybe keep local? 
+                    // Let's assume DB is the source of truth if it has been updated recently.
+                    setState(prev => ({
+                        ...prev,
+                        isFinalized: false,
+                        // Merging logic: prefer local if we just loaded it, unless DB is more comprehensive?
+                        // Let's keep the local draft if it exists, otherwise use DB.
+                        symptoms: Object.keys(prev.symptoms).length > 0 ? prev.symptoms : normalizeListToRecord(data.symptoms_list_json),
+                        diagnoses: Object.keys(prev.diagnoses).length > 0 ? prev.diagnoses : normalizeListToRecord(data.diagnosis_list_json),
+                        medicines: prev.medicines.length > 0 ? prev.medicines : (data.rx_list_json || []),
+                        instructions: prev.instructions.length > 0 ? prev.instructions : (data.instructions_list_json || []),
+                        investigations: prev.investigations.length > 0 ? prev.investigations : (data.investigations_list_json || []),
+                        procedures: prev.procedures.length > 0 ? prev.procedures : (data.procedures_list_json || []),
+                        clinicalNote: prev.clinicalNote || data.clinical_notes || "",
+                        followUpDuration: prev.followUpDuration || data.follow_up_duration || "",
+                        followUpNote: prev.followUpNote || data.follow_up_note || "",
+                        referringDoctor: prev.referringDoctor || data.referring_doctor_name || "",
+                        vitals: Object.keys(prev.vitals).length > 0 ? prev.vitals : {
+                            bp: data.bp,
+                            pulse: data.pulse,
+                            weight: data.weight,
+                            spo2: data.spo2,
+                            temp: data.temp
+                        },
+                        isLoading: false
+                    }));
+                }
             }
         } catch (e) {
             console.error("Error loading prescription data:", e);
@@ -401,7 +522,9 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
                 console.error("AI Learning V2 failed:", aiError);
             }
 
-            setState(prev => ({ ...prev, isFinalized: true, isSaving: false }));
+            // Clear local storage on successful finalize
+            localStorage.removeItem(STORAGE_KEY);
+            setState(prev => ({ ...prev, isFinalized: true, isSaving: false, hasLocalChanges: false }));
 
             // Reload to sync backend state (optional but good practice)
             await loadData();

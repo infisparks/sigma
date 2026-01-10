@@ -40,10 +40,10 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
         instructions, investigations, procedures,
         clinicalNote, setClinicalNote,
         followUpDuration, setFollowUp,
-        followUpNote, // context setter setFollowUp sets both duration and note
+        followUpNote, vitals,
         referringDoctor, setReferringDoctor,
         saveAndFinalize: contextSaveAndFinalize,
-        isLoading, isSaving
+        isLoading, isSaving, isOnline, hasLocalChanges
     } = usePrescription();
 
     // --- State ---
@@ -99,6 +99,11 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
 
     // --- Actions ---
     const handleSaveAndFinalize = async () => {
+        if (!isOnline) {
+            toast.error("You are offline. Prescription is saved locally and will sync when you are back online.");
+            return;
+        }
+
         try {
             // 1. Save Global Settings
             const settingsPayload = {
@@ -106,23 +111,21 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                 margin_top: margins.top,
                 margin_bottom: margins.bottom
             };
-            await supabase
+
+            // Background settings save - don't let it block principal save
+            supabase
                 .from('opd_datasets')
                 .update({ datajson: settingsPayload, updated_at: new Date().toISOString() })
-                .eq('dataname', 'report_settings');
+                .eq('dataname', 'report_settings')
+                .then(({ error }) => { if (error) console.error("Settings save error", error) });
 
             // 2. Finalize Context
-            // Note: Context state is already updated via inputs (optimistic/controlled)
-            // But we should ensure we push any print-specific metadata if needed. 
-            // The user wanted "Use advanced architecture", context handles the data. 
-            // We just trigger the save.
             await contextSaveAndFinalize();
 
-            // Context reload only sets "isFinalized". Reloading page is often safer for "Receipt" mode.
             toast.success("Prescription Finalized & Saved!");
-
         } catch (e) {
             console.error("Save failed", e);
+            toast.error("Failed to finalize. Please check your connection.");
         }
     };
 
@@ -151,13 +154,32 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-5">
                     {/* Main Action */}
-                    <Button
-                        onClick={handleSaveAndFinalize}
-                        disabled={isSaving}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] uppercase tracking-widest py-5"
-                    >
-                        {isSaving ? "Saving..." : "Save & Finalize"}
-                    </Button>
+                    <div className="space-y-2">
+                        <Button
+                            onClick={handleSaveAndFinalize}
+                            disabled={isSaving || (isOnline === false && hasLocalChanges === false)}
+                            className={cn(
+                                "w-full font-black text-[11px] uppercase tracking-widest py-6 shadow-lg transition-all",
+                                isOnline ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-slate-800 text-slate-400 cursor-not-allowed"
+                            )}
+                        >
+                            {!isOnline ? (
+                                <div className="flex flex-col items-center">
+                                    <span>Offline Mode</span>
+                                    <span className="text-[8px] opacity-60">Waiting for Network</span>
+                                </div>
+                            ) : isSaving ? (
+                                "Finalizing..."
+                            ) : (
+                                "Save & Finalize"
+                            )}
+                        </Button>
+                        {!isOnline && (
+                            <p className="text-[9px] text-amber-600 font-bold text-center bg-amber-50 py-1 rounded border border-amber-100 animate-pulse">
+                                Draft Saved Locally
+                            </p>
+                        )}
+                    </div>
 
                     <div className="h-px bg-slate-100" />
 
@@ -299,6 +321,42 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                             <p className="text-xs text-slate-600 mt-1">{new Date().toLocaleDateString()}</p>
                         </div>
                     </div>
+
+                    {/* Vitals */}
+                    {(vitals.bp || vitals.pulse || vitals.temp || vitals.weight || vitals.spo2) && (
+                        <div className="flex flex-wrap gap-4 mb-6 py-2 border-y border-slate-100 bg-slate-50/50 px-3">
+                            {vitals.bp && (
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">BP</span>
+                                    <span className="text-[11px] font-bold text-slate-800">{vitals.bp} <span className="text-[9px] font-normal text-slate-500">mmHg</span></span>
+                                </div>
+                            )}
+                            {vitals.pulse && (
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Pulse</span>
+                                    <span className="text-[11px] font-bold text-slate-800">{vitals.pulse} <span className="text-[9px] font-normal text-slate-500">bpm</span></span>
+                                </div>
+                            )}
+                            {vitals.temp && (
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Temp</span>
+                                    <span className="text-[11px] font-bold text-slate-800">{vitals.temp} <span className="text-[9px] font-normal text-slate-500">°F</span></span>
+                                </div>
+                            )}
+                            {vitals.spo2 && (
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">SpO2</span>
+                                    <span className="text-[11px] font-bold text-slate-800">{vitals.spo2} <span className="text-[9px] font-normal text-slate-500">%</span></span>
+                                </div>
+                            )}
+                            {vitals.weight && (
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Weight</span>
+                                    <span className="text-[11px] font-bold text-slate-800">{vitals.weight} <span className="text-[9px] font-normal text-slate-500">kg</span></span>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
 
 
