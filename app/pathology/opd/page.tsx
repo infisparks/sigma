@@ -579,7 +579,11 @@ export default function OPDDashboard() {
                                     {displayedRecords.map((r) => {
                                         const due = r.total_fees - r.amount_paid;
                                         return (
-                                            <TableRow key={r.id} className="hover:bg-slate-50/50">
+                                            <TableRow
+                                                key={r.id}
+                                                className="hover:bg-slate-50/50 cursor-pointer transition-colors"
+                                                onClick={() => router.push(`/pathology/opd/${r.id}/prescription`)}
+                                            >
                                                 <TableCell className="font-medium">
                                                     <span className="text-slate-700">{r.uhid}</span>
                                                 </TableCell>
@@ -612,14 +616,14 @@ export default function OPDDashboard() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex gap-1 justify-end">
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-emerald-600" onClick={() => router.push(`/pathology/opd/${r.id}/prescription`)}>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-emerald-600" onClick={(e) => { e.stopPropagation(); router.push(`/pathology/opd/${r.id}/prescription`); }}>
                                                             <Pill className="h-4 w-4" />
                                                         </Button>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => { setSelectedRecordId(r.id); setIsModalOpen(true); }}>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); setSelectedRecordId(r.id); setIsModalOpen(true); }}>
                                                             <FilePenLine className="h-4 w-4" />
                                                         </Button>
                                                         {role === 'admin' && (
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteRecord(r)}>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={(e) => { e.stopPropagation(); handleDeleteRecord(r); }}>
                                                                 <Trash2 className="h-4 w-4" />
                                                             </Button>
                                                         )}
