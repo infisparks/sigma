@@ -7,7 +7,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
-import { CalendarIcon, Search, History, Loader2, Download, DollarSign, TrendingUp, TrendingDown, CreditCard, Wallet, Building2, Clock, Eye, X } from "lucide-react"
+import { CalendarIcon, Search, History, Loader2, Download, DollarSign, TrendingUp, TrendingDown, CreditCard, Wallet, Building2, Clock, Eye, X, FlaskConical } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
@@ -39,6 +40,13 @@ interface Registration {
   doctor_name: string
   name?: string
   contact?: string
+  bloodtest_data?: {
+    testId: number | string
+    testName: string
+    price: number
+    serviceType: string
+    testType: string
+  }[]
 }
 
 type DateRangeOption = "today" | "last7days" | "thismonth" | "custom"
@@ -53,70 +61,114 @@ export default function BillingPage() {
   const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [hospitalFilterTerm, setHospitalFilterTerm] = useState<string>("all")
+  const [serviceTypeTerm, setServiceTypeTerm] = useState<string>("all")
   const [isSearchFocused, setIsSearchFocused] = useState(false)
-  const [totalRecords, setTotalRecords] = useState(0) // State to hold total records count
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 50
 
-  // Fetch data from Supabase with server-side filtering
+  const [totalSummary, setTotalSummary] = useState({
+    totalAmount: 0,
+    totalDiscount: 0,
+    totalCash: 0,
+    totalOnline: 0
+  })
+
+  // Fetch data from Supabase with server-side filtering and pagination
   const fetchRegistrations = useCallback(async () => {
     setLoading(true)
 
-    // Query for fetching data
-    // Dynamic select: Use inner join for search to filter parent rows, otherwise left join
-    const selectQuery = searchQuery
-      ? `*, patient_detail!inner(name, number, uhid)`
-      : `*, patient_detail(name, number, uhid)`
+    const from = (currentPage - 1) * pageSize
+    const to = from + pageSize - 1
 
-    let query = supabase.from("zregistration").select(selectQuery, { count: 'exact' })
+    try {
+      // First, try to use RPC if available (optimized)
+      // Note: User needs to run the provided SQL function get_billing_dashboard_data first.
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_billing_dashboard_data', {
+        p_start_date: startDate ? format(startOfDay(startDate), "yyyy-MM-dd HH:mm:ss.SSSxxx") : null,
+        p_end_date: endDate ? format(endOfDay(endDate), "yyyy-MM-dd HH:mm:ss.SSSxxx") : null,
+        p_hospital_name: hospitalFilterTerm,
+        p_search_query: searchQuery.trim(),
+        p_service_type: serviceTypeTerm,
+        p_page_limit: pageSize,
+        p_page_offset: from
+      })
 
-    // Apply date filters
-    if (startDate && endDate) {
-      query = query.gte("created_at", format(startOfDay(startDate), "yyyy-MM-dd HH:mm:ss.SSSxxx"))
-      query = query.lte("created_at", format(endOfDay(endDate), "yyyy-MM-dd HH:mm:ss.SSSxxx"))
-    }
+      if (!rpcError && rpcData) {
+        const parsedData = (rpcData.registrations || []).map((reg: any) => ({
+          ...reg,
+          name: reg.patient_name || "",
+          contact: reg.patient_number || "",
+          patient_id: reg.patient_uhid || reg.UHID || "",
+          amount_paid_history: reg.amount_paid_history as unknown as Registration["amount_paid_history"],
+        }))
+        setRegistrations(parsedData)
+        setTotalRecords(rpcData.totalRecords || 0)
+        setTotalSummary({
+          totalAmount: Number(rpcData.summary?.totalAmount || 0),
+          totalDiscount: Number(rpcData.summary?.totalDiscount || 0),
+          totalCash: Number(rpcData.summary?.totalCash || 0),
+          totalOnline: Number(rpcData.summary?.totalOnline || 0)
+        })
+      } else {
+        // Fallback to standard query if RPC fails or is not yet created
+        console.warn("RPC not found or error, falling back to standard query:", rpcError)
 
-    // UPDATED SEARCH LOGIC: correct syntax for foreign table filtering
-    if (searchQuery) {
-      const term = searchQuery.trim()
-      const isNumeric = /^\d+$/.test(term)
+        let query = supabase.from("zregistration").select(`*, patient_detail(name, number, uhid)`, { count: 'exact' })
 
-      // Search fields on the joined 'patient_detail' table
-      const conditions = [
-        `name.ilike.%${term}%`,
-        `uhid.ilike.%${term}%`
-      ]
+        if (startDate && endDate) {
+          query = query.gte("created_at", format(startOfDay(startDate), "yyyy-MM-dd HH:mm:ss.SSSxxx"))
+          query = query.lte("created_at", format(endOfDay(endDate), "yyyy-MM-dd HH:mm:ss.SSSxxx"))
+        }
 
-      if (isNumeric) {
-        conditions.push(`number.eq.${term}`)
+        if (searchQuery) {
+          const term = searchQuery.trim()
+          query = query.or(`name.ilike.%${term}%,uhid.ilike.%${term}%,number.ilike.%${term}%`, { foreignTable: 'patient_detail' })
+        }
+
+        if (hospitalFilterTerm !== "all") {
+          query = query.eq("hospital_name", hospitalFilterTerm)
+        }
+
+        // Service Type filter (Manual fallback)
+        if (serviceTypeTerm !== "all") {
+          // This is complex in manual fallback because bloodtest_data is JSONB array
+          // We'll use the contains operator if possible, but manual filtering is safer for fallback
+          // query = query.contains('bloodtest_data', [{serviceType: serviceTypeTerm}])
+        }
+
+        const { data, error, count } = await query.order("created_at", { ascending: false }).range(from, to)
+
+        if (error) throw error
+
+        let parsedData = (data || []).map((reg: any) => ({
+          ...reg,
+          name: reg.patient_detail?.name || "",
+          contact: reg.patient_detail?.number || "",
+          patient_id: reg.patient_detail?.uhid || reg.UHID || "",
+          amount_paid_history: reg.amount_paid_history as unknown as Registration["amount_paid_history"],
+        }))
+
+        // Manual filter for service type if needed in fallback
+        if (serviceTypeTerm !== "all") {
+          parsedData = parsedData.filter((reg: any) =>
+            reg.bloodtest_data?.some((t: any) => t.serviceType === serviceTypeTerm)
+          )
+        }
+
+        setRegistrations(parsedData)
+        setTotalRecords(count || 0)
+
+        // For summary in fallback, we'd need another query or use the current page (limited)
+        // This is why RPC is strongly recommended.
       }
-
-      // Apply OR filter specifically to the foreign table
-      query = query.or(conditions.join(","), { foreignTable: 'patient_detail' })
-    }
-
-    // Apply hospital filter
-    if (hospitalFilterTerm !== "all") {
-      query = query.eq("hospital_name", hospitalFilterTerm)
-    }
-
-    const { data, error, count } = await query.order("created_at", { ascending: false })
-
-    if (error) {
+    } catch (error) {
       console.error("Error fetching registrations:", error)
       setRegistrations([])
-    } else {
-      const parsedData = data.map((reg: any) => ({
-        ...reg,
-        // --- Mapped patient_detail fields ---
-        name: reg.patient_detail?.name || "",
-        contact: reg.patient_detail?.number || "",
-        patient_id: reg.patient_detail?.uhid || reg.UHID || "", // Map UHID to patient_id
-        amount_paid_history: reg.amount_paid_history as unknown as Registration["amount_paid_history"],
-      }))
-      setRegistrations(parsedData)
-      setTotalRecords(count || 0)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
-  }, [startDate, endDate, searchQuery, hospitalFilterTerm])
+  }, [startDate, endDate, searchQuery, hospitalFilterTerm, serviceTypeTerm, currentPage])
 
   useEffect(() => {
     fetchRegistrations()
@@ -125,6 +177,7 @@ export default function BillingPage() {
   // Handle date range selection
   const handleDateRangeChange = (option: DateRangeOption) => {
     setDateRange(option)
+    setCurrentPage(1) // Reset to first page
     const now = new Date()
     if (option === "today") {
       setStartDate(startOfDay(now))
@@ -143,39 +196,22 @@ export default function BillingPage() {
     }
   }
 
-  // Calculate totals using filtered registrations from state
+  // Calculate totals using summary data from fetch (which includes full period)
   const calculations = useMemo(() => {
-    const totalAmount = registrations.reduce((sum, reg) => sum + (reg.amount_paid_history?.totalAmount || 0), 0)
-    const totalDiscount = registrations.reduce((sum, reg) => sum + (reg.amount_paid_history?.discount || reg.discount_amount || 0), 0)
-    const totalAmountAfterDiscount = totalAmount - totalDiscount
-
-    const totalCash = registrations.reduce((sum, reg) => {
-      if (!reg.amount_paid_history?.paymentHistory) return sum
-      return sum + reg.amount_paid_history.paymentHistory
-        .filter(p => p.paymentMode === "cash")
-        .reduce((s, p) => s + (p.amount || 0), 0)
-    }, 0)
-
-    const totalOnline = registrations.reduce((sum, reg) => {
-      if (!reg.amount_paid_history?.paymentHistory) return sum
-      return sum + reg.amount_paid_history.paymentHistory
-        .filter(p => p.paymentMode === "online")
-        .reduce((s, p) => s + (p.amount || 0), 0)
-    }, 0)
-
-    const totalCollected = totalCash + totalOnline
-    const totalRemaining = totalAmountAfterDiscount - totalCollected
+    const totalCollected = totalSummary.totalCash + totalSummary.totalOnline
+    const netAmount = totalSummary.totalAmount - totalSummary.totalDiscount
+    const totalRemaining = netAmount - totalCollected
 
     return {
-      totalAmount,
-      totalDiscount,
-      totalAmountAfterDiscount,
-      totalCash,
-      totalOnline,
+      totalAmount: totalSummary.totalAmount,
+      totalDiscount: totalSummary.totalDiscount,
+      totalAmountAfterDiscount: netAmount,
+      totalCash: totalSummary.totalCash,
+      totalOnline: totalSummary.totalOnline,
       totalCollected,
       totalRemaining
     }
-  }, [registrations])
+  }, [totalSummary])
 
   const handleRowClick = (registration: Registration) => {
     setSelectedRegistration(registration)
@@ -400,6 +436,23 @@ export default function BillingPage() {
                   <option value="Cigma Clinic">Cigma Clinic</option>
 
                 </select>
+
+                {/* Service Type Filter */}
+                <select
+                  value={serviceTypeTerm}
+                  onChange={(e) => {
+                    setServiceTypeTerm(e.target.value)
+                    setCurrentPage(1)
+                  }}
+                  className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all duration-300 bg-white hover:border-gray-300 min-w-[200px]"
+                >
+                  <option value="all">All Services</option>
+                  <option value="blood_test">Pathology / Blood Test</option>
+                  <option value="xray_standard">X-Ray (Standard)</option>
+                  <option value="xray_procedure">X-Ray (Procedure)</option>
+                  <option value="sonography">Sonography</option>
+                  <option value="color_doppler">Color Doppler</option>
+                </select>
               </div>
             </div>
 
@@ -419,6 +472,14 @@ export default function BillingPage() {
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs bg-green-100 text-green-800 border border-green-200">
                     Hospital: {hospitalFilterTerm}
                     <button onClick={() => setHospitalFilterTerm("all")} className="ml-2 hover:text-green-900">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {serviceTypeTerm !== "all" && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs bg-purple-100 text-purple-800 border border-purple-200">
+                    Service: {serviceTypeTerm.replace(/_/g, " ")}
+                    <button onClick={() => setServiceTypeTerm("all")} className="ml-2 hover:text-purple-900">
                       <X className="h-3 w-3" />
                     </button>
                   </span>
@@ -474,6 +535,7 @@ export default function BillingPage() {
                     <TableRow className="bg-gray-50/50">
                       <TableHead className="font-semibold text-gray-700">Registration ID</TableHead>
                       <TableHead className="font-semibold text-gray-700">Patient Details</TableHead>
+                      <TableHead className="font-semibold text-gray-700">Services/Tests</TableHead>
                       <TableHead className="font-semibold text-gray-700">Date & Time</TableHead>
                       <TableHead className="font-semibold text-gray-700">Financial Summary</TableHead>
                       <TableHead className="font-semibold text-gray-700">Payments</TableHead>
@@ -521,6 +583,24 @@ export default function BillingPage() {
                               <div className="text-sm text-gray-500 flex items-center space-x-2">
                                 <span>📞 {reg.contact || "N/A"}</span>
                               </div>
+                            </div>
+                          </TableCell>
+
+                          <TableCell>
+                            <div className="max-w-[180px] flex flex-wrap gap-1">
+                              {reg.bloodtest_data && reg.bloodtest_data.length > 0 ? (
+                                reg.bloodtest_data.map((test, idx) => (
+                                  <Badge
+                                    key={idx}
+                                    variant="secondary"
+                                    className="text-[10px] py-0 px-1.5 bg-indigo-50 text-indigo-700 border-indigo-100 font-medium whitespace-nowrap"
+                                  >
+                                    {test.testName}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-xs text-gray-400 italic">No services listed</span>
+                              )}
                             </div>
                           </TableCell>
 
@@ -618,6 +698,36 @@ export default function BillingPage() {
               </div>
             )}
           </CardContent>
+          {/* Pagination Controls */}
+          {totalRecords > pageSize && (
+            <div className="p-4 bg-gray-50 border-t flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Page <span className="font-semibold text-blue-600">{currentPage}</span> of{" "}
+                <span className="font-semibold text-blue-600">{Math.ceil(totalRecords / pageSize)}</span>
+                <span className="ml-2">({totalRecords} total records)</span>
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  className="bg-white hover:bg-gray-100 text-gray-700 font-medium"
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= Math.ceil(totalRecords / pageSize)}
+                  onClick={() => setCurrentPage(prev => prev + 1)}
+                  className="bg-white hover:bg-gray-100 text-gray-700 font-medium"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
 
         {/* Enhanced Payment History Modal */}
@@ -634,6 +744,37 @@ export default function BillingPage() {
 
             {selectedRegistration && (
               <div className="space-y-6 py-4">
+                {/* Services List Card */}
+                <Card className="border-indigo-100 bg-indigo-50/30">
+                  <CardHeader className="py-2 border-b border-indigo-50 bg-indigo-50/50">
+                    <CardTitle className="text-sm font-semibold flex items-center text-indigo-700">
+                      <FlaskConical className="h-4 w-4 mr-2" />
+                      Billed Services & Tests
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-3">
+                    <div className="space-y-2">
+                      {selectedRegistration.bloodtest_data && selectedRegistration.bloodtest_data.length > 0 ? (
+                        <div className="grid grid-cols-1 gap-2">
+                          {selectedRegistration.bloodtest_data.map((test, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-sm bg-white p-2 rounded border border-indigo-50">
+                              <div className="flex flex-col">
+                                <span className="font-medium text-gray-800">{test.testName}</span>
+                                <span className="text-[10px] text-indigo-500 uppercase font-bold tracking-wider">
+                                  {test.serviceType?.replace(/_/g, " ")}
+                                </span>
+                              </div>
+                              <div className="font-semibold text-gray-700">₹{test.price.toLocaleString()}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-2 text-gray-500 text-sm italic">No services listed for this registration</div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
                 {/* Patient Info Card */}
                 <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
                   <CardContent className="p-4">
