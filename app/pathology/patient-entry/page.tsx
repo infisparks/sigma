@@ -245,7 +245,7 @@ export default function UnifiedPatientEntry() {
   useEffect(() => {
     const isReadyForNewRegistration = (
       !isPatientSelectedOrRegistered && // UHID is currently empty
-      !showPatientHints && // Hints are not currently visible
+      (!showPatientHints || patientHints.length === 0) && // Hints are not visible OR no hints found
       (patientData.name || "").trim().length > 1 &&
       (patientData.contact || "").length === 10 &&
       patientData.age > 0 &&
@@ -255,7 +255,7 @@ export default function UnifiedPatientEntry() {
 
     setCanRegisterNew(isReadyForNewRegistration);
 
-  }, [patientData, isPatientSelectedOrRegistered, showPatientHints]);
+  }, [patientData, isPatientSelectedOrRegistered, showPatientHints, patientHints.length]);
 
   const handleRegisterNewUser = useCallback(async () => {
     if (!canRegisterNew) return;
@@ -290,6 +290,8 @@ export default function UnifiedPatientEntry() {
       // Success: Update the form with the permanent UHID
       setValue("uhid", newUHID, { shouldValidate: true, shouldDirty: true });
       setCanRegisterNew(false); // Hide the button
+      setShowPatientHints(false);
+      setPatientHints([]);
 
       alert(`New Patient Registered! UHID: ${newUHID}. Proceed to Registration.`);
 
@@ -430,6 +432,8 @@ export default function UnifiedPatientEntry() {
     setOpdData(getDefaultUnifiedFormValues().opd);
     setShowSourceSelection(false);
     setCanRegisterNew(false); // Reset new registration flag
+    setShowPatientHints(false);
+    setPatientHints([]);
   }
 
   // --- Source Selection Popover Component (Omitted for brevity) ---
