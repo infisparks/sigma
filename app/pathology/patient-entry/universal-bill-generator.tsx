@@ -101,35 +101,31 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
     let headerHeight = 20; // Default if no logo - reduced
 
     // --- Custom Header Function ---
-    const drawHeader = () => {
+    const drawHeader = (pageNumber = 1) => {
+        // --- 🟢 NEW: Add Page Border ---
+        doc.setDrawColor(41, 128, 185); // Professional Blue
+        doc.setLineWidth(0.5);
+        doc.rect(5, 5, pageWidth - 10, pageHeight - 10, "S");
+
         if (logoData) {
             const imgProps = doc.getImageProperties(logoData);
-            // User requested "small in left". 
-            // Fix width to something small like 35mm.
             const pdfWidth = 80;
             const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
-            // Draw user logo
-            doc.addImage(logoData, 'PNG', 15, 5, pdfWidth, pdfHeight);
-
-            // We can add clinic text next to it if needed, but per request "show loo in small in left",
-            // and previous context implies the logo has text.
-            // If the logo is tiny, we might want to re-add the text header? 
-            // Let's rely on the logo for now, but keep header height compact.
-            headerHeight = Math.max(pdfHeight + 8, 15);
+            doc.addImage(logoData, 'PNG', 15, 8, pdfWidth, pdfHeight);
+            headerHeight = Math.max(pdfHeight + 12, 18);
         } else {
             // Logo / Title Fallback
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(14); // Reduced from 22
-            doc.setTextColor(41, 128, 185); // Professional Blue
-            doc.text("CIGMA", 15, 10);
+            doc.setFontSize(14);
+            doc.setTextColor(41, 128, 185);
+            doc.text("CIGMA", 15, 12);
 
             // Subtitle
-            doc.setFontSize(8); // Reduced from 10
+            doc.setFontSize(8);
             doc.setFont("helvetica", "normal");
-            doc.setTextColor(127, 140, 141); // Grey
-            doc.text("Clinic and Diagnostic Center", 15, 14);
-            headerHeight = 18;
+            doc.setTextColor(127, 140, 141);
+            doc.text("Clinic and Diagnostic Center", 15, 16);
+            headerHeight = 20;
         }
 
         // Divider Line
@@ -140,7 +136,32 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
         doc.setTextColor(0, 0, 0); // Reset text color
     };
 
-    // Draw initial header
+    // --- 🟢 NEW: Watermark Function ---
+    const drawWatermark = async () => {
+        try {
+            const watermarkData = await loadImage("/watermark.png");
+            const imgProps = doc.getImageProperties(watermarkData);
+
+            // Calculate size - approx 35% of page height
+            const targetHeight = pageHeight * 0.35;
+            const targetWidth = (imgProps.width * targetHeight) / imgProps.height;
+
+            // Position: Center horizontally, slightly below center vertically
+            const x = (pageWidth - targetWidth) / 2;
+            const y = (pageHeight - targetHeight) / 2 + 30; // Shifted 15mm down
+
+            // Set transparency for watermark - slightly darker (0.2)
+            doc.saveGraphicsState();
+            doc.setGState(new (doc as any).GState({ opacity: 0.2 }));
+            doc.addImage(watermarkData, 'PNG', x, y, targetWidth, targetHeight);
+            doc.restoreGraphicsState();
+        } catch (e) {
+            console.warn("Watermark image not found or failed to load:", e);
+        }
+    };
+
+    // Draw initial header and watermark
+    await drawWatermark();
     drawHeader();
 
     // Helper to get doctor name from ID
@@ -247,6 +268,7 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
         // Page break logic
         if (yPos > pageHeight - 30) { // Reduced bottom margin trigger
             doc.addPage()
+            drawWatermark();
             drawHeader();
             yPos = headerHeight + 8;
             drawTableHeader(yPos);
@@ -295,6 +317,7 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
     // Check availability for summary
     if (yPos > pageHeight - 35) {
         doc.addPage();
+        drawWatermark();
         drawHeader();
         yPos = headerHeight + 8;
     }
