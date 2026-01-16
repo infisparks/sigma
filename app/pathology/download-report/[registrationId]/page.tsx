@@ -716,7 +716,7 @@ function DownloadReport() {
       }
 
       // Send with new endpoint and headers
-      const res = await fetch("https://evo.infispark.in/message/sendMedia/cigma", {
+      const res = await fetch("https://evo.infispark.in/message/sendMedia/cigmalab", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -791,7 +791,7 @@ function DownloadReport() {
       }
 
       // Send with new endpoint and headers
-      const res = await fetch("https://evo.infispark.in/message/sendMedia/cigma", {
+      const res = await fetch("https://evo.infispark.in/message/sendMedia/cigmalab", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -883,7 +883,7 @@ function DownloadReport() {
       }
 
       // 6. Send the message with new endpoint and headers
-      const res = await fetch("https://evo.infispark.in/message/sendMedia/cigma", {
+      const res = await fetch("https://evo.infispark.in/message/sendMedia/cigmalab", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
