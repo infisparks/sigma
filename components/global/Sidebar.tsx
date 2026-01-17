@@ -20,7 +20,8 @@ import {
   Trash2,
   Receipt,
   TestTube2,
-  Pill
+  Pill,
+  TrendingUp
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -62,8 +63,14 @@ const pathologyMenuItems = [
   },
   {
     icon: Receipt,
-    label: 'Billing',
+    label: 'Pathology Admin',
     href: '/pathology/billing',
+    roles: ['admin']
+  },
+  {
+    icon: TrendingUp,
+    label: 'OPD Admin',
+    href: '/pathology/opd-admin',
     roles: ['admin']
   },
   {
