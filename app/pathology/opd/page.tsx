@@ -34,6 +34,7 @@ interface OPDRecord {
     uhid: string;
     treating_doctor_id: number;
     total_fees: number;
+    discount_amount: number;
     amount_paid: number;
     created_at: string;
     patient_name?: string;
@@ -161,7 +162,7 @@ export default function OPDDashboard() {
             let query = supabase
                 .from(TABLE.OPD_REGISTRATION)
                 .select(`
-                    id, uhid, treating_doctor_id, total_fees, amount_paid, created_at, referring_doctor_name,
+                    id, uhid, treating_doctor_id, total_fees, discount_amount, amount_paid, created_at, referring_doctor_name,
                     ${TABLE.PATIENT}!inner (name, number)
                 `);
 
@@ -247,6 +248,7 @@ export default function OPDDashboard() {
                 uhid: r.uhid,
                 treating_doctor_id: r.treating_doctor_id,
                 total_fees: r.total_fees,
+                discount_amount: r.discount_amount || 0,
                 amount_paid: r.amount_paid,
                 created_at: r.created_at,
                 referring_doctor_name: r.referring_doctor_name,
@@ -303,7 +305,7 @@ export default function OPDDashboard() {
     const stats = useMemo(() => {
         const totalPatients = displayedRecords.length;
         const totalRevenue = displayedRecords.reduce((acc, curr) => acc + curr.amount_paid, 0);
-        const totalDue = displayedRecords.reduce((acc, curr) => acc + (curr.total_fees - curr.amount_paid), 0);
+        const totalDue = displayedRecords.reduce((acc, curr) => acc + (curr.total_fees - (curr.discount_amount || 0) - curr.amount_paid), 0);
         return { totalPatients, totalRevenue, totalDue };
     }, [displayedRecords]);
 
@@ -577,7 +579,8 @@ export default function OPDDashboard() {
                                 </TableHeader>
                                 <TableBody>
                                     {displayedRecords.map((r) => {
-                                        const due = r.total_fees - r.amount_paid;
+                                        const due = r.total_fees - (r.discount_amount || 0) - r.amount_paid;
+                                        const netTotal = r.total_fees - (r.discount_amount || 0);
                                         return (
                                             <TableRow
                                                 key={r.id}
@@ -603,7 +606,14 @@ export default function OPDDashboard() {
                                                     {formatDate(r.created_at)}
                                                 </TableCell>
                                                 <TableCell className="text-right font-medium">
-                                                    {formatCurrency(r.total_fees)}
+                                                    {r.discount_amount > 0 ? (
+                                                        <div className="flex flex-col items-end">
+                                                            <span className="text-slate-900">{formatCurrency(netTotal)}</span>
+                                                            <span className="text-[10px] text-slate-400 line-through">{formatCurrency(r.total_fees)}</span>
+                                                        </div>
+                                                    ) : (
+                                                        formatCurrency(r.total_fees)
+                                                    )}
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     {due <= 0 ? (
