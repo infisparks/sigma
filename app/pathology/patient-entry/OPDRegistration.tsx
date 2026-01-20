@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus, X, User, Heart, Scale, Stethoscope, Activity } from "lucide-react"
 import { format } from "date-fns"
+import { Checkbox } from "@/components/ui/checkbox"
 
 // --- Supabase and Config Imports ---
 // 🚨 IMPORTANT: Ensure this path is correct for your Supabase client setup
@@ -294,7 +295,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
             await openUniversalBillInNewTabProgrammatically(billData, doctorList.map(d => ({ id: d.id, doctor_name: d.doctor_name } as DoctorLite)));
 
             // 4. 🟢 SEND WHATSAPP
-            if (data.sendWhatsApp && patientData.contact) {
+            if (data.sendWhatsApp && patientData.contact && finalTotalPaid > 0) {
                 const contactNumber = String(patientData.contact);
                 const estTimeDuration = "30 Minutes"; // Default for OPD
                 const testNameList = `${doctorName} Consultation (${data.visitCategory})`;
@@ -444,6 +445,16 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                 readOnly
                                 className="h-8 bg-gray-100 cursor-not-allowed"
                             />
+                        </div>
+                        <div className="col-span-3 flex items-center h-8 mt-5">
+                            <Checkbox
+                                checked={watch("sendWhatsApp")}
+                                onCheckedChange={(v) => setValue("sendWhatsApp", !!v)}
+                                id="opd-whatsapp-checkbox"
+                            />
+                            <Label htmlFor="opd-whatsapp-checkbox" className="text-sm cursor-pointer ml-2 flex items-center gap-1">
+                                <span className="text-green-600">📱</span>Send WhatsApp SMS
+                            </Label>
                         </div>
                     </div>
                 </div>

@@ -303,7 +303,7 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
             await openUniversalBillInNewTabProgrammatically(billData, doctorList);
 
             // 4. 🟢 SEND WHATSAPP
-            if (data.sendWhatsApp && patientData.contact) {
+            if (data.sendWhatsApp && patientData.contact && totalPaid > 0) {
                 const contactNumber = String(patientData.contact);
                 const estTimeDuration = formatMinutesToDuration(parseInt(data.estimatedTime, 10) || 0);
                 const testNameList = data.bloodTests.map((t: any) => t.testName).join(", ");

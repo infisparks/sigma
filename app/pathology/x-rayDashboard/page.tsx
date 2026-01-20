@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { format, parseISO } from "date-fns"
 import { useRouter } from "next/navigation"
 
@@ -39,45 +40,45 @@ const TABLE = {
 
 // --- Types for Data Consistency ---
 interface PaymentHistoryEntry {
-    amount: number;
-    paymentMode: string;
-    time: string;
+  amount: number;
+  paymentMode: string;
+  time: string;
 }
 
 interface AmountDetail {
-    totalAmount: number;
-    discount: number;
-    paymentHistory: PaymentHistoryEntry[];
+  totalAmount: number;
+  discount: number;
+  paymentHistory: PaymentHistoryEntry[];
 }
 
 interface XrayDetail {
-    Examination: string;
-    Xray_Via: string;
-    Amount: number;
+  Examination: string;
+  Xray_Via: string;
+  Amount: number;
 }
 
 interface PatientDetails {
-    uhid: string;
-    name: string;
-    number: string | number;
-    age: number;
-    age_unit: 'year' | 'month' | 'day';
-    gender: string;
-    title: string;
-    address: string;
+  uhid: string;
+  name: string;
+  number: string | number;
+  age: number;
+  age_unit: 'year' | 'month' | 'day';
+  gender: string;
+  title: string;
+  address: string;
 }
 
 interface DashboardRow {
-    id: string | number; // Can be string or number
-    created_at: string;
-    Hospital_name: string;
-    Refer_doctorname: string;
-    Visit_type: string;
-    Tpa: string;
-    Remark: string;
-    amount_detail: AmountDetail;
-    "x-ray_detail": XrayDetail[];
-    patient_uhid: PatientDetails | null;
+  id: string | number; // Can be string or number
+  created_at: string;
+  Hospital_name: string;
+  Refer_doctorname: string;
+  Visit_type: string;
+  Tpa: string;
+  Remark: string;
+  amount_detail: AmountDetail;
+  "x-ray_detail": XrayDetail[];
+  patient_uhid: PatientDetails | null;
 }
 // --- END Types ---
 
@@ -108,40 +109,72 @@ const withRetry = async <T,>(fn: () => Promise<any>, retries = 3, delay = 1000):
 
 // Helper to safely parse JSON/Object from DB
 const safeParseJson = (data: any): any => {
-    if (!data) return null;
-    try {
-        return typeof data === 'string' ? JSON.parse(data) : data;
-    } catch {
-        return null;
-    }
+  if (!data) return null;
+  try {
+    return typeof data === 'string' ? JSON.parse(data) : data;
+  } catch {
+    return null;
+  }
 }
 
 // Helper to get payment details from the amount_detail column
 const getPaymentSummary = (amountDetail: any) => {
-    const data = safeParseJson(amountDetail);
-    
-    let payment: any = {};
-    if (Array.isArray(data)) {
-        payment = data[0] || {};
-    } else if (data && typeof data === 'object') {
-        payment = data;
-    }
+  const data = safeParseJson(amountDetail);
 
-    const totalAmount = Number(payment.totalAmount) || Number(payment.TotalAmount) || 0;
-    const discount = Number(payment.discount) || Number(payment.Discount) || 0; 
-    
-    const paymentHistory: PaymentHistoryEntry[] = (payment.paymentHistory || []).map((p: any) => ({
-        amount: Number(p.amount) || 0,
-        paymentMode: p.paymentMode || 'Cash',
-        time: p.time || new Date().toISOString(),
-    }));
+  let payment: any = {};
+  if (Array.isArray(data)) {
+    payment = data[0] || {};
+  } else if (data && typeof data === 'object') {
+    payment = data;
+  }
 
-    const totalPaid = paymentHistory.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
-    const remainingAmount = Math.max(0, totalAmount - (totalPaid + discount));
+  const totalAmount = Number(payment.totalAmount) || Number(payment.TotalAmount) || 0;
+  const discount = Number(payment.discount) || Number(payment.Discount) || 0;
 
-    return { totalAmount, discount, totalPaid, remainingAmount, paymentHistory };
+  const paymentHistory: PaymentHistoryEntry[] = (payment.paymentHistory || []).map((p: any) => ({
+    amount: Number(p.amount) || 0,
+    paymentMode: p.paymentMode || 'Cash',
+    time: p.time || new Date().toISOString(),
+  }));
+
+  const totalPaid = paymentHistory.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+  const remainingAmount = Math.max(0, totalAmount - (totalPaid + discount));
+
+  return { totalAmount, discount, totalPaid, remainingAmount, paymentHistory };
 }
 
+
+/**
+ * Helper to send WhatsApp notification for payment updates
+ */
+const sendPaymentWhatsAppNotification = async (
+  contactNumber: string,
+  patientName: string,
+  regId: string | number,
+  financials: { total: number; paidNow: number; totalPaid: number; balance: number }
+) => {
+  const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || ""
+  if (!apiKey) return
+
+  const messageText = `Dear *${patientName}*,\n\nWe have received a payment of *₹${financials.paidNow.toFixed(2)}* for your X-ray Registration (ID: ${regId}).\n\n*Updated Payment Summary:*\n💰 Total Bill: ₹${financials.total.toFixed(2)}\n✅ Total Paid: ₹${financials.totalPaid.toFixed(2)}\n⚠️ Remaining Balance: ₹${financials.balance.toFixed(2)}\n\nThank you for choosing Cigma Clinic!`
+
+  try {
+    await fetch("https://evo.infispark.in/message/sendText/cigma", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": apiKey
+      },
+      body: JSON.stringify({
+        number: `91${contactNumber}`,
+        text: messageText
+      }),
+    });
+    console.log(`✅ WhatsApp payment update sent to ${contactNumber}`);
+  } catch (error) {
+    console.error("❌ WhatsApp Error:", error);
+  }
+}
 
 // ------------------------------------------
 // --- PDF VIEW UTILITY ---
@@ -150,15 +183,15 @@ export const viewXrayBill = async (data: DashboardRow) => {
   try {
     const response = await fetch(letterhead.src)
     if (!response.ok) {
-        throw new Error("Network response was not ok for letterhead image.")
+      throw new Error("Network response was not ok for letterhead image.")
     }
     const imageBlob = await response.blob()
 
     const bgDataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onloadend = () => resolve(reader.result as string)
-        reader.onerror = reject
-        reader.readAsDataURL(imageBlob)
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(imageBlob)
     })
 
     const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" })
@@ -171,7 +204,7 @@ export const viewXrayBill = async (data: DashboardRow) => {
     const patient = data.patient_uhid
     const xrayDetails = safeParseJson(data["x-ray_detail"]) || []
     const { totalAmount, discount, totalPaid, remainingAmount } = getPaymentSummary(data.amount_detail)
-    
+
     const billNumber = data?.id ? String(data.id).slice(-6) : "N/A"
 
     let y = 70
@@ -302,6 +335,7 @@ export default function XrayDashboardPage() {
     discount: 0,
     additionalPayment: 0,
     paymentMode: "Cash",
+    sendWhatsApp: true,
   })
 
   const fetchData = useCallback(async () => {
@@ -363,7 +397,7 @@ export default function XrayDashboardPage() {
       if (!item.created_at) return false
       const itemDate = new Date(item.created_at)
       const dateOnlyItem = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate()).getTime();
-      
+
       const fromDateOnly = fromDate ? new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()).getTime() : null;
       const toDateOnly = toDate ? new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate()).getTime() : null;
 
@@ -447,6 +481,7 @@ export default function XrayDashboardPage() {
       discount: 0,
       additionalPayment: 0,
       paymentMode: "Cash",
+      sendWhatsApp: true,
     })
     setShowPaymentModal(true)
   }
@@ -458,6 +493,7 @@ export default function XrayDashboardPage() {
       const {
         totalAmount,
         discount: currentDiscount,
+        totalPaid,
         paymentHistory: existingPaymentHistory,
       } = getPaymentSummary(paymentModalData.amount_detail)
 
@@ -492,6 +528,24 @@ export default function XrayDashboardPage() {
       } else {
         setMessage("Payment updated successfully.")
         setMessageType("success")
+
+        // --- NEW: Send WhatsApp Notification for Payment ---
+        if (paymentForm.sendWhatsApp && paymentForm.additionalPayment > 0 && paymentModalData.patient_uhid?.number) {
+          const nextTotalPaid = totalPaid + paymentForm.additionalPayment;
+          const nextRemaining = totalAmount - newDiscount - nextTotalPaid;
+          await sendPaymentWhatsAppNotification(
+            String(paymentModalData.patient_uhid.number),
+            paymentModalData.patient_uhid.name,
+            paymentModalData.id,
+            {
+              total: totalAmount,
+              paidNow: paymentForm.additionalPayment,
+              totalPaid: nextTotalPaid,
+              balance: nextRemaining
+            }
+          );
+        }
+
         setShowPaymentModal(false)
         fetchData()
       }
@@ -534,7 +588,7 @@ export default function XrayDashboardPage() {
                 <SelectContent>
                   <SelectItem value="All">All Hospitals</SelectItem>
                   <SelectItem value="">Cigma Clinic</SelectItem>
-                 
+
                 </SelectContent>
               </Select>
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -789,6 +843,17 @@ export default function XrayDashboardPage() {
                       <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem></SelectContent>
                     </Select>
                   </div>
+                  <div className="flex items-center space-x-2 py-2">
+                    <Checkbox
+                      id="xray-modal-send-whatsapp"
+                      checked={paymentForm.sendWhatsApp}
+                      onCheckedChange={(checked) => setPaymentForm((prev) => ({ ...prev, sendWhatsApp: !!checked }))}
+                    />
+                    <Label htmlFor="xray-modal-send-whatsapp" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                      <span className="text-green-600 text-lg">📱</span>
+                      Send WhatsApp Notification
+                    </Label>
+                  </div>
                 </div>
                 <div className="flex space-x-3 pt-4">
                   <Button onClick={handlePaymentUpdate} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-semibold">Update Payment</Button>
@@ -796,7 +861,7 @@ export default function XrayDashboardPage() {
                 </div>
               </div>
             </>
-          )} 
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, X, FileText, Save, Plus, Heart, Scale, Stethoscope, FilePenLine, UserCircle, Phone, Activity } from 'lucide-react';
 import { openUniversalBillInNewTabProgrammatically, type BillServiceItem, type UniversalBillData, type DoctorLite } from "../patient-entry/universal-bill-generator";
@@ -60,6 +61,38 @@ interface FullOPDRecord {
     patient_detail: PatientDetails | null;
 }
 
+/**
+ * Helper to send WhatsApp notification for payment updates
+ */
+const sendPaymentWhatsAppNotification = async (
+    contactNumber: string,
+    patientName: string,
+    regId: number,
+    financials: { total: number; paidNow: number; totalPaid: number; balance: number }
+) => {
+    const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || ""
+    if (!apiKey) return
+
+    const messageText = `Dear *${patientName}*,\n\nWe have received a payment of *₹${financials.paidNow.toFixed(2)}* for your OPD Registration (ID: ${regId}).\n\n*Updated Payment Summary:*\n💰 Total Bill: ₹${financials.total.toFixed(2)}\n✅ Total Paid: ₹${financials.totalPaid.toFixed(2)}\n⚠️ Remaining Balance: ₹${financials.balance.toFixed(2)}\n\nThank you for choosing Cigma Clinic!`
+
+    try {
+        await fetch("https://evo.infispark.in/message/sendText/cigma", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "apikey": apiKey
+            },
+            body: JSON.stringify({
+                number: `91${contactNumber}`,
+                text: messageText
+            }),
+        });
+        console.log(`✅ WhatsApp payment update sent to ${contactNumber}`);
+    } catch (error) {
+        console.error("❌ WhatsApp Error:", error);
+    }
+}
+
 // 🟢 EXPANDED FORM FIELDS to include editable patient details
 interface EditFormFields {
     // Patient Details
@@ -80,6 +113,7 @@ interface EditFormFields {
     weight: number | null;
     spo2: string;
     discountAmount: number;
+    sendWhatsApp: boolean;
     paymentEntries: PaymentEntry[];
 }
 
@@ -130,6 +164,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
         spo2: record?.spo2 || '',
         discountAmount: record?.discount_amount || 0,
         paymentEntries: record?.payment_entries || [],
+        sendWhatsApp: true,
     }), [record, doctorList]);
 
     const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<EditFormFields>({
@@ -252,6 +287,24 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                 .eq('id', opdId);
 
             if (opdErr) throw opdErr;
+
+            // --- 3. Send WhatsApp Notification for New Payment ---
+            const amountReceivedNow = finalTotalPaid - (record.amount_paid || 0);
+            if (data.sendWhatsApp && amountReceivedNow > 0 && data.number) {
+                const netTotal = totalFees - data.discountAmount;
+                const balance = netTotal - finalTotalPaid;
+                await sendPaymentWhatsAppNotification(
+                    String(data.number),
+                    data.name,
+                    opdId,
+                    {
+                        total: totalFees,
+                        paidNow: amountReceivedNow,
+                        totalPaid: finalTotalPaid,
+                        balance: balance
+                    }
+                );
+            }
 
             alert("Patient and OPD Record updated successfully! ✅");
             onClose(true); // Refresh dashboard after successful update
@@ -534,6 +587,17 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                             ₹{remainingAmount.toFixed(2)}
                                         </span>
                                     </div>
+                                </div>
+                                <div className="flex items-center space-x-2 py-4 border-t mt-2">
+                                    <Checkbox
+                                        id="edit-send-whatsapp"
+                                        checked={watchedFields.sendWhatsApp}
+                                        onCheckedChange={(checked) => setValue("sendWhatsApp", !!checked)}
+                                    />
+                                    <Label htmlFor="edit-send-whatsapp" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                                        <span className="text-green-600 text-lg">📱</span>
+                                        Send WhatsApp Notification
+                                    </Label>
                                 </div>
                             </div>
 

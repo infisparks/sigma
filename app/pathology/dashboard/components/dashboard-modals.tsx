@@ -12,6 +12,8 @@ import { calculateAmounts, formatCurrency, format12Hour, generateBillBlob } from
 import type { Registration } from "../types/dashboard"
 import { supabase } from "@/lib/supabase"
 import { downloadBill } from "../lib/dashboard-utils"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 
 // Lazy load the FakeBill component
 const FakeBill = lazy(() => import("../FakeBill")) // Adjust path if needed
@@ -44,6 +46,8 @@ interface DashboardModalsProps {
   setAmountId: (id: string) => void
   billNo: string
   setBillNo: (billNo: string) => void
+  sendWhatsApp: boolean
+  setSendWhatsApp: (send: boolean) => void
 }
 
 export function DashboardModals({
@@ -74,6 +78,8 @@ export function DashboardModals({
   setAmountId,
   billNo,
   setBillNo,
+  sendWhatsApp,
+  setSendWhatsApp,
 }: DashboardModalsProps) {
   // Add handler for sending bill on WhatsApp
   const [isSendingBill, setIsSendingBill] = useState(false)
@@ -93,7 +99,7 @@ export function DashboardModals({
 
       // 2. Generate the bill as a PDF blob
       const blob = await generateBillBlob(selectedRegistration);
-      
+
       // 3. Create a user-friendly filename and storage path
       const friendlyFileName = `bill_${selectedRegistration.name.replace(/\s+/g, "_")}_${selectedRegistration.id}.pdf`;
       const storagePath = `reports/${friendlyFileName}`; // Use a consistent name
@@ -317,6 +323,18 @@ export function DashboardModals({
                             </div>
                           </div>
 
+                          <div className="flex items-center space-x-2 py-2">
+                            <Checkbox
+                              id="modal-send-whatsapp"
+                              checked={sendWhatsApp}
+                              onCheckedChange={(checked) => setSendWhatsApp(!!checked)}
+                            />
+                            <Label htmlFor="modal-send-whatsapp" className="text-sm font-medium leading-none cursor-pointer flex items-center gap-2">
+                              <span className="text-green-600 text-lg">📱</span>
+                              Send Notification via WhatsApp
+                            </Label>
+                          </div>
+
                           <button
                             type="submit"
                             className="w-full bg-violet-600 text-white py-3 rounded-xl font-medium hover:bg-violet-700 transition-colors duration-200 shadow-sm flex items-center justify-center"
@@ -473,11 +491,10 @@ export function DashboardModals({
                       <button
                         onClick={submitDeleteRequest}
                         disabled={!deleteReason.trim()}
-                        className={`px-4 py-2 rounded-lg text-white font-medium ${
-                          deleteReason.trim()
+                        className={`px-4 py-2 rounded-lg text-white font-medium ${deleteReason.trim()
                             ? "bg-red-600 hover:bg-red-700 transition-colors duration-200"
                             : "bg-red-300 cursor-not-allowed"
-                        }`}
+                          }`}
                       >
                         Submit Request
                       </button>

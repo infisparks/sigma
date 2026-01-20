@@ -295,7 +295,7 @@ const XrayRegistration: React.FC<XrayProps> = ({
             await openUniversalBillInNewTabProgrammatically(billData, doctorList);
 
             // 4. 🟢 SEND WHATSAPP
-            if (data.sendWhatsApp && patientData.contact) {
+            if (data.sendWhatsApp && patientData.contact && totalPaid > 0) {
                 const contactNumber = String(patientData.contact);
                 const examNameList = data.xrayTests.map((t: any) => t.examination).join(", ");
 

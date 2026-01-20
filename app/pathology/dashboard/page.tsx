@@ -46,6 +46,38 @@ function toLocalInputValue(isoDateString?: string) {
 }
 
 /**
+ * Helper to send WhatsApp notification for payment updates
+ */
+const sendPaymentWhatsAppNotification = async (
+  contactNumber: string,
+  patientName: string,
+  regId: number,
+  financials: { total: number; paidNow: number; totalPaid: number; balance: number }
+) => {
+  const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY || ""
+  if (!apiKey) return
+
+  const messageText = `Dear *${patientName}*,\n\nWe have received a payment of *₹${financials.paidNow.toFixed(2)}* for your registration (ID: ${regId}).\n\n*Updated Payment Summary:*\n💰 Total: ₹${financials.total.toFixed(2)}\n✅ Total Paid: ₹${financials.totalPaid.toFixed(2)}\n⚠️ Remaining Balance: ₹${financials.balance.toFixed(2)}\n\nThank you for choosing Cigma Clinic!`
+
+  try {
+    await fetch("https://evo.infispark.in/message/sendText/cigma", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: apiKey,
+      },
+      body: JSON.stringify({
+        number: `91${contactNumber}`,
+        text: messageText,
+      }),
+    })
+    console.log(`✅ WhatsApp payment update sent to ${contactNumber}`)
+  } catch (error) {
+    console.error("❌ WhatsApp Error:", error)
+  }
+}
+
+/**
  * Format datetime-local string ("YYYY-MM-DDTHH:MM") or ISO to 12-hour display in local time
  */
 function format12HourLocal(dateString?: string) {
@@ -105,6 +137,7 @@ export default function Dashboard() {
   const [tempDiscount, setTempDiscount] = useState<string>("")
   const [amountId, setAmountId] = useState<string>("")
   const [billNo, setBillNo] = useState<string>("")
+  const [sendUpdateWhatsApp, setSendUpdateWhatsApp] = useState<boolean>(true)
 
   useEffect(() => {
     if (selectedRegistration) {
@@ -811,6 +844,18 @@ export default function Dashboard() {
       setBillNo("")
       setPaymentMode("online")
       alert("Payment and discount updated successfully!")
+
+      // --- NEW: Send WhatsApp Notification for Payment ---
+      if (sendUpdateWhatsApp && additionalPayment > 0 && selectedRegistration.contact) {
+        const remainingAfterUpdate = updatedPaymentHistory.totalAmount - newDiscountAmount - newTotalPaid
+        await sendPaymentWhatsAppNotification(String(selectedRegistration.contact), selectedRegistration.name, selectedRegistration.id, {
+          total: updatedPaymentHistory.totalAmount,
+          paidNow: additionalPayment,
+          totalPaid: newTotalPaid,
+          balance: remainingAfterUpdate,
+        })
+      }
+
       fetchRegistrations(startDate, endDate)
       fetchDashboardStats()
     } catch (error: any) {
@@ -824,6 +869,7 @@ export default function Dashboard() {
     paymentMode,
     amountId,
     billNo,
+    sendUpdateWhatsApp,
     fetchRegistrations,
     fetchDashboardStats,
     startDate,
@@ -934,6 +980,8 @@ export default function Dashboard() {
         setAmountId={setAmountId}
         billNo={billNo}
         setBillNo={setBillNo}
+        sendWhatsApp={sendUpdateWhatsApp}
+        setSendWhatsApp={setSendUpdateWhatsApp}
       />
     </div>
   )
