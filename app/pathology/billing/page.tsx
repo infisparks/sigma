@@ -452,6 +452,8 @@ export default function BillingPage() {
                   <option value="xray_procedure">X-Ray (Procedure)</option>
                   <option value="sonography">Sonography</option>
                   <option value="color_doppler">Color Doppler</option>
+                  <option value="diagnostics">Diagnostics</option>
+                  <option value="other">Other</option>
                 </select>
               </div>
             </div>

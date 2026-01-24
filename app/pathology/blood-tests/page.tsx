@@ -60,7 +60,7 @@ export interface BloodTestFormInputs {
   testName: string
   price: number
   tpa_price?: number
-  type: "blood_test" | "xray_standard" | "xray_procedure" | "sonography" | "color_doppler"
+  type: "blood_test" | "xray_standard" | "xray_procedure" | "sonography" | "color_doppler" | "diagnostics" | "other"
   parameters: BloodTestParameter[]
   subheadings: BloodTestSubheading[]
   isOutsource?: boolean
@@ -76,7 +76,7 @@ export interface TestData {
   testName: string
   price: number
   tpa_price?: number
-  type: "blood_test" | "xray_standard" | "xray_procedure" | "sonography" | "color_doppler"
+  type: "blood_test" | "xray_standard" | "xray_procedure" | "sonography" | "color_doppler" | "diagnostics" | "other"
   isOutsource: boolean
   parameters: BloodTestParameter[]
   subheadings: BloodTestSubheading[]
@@ -695,6 +695,8 @@ const TestModal: React.FC<TestModalProps> = ({ testData, onClose, onTestUpdated 
                 <option value="xray_procedure">X-Ray (Procedure)</option>
                 <option value="sonography">Sonography / Ultrasound</option>
                 <option value="color_doppler">Color Doppler</option>
+                <option value="diagnostics">Diagnostics</option>
+                <option value="other">Other</option>
               </select>
             </div>
 
