@@ -339,7 +339,7 @@ export default function Dashboard() {
               ...test,
               testName: String(test.testName || ""),
             }))
-            .filter((t: any) => !t.serviceType || t.serviceType === 'blood_test'),
+            .filter((t: any) => !t.serviceType || ['blood_test', 'diagnostics', 'other'].includes(t.serviceType)),
           bloodtest: registrationRow.bloodtest_detail || {},
           sampleCollectedAt: registrationRow.samplecollected_time,
           paymentHistory: registrationRow.amount_paid_history || null,
@@ -541,7 +541,7 @@ export default function Dashboard() {
               ...test,
               testName: String(test.testName || ""),
             }))
-            .filter((t: any) => !t.serviceType || t.serviceType === 'blood_test'),
+            .filter((t: any) => !t.serviceType || ['blood_test', 'diagnostics', 'other'].includes(t.serviceType)),
           bloodtest: registrationRow.bloodtest_detail || {},
           sampleCollectedAt: registrationRow.samplecollected_time,
           paymentHistory: registrationRow.amount_paid_history || null,

@@ -105,7 +105,7 @@ export function RegistrationList({
             {filteredRegistrations.map(r => {
               const sampleCollected = !!r.sampleCollectedAt
               const complete = isAllTestsComplete(r)
-              const status = !sampleCollected ? "Not Collected" : complete ? "Completed" : "Pending"
+              const status = complete ? "Completed" : !sampleCollected ? "Not Collected" : "Pending"
               const { testTotal, remaining, totalPaid } = calculateAmounts(r)
 
               let ageUnit = "y"

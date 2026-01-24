@@ -11,7 +11,12 @@ export const slugifyTestName = (name: string) =>
     .replace(/[.#$[\]]/g, "")
 
 export const isTestFullyEntered = (r: Registration, t: BloodTest): boolean => {
+  // If it's an outsource test, it's considered entered/ready (usually handled externally)
   if (t.testType?.toLowerCase() === "outsource") return true
+
+  // If it's NOT a blood test (e.g., diagnostics, xray) and it's in-house, mark as completed
+  if (t.serviceType && t.serviceType !== 'blood_test' && t.testType?.toLowerCase() === 'inhospital') return true
+
   if (!r.bloodtest) return false
   const data = r.bloodtest[slugifyTestName(t.testName)]
   if (!data?.parameters) return false
@@ -96,7 +101,7 @@ export const formatCurrency = (amount: number) => {
   }).format(amount)
 }
 
-export const getRank = (r: Registration) => (!r.sampleCollectedAt ? 1 : isAllTestsComplete(r) ? 3 : 2)
+export const getRank = (r: Registration) => (isAllTestsComplete(r) ? 3 : !r.sampleCollectedAt ? 1 : 2)
 export const getMergedPatientId = (registration: Registration) => {
   if (registration.patientId && registration.registration_id) {
     return `${registration.patientId}-${registration.registration_id}`;
@@ -150,7 +155,7 @@ export const getLatestReportedOnTime = (registration: Registration) => {
 export const calculateTurnAroundTime = (registration: Registration) => {
   const registrationTime = new Date(registration.createdAt);
   const reportedOnTimeStr = getLatestReportedOnTime(registration);
-  
+
   if (reportedOnTimeStr === "-") return "-";
 
   const reportedOnTime = new Date(reportedOnTimeStr);
@@ -225,8 +230,8 @@ export const downloadBill = (selectedRegistration: Registration) => {
       selectedRegistration.day_type === "month"
         ? "m"
         : selectedRegistration.day_type === "day"
-        ? "d"
-        : "y"
+          ? "d"
+          : "y"
 
     // Calculate max width for the name column before splitting
     const nameColumnWidth = (pageW / 2 + margin) - leftValueX - 4;
@@ -386,8 +391,8 @@ export const downloadMultipleBills = (selectedRegistrations: number[], allRegist
           registration.day_type === "month"
             ? "m"
             : registration.day_type === "day"
-            ? "d"
-            : "y"
+              ? "d"
+              : "y"
 
         // Calculate max width for the name column before splitting
         const nameColumnWidth = (pageW / 2 + margin) - leftValueX - 4;
@@ -521,8 +526,8 @@ export const generateBillBlob = async (selectedRegistration: Registration): Prom
         selectedRegistration.day_type === "month"
           ? "m"
           : selectedRegistration.day_type === "day"
-          ? "d"
-          : "y"
+            ? "d"
+            : "y"
 
       // Calculate max width for the name column before splitting
       const nameColumnWidth = (pageW / 2 + margin) - leftValueX - 4;

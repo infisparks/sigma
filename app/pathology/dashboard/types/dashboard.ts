@@ -5,6 +5,7 @@ export interface BloodTest {
   price: number
   tpa_price?: number // Added for TPA pricing
   testType?: string
+  serviceType?: string
 }
 
 export interface PaymentEntry {
@@ -40,7 +41,7 @@ export interface Registration {
   patientId: string
   age: number
   billNo?: string
-  bill_no?:string
+  bill_no?: string
   gender?: string
   contact?: number
   address?: string
