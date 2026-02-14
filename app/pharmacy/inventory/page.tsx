@@ -50,6 +50,9 @@ interface PurchaseItem {
     medicine_name: string
     batch_number: string
     quantity: number
+    quantity_billed: number
+    quantity_free: number
+    pack_size_quantity: number
     unit_price: number
     total_amount: number
 }
@@ -71,6 +74,7 @@ export default function InventoryMasterPage() {
 
     // Stock State
     const [stockList, setStockList] = useState<MedicineStockAgg[]>([])
+    const [expiringList, setExpiringList] = useState<MedicineStockAgg[]>([]) // NEW: Expiring State
     const [stockSearch, setStockSearch] = useState('')
     const [expandedMedicineId, setExpandedMedicineId] = useState<number | null>(null)
 
@@ -101,9 +105,7 @@ export default function InventoryMasterPage() {
 
             // 2. Fetch All Active Batches
             const { data: batches, error: batchError } = await supabase
-                .from('pharmacy_batch_stock')
-                .select('*')
-                .gt('quantity', 0) // Only show active stock
+                .rpc('get_current_stock')
 
             if (batchError) throw batchError
 
@@ -126,7 +128,7 @@ export default function InventoryMasterPage() {
             })
 
             // Fill Data
-            batches?.forEach(b => {
+            batches?.forEach((b: any) => {
                 const med = medMap.get(b.medicine_id)
                 if (med) {
                     med.total_quantity += b.quantity
@@ -150,7 +152,6 @@ export default function InventoryMasterPage() {
 
             // Determine Status & Sort Batches by Expiry
             const computedList = Array.from(medMap.values()).map(m => {
-                // Sort batches: Earliest Expiry First
                 m.batches.sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())
 
                 if (m.total_quantity === 0) m.status = 'Out of Stock'
@@ -160,7 +161,26 @@ export default function InventoryMasterPage() {
                 return m
             })
 
+            // Filter Expiring Items (Within 90 Days)
+            const today = new Date()
+            const alertDate = new Date()
+            alertDate.setDate(today.getDate() + 90)
+
+            const alerts = (batches as any[])?.filter((b: any) => {
+                const exp = new Date(b.expiry_date)
+                return exp <= alertDate
+            }).map((b: any) => {
+                // Map raw batch to aggregated structure for uniform display
+                const m = medMap.get(b.medicine_id)
+                return {
+                    ...m!,
+                    batches: [b], // Only the expiring batch
+                    status: new Date(b.expiry_date) < today ? 'Out of Stock' : 'Low Stock' // Reusing status for Badge color logic
+                } as MedicineStockAgg
+            }) || []
+
             setStockList(computedList)
+            setExpiringList(alerts)
 
         } catch (error) {
             console.error('Stock Load Failed', error)
@@ -168,6 +188,7 @@ export default function InventoryMasterPage() {
     }
 
     // --- Fetch History Logic ---
+    // Fetch Purchase History from Ledger
     const fetchPurchases = async () => {
         try {
             let query = supabase
@@ -179,15 +200,17 @@ export default function InventoryMasterPage() {
                     total_amount,
                     status,
                     vendor:pharmacy_vendors(name),
-                    items:pharmacy_purchase_item(
+                    items:pharmacy_stock_ledger(
                         id,
-                        quantity,
-                        unit_price,
+                        quantity_billed,
+                        quantity_free,
+                        rate_per_unit,
                         total_amount,
                         batch_number,
                         medicine:clinic_medicine(name)
                     )
                 `)
+                .eq('items.transaction_type', 'PURCHASE')
                 .order('created_at', { ascending: false })
 
             if (purchaseDateFilter) {
@@ -208,8 +231,11 @@ export default function InventoryMasterPage() {
                     id: i.id,
                     medicine_name: i.medicine?.name || 'Unknown',
                     batch_number: i.batch_number,
-                    quantity: i.quantity,
-                    unit_price: i.unit_price,
+                    quantity: (i.quantity_billed || 0) + (i.quantity_free || 0),
+                    quantity_billed: i.quantity_billed || 0,
+                    quantity_free: i.quantity_free || 0,
+                    pack_size_quantity: i.pack_size_quantity || 1,
+                    unit_price: i.rate_per_unit,
                     total_amount: i.total_amount
                 })) || []
             }))
@@ -265,6 +291,9 @@ export default function InventoryMasterPage() {
                     </TabsTrigger>
                     <TabsTrigger value="purchases" className="h-10 text-sm px-6 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
                         Purchase History
+                    </TabsTrigger>
+                    <TabsTrigger value="expiry" className="h-10 text-sm px-6 data-[state=active]:bg-red-50 data-[state=active]:text-red-700">
+                        Expiry Alerts {expiringList.length > 0 && <Badge variant="destructive" className="ml-2 h-5 px-1.5">{expiringList.length}</Badge>}
                     </TabsTrigger>
                 </TabsList>
 
@@ -472,16 +501,27 @@ export default function InventoryMasterPage() {
                                         </div>
                                         <div className="bg-white p-4">
                                             <div className="text-xs font-semibold text-gray-500 mb-2 uppercase">Items Purchased</div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                                            <div className="grid grid-cols-1 gap-y-2">
                                                 {invoice.items.map(item => (
-                                                    <div key={item.id} className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0 hover:bg-gray-50 px-2 rounded">
-                                                        <div>
-                                                            <span className="font-medium text-gray-800">{item.medicine_name}</span>
-                                                            <span className="text-xs text-gray-400 ml-2">BATCH: {item.batch_number}</span>
+                                                    <div key={item.id} className="grid grid-cols-12 gap-2 text-sm py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50 px-2 rounded items-center">
+                                                        <div className="col-span-5">
+                                                            <div className="font-medium text-gray-800">{item.medicine_name}</div>
+                                                            <div className="text-[10px] text-gray-400 font-mono">
+                                                                BATCH: {item.batch_number} | {item.pack_size_quantity} Units/Pack
+                                                            </div>
                                                         </div>
-                                                        <div className="text-gray-600">
-                                                            <span>{item.quantity} x ₹{item.unit_price}</span>
-                                                            <span className="font-semibold ml-2 min-w-[60px] inline-block text-right">₹{item.total_amount}</span>
+                                                        <div className="col-span-4 text-center">
+                                                            <div className="text-xs">
+                                                                <span className="font-semibold">{item.quantity_billed}</span> Billed
+                                                                {item.quantity_free > 0 && <span className="text-green-600 ml-1">+ {item.quantity_free} Free</span>}
+                                                            </div>
+                                                            <div className="text-[10px] text-gray-400">
+                                                                Total: {(item.quantity_billed + item.quantity_free) * item.pack_size_quantity} Units
+                                                            </div>
+                                                        </div>
+                                                        <div className="col-span-3 text-right">
+                                                            <div className="font-semibold text-gray-900">₹{item.total_amount.toLocaleString()}</div>
+                                                            <div className="text-[10px] text-gray-500">Rate: ₹{item.unit_price} / pack</div>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -495,6 +535,62 @@ export default function InventoryMasterPage() {
                                     </div>
                                 )}
                             </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* --- TAB 3: EXPIRY ALERTS --- */}
+                <TabsContent value="expiry" className="space-y-4">
+                    <Card className="border-none shadow-sm bg-white">
+                        <CardHeader>
+                            <CardTitle className="text-red-600 flex items-center gap-2">
+                                <AlertCircle className="h-5 w-5" /> Expiry Alerts
+                            </CardTitle>
+                            <CardDescription>Items expired or expiring within 90 days.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader className="bg-red-50">
+                                    <TableRow>
+                                        <TableHead>Medicine</TableHead>
+                                        <TableHead>Batch No</TableHead>
+                                        <TableHead>Expiry Date</TableHead>
+                                        <TableHead className="text-right">Stock Left</TableHead>
+                                        <TableHead className="text-right">Value Loss</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {expiringList.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="h-24 text-center text-green-600 font-medium">
+                                                <CheckCircle2 className="h-6 w-6 mx-auto mb-2" />
+                                                No expiry alerts. Stock is healthy!
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        expiringList.map((item, idx) => {
+                                            const batch = item.batches[0];
+                                            const isExpired = new Date(batch.expiry_date) < new Date();
+                                            return (
+                                                <TableRow key={idx} className={isExpired ? "bg-red-50/50" : "bg-orange-50/30"}>
+                                                    <TableCell className="font-bold text-gray-800">{item.medicine_name}</TableCell>
+                                                    <TableCell className="font-mono">{batch.batch_number}</TableCell>
+                                                    <TableCell>
+                                                        <div className={cn("font-medium", isExpired ? "text-red-600" : "text-orange-600")}>
+                                                            {batch.expiry_date}
+                                                        </div>
+                                                        <div className="text-[10px] text-gray-500">
+                                                            {isExpired ? "EXPIRED" : "Expiring Soon"}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-bold">{batch.quantity} Packs</TableCell>
+                                                    <TableCell className="text-right text-gray-500">₹{(batch.quantity * batch.purchase_rate).toLocaleString()}</TableCell>
+                                                </TableRow>
+                                            )
+                                        })
+                                    )}
+                                </TableBody>
+                            </Table>
                         </CardContent>
                     </Card>
                 </TabsContent>

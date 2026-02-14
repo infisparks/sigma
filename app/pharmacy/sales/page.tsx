@@ -170,11 +170,12 @@ export default function SalesDashboardPage() {
         setIsDetailsOpen(true)
         setDetailsLoading(true)
         try {
-            // 1. Get Items
+            // 1. Get Items from Ledger
             const { data: items, error } = await supabase
-                .from('pharmacy_sale_items')
+                .from('pharmacy_stock_ledger')
                 .select('*')
-                .eq('sale_id', sale.id)
+                .eq('sale_invoice_id', sale.id)
+                .eq('transaction_type', 'SALE')
 
             if (error) throw error
             if (!items || items.length === 0) {
@@ -193,10 +194,21 @@ export default function SalesDashboardPage() {
             meds?.forEach((m: any) => medMap.set(m.id, m.name))
 
             // 3. Merge
-            const formattedData = items.map((item: any) => ({
-                ...item,
-                medicine_name: medMap.get(item.medicine_id) || 'Unknown Medicine'
-            }))
+            const formattedData = items.map((item: any) => {
+                const isPack = item.quantity_mode === 'Pack'
+                const qty = isPack
+                    ? Math.abs(item.total_units) / (item.pack_size_quantity || 1)
+                    : Math.abs(item.total_units)
+
+                return {
+                    ...item,
+                    medicine_name: medMap.get(item.medicine_id) || 'Unknown Medicine',
+                    unit_price: item.rate_per_unit || 0,
+                    total_price: item.total_amount || 0,
+                    item_discount_amount: item.item_discount || 0,
+                    quantity: qty
+                }
+            })
 
             setSaleItems(formattedData)
         } catch (e) {

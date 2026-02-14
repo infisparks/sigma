@@ -48,8 +48,9 @@ interface PurchaseItem {
     expiry_date: string
 
     quantity: number // Packs
+    free_quantity: number // Free Packs
     pack_size_quantity: number // Units per pack
-    total_units: number // Derived (qty * pack_size_quantity)
+    total_units: number // Derived ((qty + free) * pack_size_quantity)
 
     mrp: number
     unit_price: number // Cost Price
@@ -89,6 +90,7 @@ export default function PurchaseEntryPage() {
         batch_number: '',
         expiry_date: '',
         quantity: '',
+        free_quantity: '0',
         mrp: '',
         unit_price: ''
     })
@@ -110,6 +112,7 @@ export default function PurchaseEntryPage() {
     const batchInputRef = useRef<HTMLInputElement>(null)
     const unitInputRef = useRef<HTMLInputElement>(null)
     const qtyInputRef = useRef<HTMLInputElement>(null)
+    const freeQtyInputRef = useRef<HTMLInputElement>(null)
     const mrpInputRef = useRef<HTMLInputElement>(null)
     const rateInputRef = useRef<HTMLInputElement>(null)
     const expiryInputRef = useRef<HTMLInputElement>(null)
@@ -226,13 +229,9 @@ export default function PurchaseEntryPage() {
         }))
         setShowSuggestions(false)
 
-        // Fetch existing batches for this medicine
+        // Fetch existing batches via RPC
         const { data } = await supabase
-            .from('pharmacy_batch_stock')
-            .select('batch_number, expiry_date, mrp, purchase_rate, pack_size_quantity')
-            .eq('medicine_id', med.id)
-            .order('expiry_date', { ascending: false })
-            .limit(5)
+            .rpc('get_current_stock', { p_medicine_id: med.id })
 
         setExistingBatches(data || [])
 
@@ -301,8 +300,9 @@ export default function PurchaseEntryPage() {
         if (!currentItem.expiry_date) return alert("Enter Expiry Date")
 
         const qty = parseInt(currentItem.quantity)
+        const free = parseInt(currentItem.free_quantity) || 0
         const units = currentItem.pack_size_quantity
-        const rate = parseFloat(currentItem.unit_price)
+        const rate = parseFloat(currentItem.unit_price) // Cost per pack
         const total = qty * rate
 
         const newItem: PurchaseItem = {
@@ -315,8 +315,9 @@ export default function PurchaseEntryPage() {
             expiry_date: currentItem.expiry_date,
 
             quantity: qty,
+            free_quantity: free,
             pack_size_quantity: units, // Save this!
-            total_units: qty * units, // Calculated
+            total_units: (qty + free) * units, // Calculated with FREE quantity
 
             mrp: parseFloat(currentItem.mrp),
             unit_price: rate,
@@ -335,6 +336,7 @@ export default function PurchaseEntryPage() {
             batch_number: '',
             expiry_date: '',
             quantity: '',
+            free_quantity: '0',
             mrp: '',
             unit_price: ''
         })
@@ -366,6 +368,7 @@ export default function PurchaseEntryPage() {
                 batch_number: item.batch_number,
                 expiry_date: item.expiry_date,
                 quantity: item.quantity,
+                free_quantity: item.free_quantity, // PASS FREE QTY
                 pack_size_quantity: item.pack_size_quantity, // PASS UNIT INFO
                 mrp: item.mrp,
                 unit_price: item.unit_price,
@@ -585,6 +588,20 @@ export default function PurchaseEntryPage() {
                                 value={currentItem.quantity}
                                 onChange={e => setCurrentItem(prev => ({ ...prev, quantity: e.target.value }))}
                                 placeholder="0"
+                                onKeyDown={e => e.key === 'Enter' && freeQtyInputRef.current?.focus()}
+                            />
+                        </div>
+
+                        {/* 3.1 Free Quantity - NEW */}
+                        <div className="w-[90px] space-y-2">
+                            <Label className="text-green-600">Free Qty</Label>
+                            <Input
+                                ref={freeQtyInputRef}
+                                type="number"
+                                value={currentItem.free_quantity}
+                                onChange={e => setCurrentItem(prev => ({ ...prev, free_quantity: e.target.value }))}
+                                placeholder="0"
+                                className="bg-green-50 border-green-200"
                                 onKeyDown={e => e.key === 'Enter' && mrpInputRef.current?.focus()}
                             />
                         </div>
@@ -650,6 +667,7 @@ export default function PurchaseEntryPage() {
                             <TableHead>Medicine Info</TableHead>
                             <TableHead className="w-[120px]">Batch</TableHead>
                             <TableHead className="w-[80px] text-right">Pack Info</TableHead>
+                            <TableHead className="w-[80px] text-right">Qty + Free</TableHead>
                             <TableHead className="w-[80px] text-right">Total Units</TableHead>
                             <TableHead className="text-right w-[100px]">Rate</TableHead>
                             <TableHead className="text-right w-[120px]">Purchase Amount</TableHead>
@@ -669,8 +687,10 @@ export default function PurchaseEntryPage() {
                                     <div className="text-xs text-gray-500">Exp: {item.expiry_date}</div>
                                 </TableCell>
                                 <TableCell className="text-right">
-                                    <div className="font-medium text-gray-900">{item.quantity} Packs</div>
                                     <div className="text-xs text-gray-500">x {item.pack_size_quantity} units/pack</div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <div className="font-medium text-gray-900">{item.quantity} + <span className="text-green-600">{item.free_quantity}</span></div>
                                 </TableCell>
                                 <TableCell className="text-right font-medium text-blue-700 bg-blue-50/50">
                                     {item.total_units} units

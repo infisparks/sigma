@@ -93,11 +93,12 @@ export default function BillPage({ params }: BillProps) {
             }
             setSale(saleData)
 
-            // 2. Fetch Items
+            // 2. Fetch Items from Ledger
             const { data: itemsData, error: itemsError } = await supabase
-                .from('pharmacy_sale_items')
+                .from('pharmacy_stock_ledger')
                 .select('*')
-                .eq('sale_id', params.id)
+                .eq('sale_invoice_id', params.id)
+                .eq('transaction_type', 'SALE')
 
             if (itemsError) {
                 console.error('Error fetching items:', itemsError)
@@ -118,7 +119,11 @@ export default function BillPage({ params }: BillProps) {
 
                 const formattedItems = itemsData.map((item: any) => ({
                     ...item,
-                    medicine_name: medMap.get(item.medicine_id) || 'Unknown Medicine'
+                    medicine_name: medMap.get(item.medicine_id) || 'Unknown Medicine',
+                    unit_price: item.rate_per_unit || 0,
+                    quantity: Math.abs(item.total_units) / (item.pack_size_quantity || 1), // Calculate packs back from units
+                    total_price: item.total_amount || 0,
+                    discount_amount: item.item_discount || 0
                 }))
                 setItems(formattedItems)
             } else {

@@ -44,6 +44,7 @@ interface BatchStock {
     mrp: number // per pack
     remaining_units: number
     pack_size_quantity: number
+    quantity: number // Full Packs
 }
 
 interface CartItem {
@@ -66,6 +67,8 @@ interface CartItem {
     discount_amount: number
 
     total_price: number
+    pack_size_quantity: number
+    is_return?: boolean // Added for Return Logic
 }
 
 interface Patient {
@@ -176,31 +179,36 @@ export default function PharmacyBillingPage() {
             setRemark(sale.notes || '')
             setSelectedDoctor(sale.doctor_name || '')
 
-            // 3. Fetch Items
-            const { data: items, error: itemsError } = await supabase.from('pharmacy_sale_items').select('*').eq('sale_id', id)
+            // 3. Fetch Items FROM LEDGER
+            const { data: items, error: itemsError } = await supabase
+                .from('pharmacy_stock_ledger')
+                .select('*')
+                .eq('sale_invoice_id', id)
+                .eq('transaction_type', 'SALE')
+
             if (itemsError) throw itemsError
 
-            // 4. Hydrate Cart needs Medicine Name from ID
-            const { data: meds } = await supabase.from('clinic_medicine').select('id, name').in('id', items.map(i => i.medicine_id))
+            // 4. Hydrate Cart
+            const medIds = items.map(i => i.medicine_id)
+            const { data: meds } = await supabase.from('clinic_medicine').select('id, name').in('id', medIds)
             const medMap = new Map((meds || []).map(m => [m.id, m.name]))
 
             const hydratedCart: CartItem[] = items.map(item => {
-                // Determine Mode: calculated from total_units_sold and quantity
-                // OR we stored it? We stored 'quantity_mode' in SQL but interface wasn't explicit
-                // Let's rely on stored quantity_mode column if added, otherwise derive
                 return {
-                    id: Math.random().toString(36), // Temp ID
+                    id: Math.random().toString(36),
                     medicine_id: item.medicine_id,
                     medicine_name: medMap.get(item.medicine_id) || 'Unknown',
                     batch_number: item.batch_number,
                     expiry_date: item.expiry_date,
                     quantity_mode: item.quantity_mode as 'Pack' | 'Unit',
-                    quantity: Number(item.quantity),
-                    total_units_sold: item.total_units_sold,
-                    mrp_per_pack: 0, // Need to fetch from batch stock or approximate from unit_price
-                    unit_price: Number(item.unit_price), // This was saved as unit price
-                    discount_amount: Number(item.discount_amount || 0),
-                    total_price: Number(item.total_price)
+                    quantity: Number(item.total_units) / (item.pack_size_quantity || 1), // Approximate original qty
+                    total_units_sold: Math.abs(item.total_units),
+                    mrp_per_pack: Number(item.mrp),
+                    unit_price: Number(item.rate_per_unit),
+                    discount_amount: Number(item.item_discount || 0),
+                    total_price: Number(item.total_amount),
+                    pack_size_quantity: item.pack_size_quantity || 1,
+                    is_return: item.transaction_type === 'USER_RET' // Detect if it was a return
                 }
             })
 
@@ -312,12 +320,8 @@ export default function PharmacyBillingPage() {
         setMedSearch(med.name)
         setShowMedSuggestions(false)
 
-        // Fetch Batches
-        const { data } = await supabase.from('pharmacy_batch_stock')
-            .select('batch_number, expiry_date, mrp, remaining_units, pack_size_quantity')
-            .eq('medicine_id', med.id)
-            .gt('remaining_units', 0) // Only stock > 0
-            .order('expiry_date')
+        // Fetch Batches via RPC for this specific medicine
+        const { data } = await supabase.rpc('get_current_stock', { p_medicine_id: med.id })
 
         if (data && data.length > 0) {
             setMedBatches(data)
@@ -395,7 +399,8 @@ export default function PharmacyBillingPage() {
             unit_price: price,
             discount_amount: discAmount,
             total_price: total,
-            total_units_sold: totalUnitsSold
+            total_units_sold: totalUnitsSold,
+            pack_size_quantity: selectedBatch.pack_size_quantity
         }
 
         setCart([...cart, newItem])
@@ -412,7 +417,11 @@ export default function PharmacyBillingPage() {
     }
 
     // --- 3. Discount Logic ---
-    const subtotal = cart.reduce((sum, i) => sum + i.total_price, 0)
+    // --- 3. Discount Logic ---
+    const subtotal = cart.reduce((sum, i) => {
+        if (i.is_return) return sum - i.total_price
+        return sum + i.total_price
+    }, 0)
 
     // Bi-directional sync
     const updateDiscount = (val: string, type: 'Percent' | 'Amount') => {
@@ -694,7 +703,7 @@ export default function PharmacyBillingPage() {
                                                     <span>{b.batch_number}</span>
                                                     <span className="text-muted-foreground">Exp: {b.expiry_date}</span>
                                                     <span className={cn("font-medium", b.remaining_units < 50 ? "text-red-500" : "text-green-600")}>
-                                                        Stk: {b.remaining_units} units
+                                                        Stk: {b.quantity} Packs
                                                     </span>
                                                 </div>
                                             </SelectItem>
@@ -797,7 +806,7 @@ export default function PharmacyBillingPage() {
                                     <TableHead className="text-right">Price</TableHead>
                                     <TableHead className="text-right">Disc(₹)</TableHead>
                                     <TableHead className="text-right">Total</TableHead>
-                                    <TableHead className="w-[50px]"></TableHead>
+                                    <TableHead className="text-center w-[60px]">Ret?</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -819,11 +828,19 @@ export default function PharmacyBillingPage() {
                                         <TableCell className="text-right text-red-500 text-xs">
                                             {item.discount_amount > 0 ? `-₹${item.discount_amount}` : '-'}
                                         </TableCell>
-                                        <TableCell className="text-right font-bold text-blue-700">₹{item.total_price.toFixed(2)}</TableCell>
-                                        <TableCell>
-                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:text-red-700" onClick={() => setCart(cart.filter(x => x.id !== item.id))}>
-                                                <Trash2 className="h-3 w-3" />
-                                            </Button>
+                                        <TableCell className={cn("text-right font-bold", item.is_return ? "text-red-600" : "text-blue-700")}>
+                                            {item.is_return ? '-' : ''}₹{item.total_price.toFixed(2)}
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <input
+                                                type="checkbox"
+                                                className="w-4 h-4 accent-red-500"
+                                                checked={!!item.is_return}
+                                                onChange={(e) => {
+                                                    const checked = e.target.checked
+                                                    setCart(cart.map(c => c.id === item.id ? { ...c, is_return: checked } : c))
+                                                }}
+                                            />
                                         </TableCell>
                                     </TableRow>
                                 ))}

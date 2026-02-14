@@ -31,6 +31,8 @@ interface PurchaseItem {
     batch_number: string
     expiry_date: string
     quantity: number
+    qty_billed: number
+    qty_free: number
     unit_price: number // Cost Rate
     mrp: number
     total_amount: number
@@ -62,7 +64,7 @@ export default function PurchasesHistoryPage() {
     const fetchHistory = async () => {
         setLoading(true)
         try {
-            // Query NEW tables: pharmacy_purchase_invoice
+            // Query LEDGER for items instead of deleted pharmacy_purchase_item
             let query = supabase
                 .from('pharmacy_purchase_invoice')
                 .select(`
@@ -72,10 +74,11 @@ export default function PurchasesHistoryPage() {
                     total_amount,
                     status,
                     vendor:pharmacy_vendors(name),
-                    items:pharmacy_purchase_item(
+                    items:pharmacy_stock_ledger(
                         id,
-                        quantity,
-                        unit_price,
+                        quantity_billed,
+                        quantity_free,
+                        rate_per_unit,
                         mrp,
                         total_amount,
                         batch_number,
@@ -83,6 +86,7 @@ export default function PurchasesHistoryPage() {
                         medicine:clinic_medicine(name)
                     )
                 `)
+                .eq('items.transaction_type', 'PURCHASE') // Only purchase entries
                 .order('invoice_date', { ascending: false })
 
             if (dateFilter) {
@@ -105,8 +109,10 @@ export default function PurchasesHistoryPage() {
                     medicine_name: i.medicine?.name || 'Unknown Item',
                     batch_number: i.batch_number,
                     expiry_date: i.expiry_date,
-                    quantity: i.quantity,
-                    unit_price: i.unit_price,
+                    quantity: (i.quantity_billed || 0) + (i.quantity_free || 0),
+                    qty_billed: i.quantity_billed || 0,
+                    qty_free: i.quantity_free || 0,
+                    unit_price: i.rate_per_unit,
                     mrp: i.mrp,
                     total_amount: i.total_amount
                 }))
@@ -236,7 +242,14 @@ export default function PurchasesHistoryPage() {
                                                     <div className="font-mono text-xs">{item.batch_number}</div>
                                                     <div className="text-xs text-gray-400">Exp: {item.expiry_date}</div>
                                                 </TableCell>
-                                                <TableCell className="text-right font-medium">{item.quantity}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="font-medium text-gray-900">{item.quantity}</div>
+                                                    {item.qty_free > 0 && (
+                                                        <div className="text-[10px] text-green-600 font-semibold">
+                                                            {item.qty_billed} + {item.qty_free} Free
+                                                        </div>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell className="text-right text-gray-600">₹{item.unit_price}</TableCell>
                                                 <TableCell className="text-right text-gray-600">₹{item.mrp}</TableCell>
                                                 <TableCell className="text-right font-bold">₹{item.total_amount.toLocaleString()}</TableCell>
