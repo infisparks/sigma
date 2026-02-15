@@ -215,6 +215,19 @@ export default function PurchasesHistoryPage() {
                                     <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-none">
                                         {invoice.status.toUpperCase()}
                                     </Badge>
+                                    <div className="mt-2 text-xs">
+                                        <Button
+                                            variant="link"
+                                            size="sm"
+                                            className="h-auto p-0 text-blue-600 font-semibold"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                window.location.href = `/pharmacy/medicinePurchase?id=${invoice.id}`;
+                                            }}
+                                        >
+                                            Manage Invoice
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
 

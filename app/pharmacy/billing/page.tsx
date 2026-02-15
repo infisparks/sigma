@@ -184,7 +184,7 @@ export default function PharmacyBillingPage() {
                 .from('pharmacy_stock_ledger')
                 .select('*')
                 .eq('sale_invoice_id', id)
-                .eq('transaction_type', 'SALE')
+                .in('transaction_type', ['SALE', 'USER_RET'])
 
             if (itemsError) throw itemsError
 
@@ -811,9 +811,16 @@ export default function PharmacyBillingPage() {
                             </TableHeader>
                             <TableBody>
                                 {cart.map((item, idx) => (
-                                    <TableRow key={item.id} className="hover:bg-gray-50">
+                                    <TableRow key={item.id} className={cn("hover:bg-gray-50", item.is_return && "bg-red-50/50 hover:bg-red-50")}>
                                         <TableCell className="text-xs text-gray-400">{idx + 1}</TableCell>
-                                        <TableCell className="font-medium text-gray-900">{item.medicine_name}</TableCell>
+                                        <TableCell>
+                                            <div className="font-medium text-gray-900 flex items-center gap-2">
+                                                {item.medicine_name}
+                                                {item.is_return && (
+                                                    <Badge variant="destructive" className="text-[8px] h-4 px-1 uppercase leading-none">Returned</Badge>
+                                                )}
+                                            </div>
+                                        </TableCell>
                                         <TableCell>
                                             <div className="text-xs font-mono">{item.batch_number}</div>
                                             <div className="text-[10px] text-gray-400">{item.expiry_date}</div>

@@ -9,6 +9,7 @@
 
 -- 0. Ensure schema is correct
 ALTER TABLE public.pharmacy_sales ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE public.pharmacy_purchase_invoice ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE public.pharmacy_stock_ledger ADD COLUMN IF NOT EXISTS quantity NUMERIC DEFAULT 0;
 
 -- 0.5 DATA FIX: Correct existing USER_RET entries to have 0 flow (Neutral)
@@ -56,7 +57,7 @@ END;
 $$;
 
 -- ==============================================================================
--- 2.5 FIX: save_purchase_entry (Adding quantity support)
+-- 2.5 FIX: save_purchase_entry & update_purchase_entry (Adding quantity & return support)
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.save_purchase_entry(
     p_vendor_id UUID,
@@ -75,6 +76,9 @@ DECLARE
     v_billed_qty INT;
     v_free_qty INT;
     v_total_units INT;
+    v_is_return BOOLEAN;
+    v_trx_type TEXT;
+    v_stock_flow INT;
 BEGIN
     -- Insert Header
     INSERT INTO public.pharmacy_purchase_invoice (
@@ -90,6 +94,15 @@ BEGIN
         v_billed_qty := (v_item->>'quantity')::INT;
         v_free_qty := COALESCE((v_item->>'free_quantity')::INT, 0);
         v_total_units := (v_billed_qty + v_free_qty) * v_pack_qty;
+        v_is_return := COALESCE((v_item->>'is_return')::BOOLEAN, false);
+
+        IF v_is_return THEN
+            v_trx_type := 'PUR_RET';
+            v_stock_flow := 0; -- Neutral flow for returns in purchase module
+        ELSE
+            v_trx_type := 'PURCHASE';
+            v_stock_flow := 1;
+        END IF;
 
         INSERT INTO public.pharmacy_stock_ledger (
             medicine_id, batch_number, expiry_date,
@@ -99,7 +112,7 @@ BEGIN
             purchase_invoice_id
         ) VALUES (
             (v_item->>'medicine_id')::INT, v_item->>'batch_number', (v_item->>'expiry_date')::DATE,
-            'PURCHASE', 1,
+            v_trx_type, v_stock_flow,
             v_billed_qty, v_free_qty, v_total_units, (v_billed_qty + v_free_qty), v_pack_qty,
             (v_item->>'mrp')::DECIMAL, (v_item->>'unit_price')::DECIMAL, (v_item->>'total_amount')::DECIMAL,
             v_purchase_id
@@ -107,6 +120,73 @@ BEGIN
     END LOOP;
 
     RETURN v_purchase_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.update_purchase_entry(
+    p_purchase_id UUID,
+    p_vendor_id UUID,
+    p_invoice_number TEXT,
+    p_invoice_date DATE, 
+    p_total_amount DECIMAL,
+    p_items JSONB
+)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_item JSONB;
+    v_pack_qty INT;
+    v_billed_qty INT;
+    v_free_qty INT;
+    v_total_units INT;
+    v_is_return BOOLEAN;
+    v_trx_type TEXT;
+    v_stock_flow INT;
+BEGIN
+    -- Update Header
+    UPDATE public.pharmacy_purchase_invoice SET
+        vendor_id = p_vendor_id,
+        invoice_number = p_invoice_number,
+        invoice_date = p_invoice_date,
+        total_amount = p_total_amount,
+        updated_at = now()
+    WHERE id = p_purchase_id;
+
+    -- Clear old ledger entries
+    DELETE FROM public.pharmacy_stock_ledger WHERE purchase_invoice_id = p_purchase_id;
+
+    -- Process Items
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+        v_pack_qty := COALESCE((v_item->>'pack_size_quantity')::INT, 1);
+        v_billed_qty := (v_item->>'quantity')::INT;
+        v_free_qty := COALESCE((v_item->>'free_quantity')::INT, 0);
+        v_total_units := (v_billed_qty + v_free_qty) * v_pack_qty;
+        v_is_return := COALESCE((v_item->>'is_return')::BOOLEAN, false);
+
+        IF v_is_return THEN
+            v_trx_type := 'PUR_RET';
+            v_stock_flow := 0; -- Neutral flow for returns in purchase module
+        ELSE
+            v_trx_type := 'PURCHASE';
+            v_stock_flow := 1;
+        END IF;
+
+        INSERT INTO public.pharmacy_stock_ledger (
+            medicine_id, batch_number, expiry_date,
+            transaction_type, stock_flow,
+            quantity_billed, quantity_free, total_units, quantity, pack_size_quantity,
+            mrp, rate_per_unit, total_amount,
+            purchase_invoice_id
+        ) VALUES (
+            (v_item->>'medicine_id')::INT, v_item->>'batch_number', (v_item->>'expiry_date')::DATE,
+            v_trx_type, v_stock_flow,
+            v_billed_qty, v_free_qty, v_total_units, (v_billed_qty + v_free_qty), v_pack_qty,
+            (v_item->>'mrp')::DECIMAL, (v_item->>'unit_price')::DECIMAL, (v_item->>'total_amount')::DECIMAL,
+            p_purchase_id
+        );
+    END LOOP;
 END;
 $$;
 

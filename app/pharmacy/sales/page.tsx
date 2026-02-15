@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
     Table,
     TableBody,
@@ -41,6 +42,7 @@ interface SaleItem {
     quantity_mode: string
     unit_price: number
     total_price: number
+    is_return?: boolean
 }
 
 interface Sale {
@@ -175,7 +177,7 @@ export default function SalesDashboardPage() {
                 .from('pharmacy_stock_ledger')
                 .select('*')
                 .eq('sale_invoice_id', sale.id)
-                .eq('transaction_type', 'SALE')
+                .in('transaction_type', ['SALE', 'USER_RET'])
 
             if (error) throw error
             if (!items || items.length === 0) {
@@ -196,6 +198,7 @@ export default function SalesDashboardPage() {
             // 3. Merge
             const formattedData = items.map((item: any) => {
                 const isPack = item.quantity_mode === 'Pack'
+                const isReturn = item.transaction_type === 'USER_RET'
                 const qty = isPack
                     ? Math.abs(item.total_units) / (item.pack_size_quantity || 1)
                     : Math.abs(item.total_units)
@@ -206,7 +209,8 @@ export default function SalesDashboardPage() {
                     unit_price: item.rate_per_unit || 0,
                     total_price: item.total_amount || 0,
                     item_discount_amount: item.item_discount || 0,
-                    quantity: qty
+                    quantity: qty,
+                    is_return: isReturn
                 }
             })
 
@@ -490,8 +494,15 @@ export default function SalesDashboardPage() {
                                                 <TableRow><TableCell colSpan={6} className="text-center py-8">Loading items...</TableCell></TableRow>
                                             ) : (
                                                 saleItems.map(item => (
-                                                    <TableRow key={item.id}>
-                                                        <TableCell className="font-medium">{item.medicine_name}</TableCell>
+                                                    <TableRow key={item.id} className={cn(item.is_return && "bg-red-50/50")}>
+                                                        <TableCell className="font-medium">
+                                                            <div className="flex items-center gap-2">
+                                                                {item.medicine_name}
+                                                                {item.is_return && (
+                                                                    <Badge variant="destructive" className="text-[8px] h-4 px-1 uppercase leading-none">Returned</Badge>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
                                                         <TableCell className="text-xs text-gray-500">{item.batch_number}</TableCell>
                                                         <TableCell className="text-right">
                                                             {item.quantity}
@@ -503,7 +514,9 @@ export default function SalesDashboardPage() {
                                                                 `-₹${Number(item.item_discount_amount || item['discount_amount'] || 0).toFixed(2)}`
                                                                 : '-'}
                                                         </TableCell>
-                                                        <TableCell className="text-right font-medium">₹{item.total_price}</TableCell>
+                                                        <TableCell className={cn("text-right font-medium", item.is_return && "text-red-600")}>
+                                                            {item.is_return ? '-' : ''}₹{item.total_price}
+                                                        </TableCell>
                                                     </TableRow>
                                                 ))
                                             )}

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -55,6 +56,7 @@ interface PurchaseItem {
     mrp: number
     unit_price: number // Cost Price
     total: number
+    is_return?: boolean // Added for purchase returns
 }
 
 // NEW: Type for fetched previous batches
@@ -119,15 +121,72 @@ export default function PurchaseEntryPage() {
     const addButtonRef = useRef<HTMLButtonElement>(null)
     const vendorSelectRef = useRef<HTMLButtonElement>(null)
 
+    const searchParams = useSearchParams()
+    const editingId = searchParams.get('id')
+
     // --- Initialization ---
     useEffect(() => {
         const loadData = async () => {
             setLoadingResources(true)
             await Promise.all([fetchVendors(), fetchMedicines()])
+            if (editingId) {
+                await fetchExistingPurchase(editingId)
+            }
             setLoadingResources(false)
         }
         loadData()
-    }, [])
+    }, [editingId])
+
+    const fetchExistingPurchase = async (id: string) => {
+        try {
+            const { data: invoice, error: invError } = await supabase
+                .from('pharmacy_purchase_invoice')
+                .select(`
+                    *,
+                    items:pharmacy_stock_ledger(*)
+                `)
+                .eq('id', id)
+                .single()
+
+            if (invError) throw invError
+
+            setInvoiceData({
+                vendor_id: invoice.vendor_id,
+                invoice_number: invoice.invoice_number,
+                invoice_date: invoice.invoice_date
+            })
+
+            // Load medicines to map names
+            const medIds = (invoice.items || []).map((i: any) => i.medicine_id)
+            const { data: meds } = await supabase.from('clinic_medicine').select('id, name, pack_size_label').in('id', medIds)
+            const medMap = new Map((meds || []).map(m => [m.id, m]))
+
+            const hydratedCart: PurchaseItem[] = (invoice.items || []).map((item: any) => {
+                const med = medMap.get(item.medicine_id)
+                return {
+                    id: Math.random().toString(36),
+                    medicine_id: item.medicine_id,
+                    medicine_name: med?.name || 'Unknown',
+                    pack_size: med?.pack_size_label || '',
+                    batch_number: item.batch_number,
+                    expiry_date: item.expiry_date,
+                    quantity: item.quantity_billed || 0,
+                    free_quantity: item.quantity_free || 0,
+                    pack_size_quantity: item.pack_size_quantity || 1,
+                    total_units: item.total_units,
+                    mrp: Number(item.mrp),
+                    unit_price: Number(item.rate_per_unit),
+                    total: Number(item.total_amount),
+                    is_return: item.transaction_type === 'PUR_RET'
+                }
+            })
+
+            setCartItems(hydratedCart)
+        } catch (error) {
+            console.error('Error fetching purchase:', error)
+            alert('Failed to load purchase details')
+        }
+    }
 
     // --- Global Hotkeys ---
     useEffect(() => {
@@ -355,7 +414,7 @@ export default function PurchaseEntryPage() {
 
         setIsSubmitting(true)
 
-        const totalAmount = cartItems.reduce((sum, item) => sum + item.total, 0)
+        const totalAmount = cartItems.reduce((sum, item) => sum + (item.is_return ? -item.total : item.total), 0)
 
         // Prepare payload for NEW RPC
         const rpcPayload = {
@@ -368,24 +427,32 @@ export default function PurchaseEntryPage() {
                 batch_number: item.batch_number,
                 expiry_date: item.expiry_date,
                 quantity: item.quantity,
-                free_quantity: item.free_quantity, // PASS FREE QTY
-                pack_size_quantity: item.pack_size_quantity, // PASS UNIT INFO
+                free_quantity: item.free_quantity,
+                pack_size_quantity: item.pack_size_quantity,
                 mrp: item.mrp,
                 unit_price: item.unit_price,
-                total_amount: item.total
+                total_amount: item.is_return ? -item.total : item.total,
+                is_return: !!item.is_return
             }))
         }
 
         try {
-            const { data, error } = await supabase.rpc('save_purchase_entry', rpcPayload)
-
-            if (error) throw error
-
-            // Redirect to Bill Page
-            window.open(`/pharmacy/purchase_bill/${data}`, '_blank')
+            if (editingId) {
+                const { error } = await supabase.rpc('update_purchase_entry', {
+                    ...rpcPayload,
+                    p_purchase_id: editingId
+                })
+                if (error) throw error
+                alert('Purchase updated successfully')
+            } else {
+                const { data, error } = await supabase.rpc('save_purchase_entry', rpcPayload)
+                if (error) throw error
+                // Redirect to Bill Page
+                window.open(`/pharmacy/purchase_bill/${data}`, '_blank')
+            }
 
             // Reload page to reset state and stock
-            window.location.reload()
+            window.location.href = '/pharmacy/purchases'
         } catch (error: any) {
             console.error('Submission Error:', error)
             alert('Failed to save purchase: ' + error.message)
@@ -402,7 +469,7 @@ export default function PurchaseEntryPage() {
             <div>
                 <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
                     <ShoppingCart className="h-8 w-8 text-blue-600" />
-                    New Purchase Entry
+                    {editingId ? 'Manage Purchase Return' : 'New Purchase Entry'}
                     <div className="ml-auto flex items-center gap-2 text-xs font-normal text-muted-foreground bg-white px-3 py-1 rounded-full border shadow-sm">
                         <Keyboard className="h-4 w-4" />
                         <span>Shortcuts:</span>
@@ -466,197 +533,171 @@ export default function PurchaseEntryPage() {
                 </CardContent>
             </Card>
 
-            {/* Entry Row */}
-            <Card className="border-blue-200 border shadow-md bg-white overflow-visible z-10">
-                <CardHeader className="py-4 bg-gray-50/80 border-b flex flex-row justify-between items-center">
-                    <CardTitle className="text-sm font-semibold uppercase tracking-wider text-gray-600 flex items-center gap-2">
-                        Add Items to Stock
-                        <span className="text-[10px] font-normal text-muted-foreground ml-2">(Press <kbd className="font-mono bg-gray-100 px-1 rounded">F2</kbd> to start)</span>
-                    </CardTitle>
+            {/* Entry Row - Hidden if editing to prevent new items during return */}
+            {!editingId && (
+                <Card className="border-blue-200 border shadow-md bg-white overflow-visible z-10">
+                    <CardHeader className="py-4 bg-gray-50/80 border-b flex flex-row justify-between items-center">
+                        <CardTitle className="text-sm font-semibold uppercase tracking-wider text-gray-600 flex items-center gap-2">
+                            Add Items to Stock
+                            <span className="text-[10px] font-normal text-muted-foreground ml-2">(Press <kbd className="font-mono bg-gray-100 px-1 rounded">F2</kbd> to start)</span>
+                        </CardTitle>
 
-                    {/* NEW: Existing Batches Quick Select */}
-                    {currentItem.medicine_id > 0 && existingBatches.length > 0 && (
-                        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
-                            <span className="text-xs text-blue-600 font-medium flex items-center gap-1">
-                                <History className="h-3 w-3" /> Recent Batches:
-                            </span>
-                            <div className="flex gap-2">
-                                {existingBatches.map((batch, idx) => (
-                                    <button
-                                        key={idx}
-                                        onClick={() => selectExistingBatch(batch)}
-                                        className="text-[10px] bg-blue-100/50 hover:bg-blue-100 border border-blue-200 text-blue-800 px-2 py-1 rounded-full transition-colors font-mono"
-                                        title={`Exp: ${batch.expiry_date} | MRP: ₹${batch.mrp}`}
-                                    >
-                                        {batch.batch_number}
-                                    </button>
-                                ))}
+                        {/* NEW: Existing Batches Quick Select */}
+                        {currentItem.medicine_id > 0 && existingBatches.length > 0 && (
+                            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
+                                <span className="text-xs text-blue-600 font-medium flex items-center gap-1">
+                                    <History className="h-3 w-3" /> Recent Batches:
+                                </span>
+                                <div className="flex gap-2">
+                                    {existingBatches.map((batch, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => selectExistingBatch(batch)}
+                                            className="text-[10px] bg-blue-100/50 hover:bg-blue-100 border border-blue-200 text-blue-800 px-2 py-1 rounded-full transition-colors font-mono"
+                                            title={`Exp: ${batch.expiry_date} | MRP: ₹${batch.mrp}`}
+                                        >
+                                            {batch.batch_number}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
-                </CardHeader>
-                <CardContent className="pt-6 overflow-visible">
-                    <div className="flex flex-col md:flex-row gap-4 items-end">
-                        {/* 1. Medicine Search */}
-                        <div className="flex-1 space-y-2 relative min-w-[250px] z-50">
-                            <Label className="flex justify-between">
-                                Medicine Name
-                                <span className="text-[10px] text-gray-400 font-mono">F2</span>
-                            </Label>
-                            <div className="relative">
-                                <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                        )}
+                    </CardHeader>
+                    <CardContent className="pt-6 overflow-visible">
+                        <div className="flex flex-col md:flex-row gap-4 items-end">
+                            {/* Medicine Search */}
+                            <div className="flex-1 space-y-2 relative min-w-[250px] z-50">
+                                <Label className="flex justify-between">
+                                    Medicine Name
+                                    <span className="text-[10px] text-gray-400 font-mono">F2</span>
+                                </Label>
+                                <div className="relative">
+                                    <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                                    <Input
+                                        ref={searchInputRef}
+                                        value={currentItem.search}
+                                        onChange={e => setCurrentItem({ ...currentItem, search: e.target.value, medicine_id: 0 })}
+                                        placeholder="Type to search..."
+                                        onKeyDown={handleSearchKeyDown}
+                                        className={cn("pl-9", currentItem.medicine_id ? "border-green-500 bg-green-50" : "")}
+                                    />
+                                </div>
+                                {showSuggestions && (
+                                    <div className="absolute top-full left-0 w-full mt-1 bg-white border rounded-md shadow-xl z-[100] max-h-[300px] overflow-auto">
+                                        {filteredMeds.map((med, idx) => (
+                                            <div
+                                                key={med.id}
+                                                className={cn(
+                                                    "px-4 py-2 cursor-pointer border-b last:border-0",
+                                                    idx === focusedIndex ? "bg-blue-100" : "hover:bg-blue-50"
+                                                )}
+                                                onClick={() => selectMedicine(med)}
+                                            >
+                                                <div className="font-medium text-gray-900">{med.name}</div>
+                                                <div className="text-xs text-gray-500">{med.pack_size_label}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="w-[120px] space-y-2">
+                                <Label>Batch No.</Label>
                                 <Input
-                                    ref={searchInputRef}
-                                    value={currentItem.search}
-                                    onChange={e => setCurrentItem({ ...currentItem, search: e.target.value, medicine_id: 0 })}
-                                    placeholder="Type to search..."
-                                    onKeyDown={handleSearchKeyDown}
-                                    className={cn("pl-9", currentItem.medicine_id ? "border-green-500 bg-green-50" : "")}
+                                    ref={batchInputRef}
+                                    value={currentItem.batch_number}
+                                    onChange={e => setCurrentItem(prev => ({ ...prev, batch_number: e.target.value }))}
+                                    placeholder="BATCH123"
+                                    className="uppercase font-mono"
+                                    onKeyDown={e => e.key === 'Enter' && unitInputRef.current?.focus()}
                                 />
                             </div>
-                            {showSuggestions && (
-                                <div className="absolute top-full left-0 w-full mt-1 bg-white border rounded-md shadow-xl z-[100] max-h-[300px] overflow-auto">
-                                    {filteredMeds.map((med, idx) => (
-                                        <div
-                                            key={med.id}
-                                            className={cn(
-                                                "px-4 py-2 cursor-pointer border-b last:border-0",
-                                                idx === focusedIndex ? "bg-blue-100" : "hover:bg-blue-50"
-                                            )}
-                                            onClick={() => selectMedicine(med)}
-                                        >
-                                            <div className="font-medium text-gray-900">{med.name}</div>
-                                            <div className="text-xs text-gray-500">{med.pack_size_label}</div>
-                                        </div>
-                                    ))}
-                                    {filteredMeds.length === 0 && (
-                                        <div
-                                            className="p-3 text-center cursor-pointer hover:bg-blue-50 transition-colors group"
-                                            onClick={handleQuickAddMedicine}
-                                        >
-                                            <div className="text-xs text-gray-500">Medicine not found?</div>
-                                            <div className="text-sm font-semibold text-blue-600 flex items-center justify-center gap-2 mt-1">
-                                                {isAddingNewMed ? (
-                                                    <span>Adding...</span>
-                                                ) : (
-                                                    <>
-                                                        <PlusCircle className="h-4 w-4" />
-                                                        Add "{currentItem.search}" to Database
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
 
-                        {/* 2. Batch */}
-                        <div className="w-[120px] space-y-2">
-                            <Label>Batch No.</Label>
-                            <Input
-                                ref={batchInputRef}
-                                value={currentItem.batch_number}
-                                onChange={e => setCurrentItem(prev => ({ ...prev, batch_number: e.target.value }))}
-                                placeholder="BATCH123"
-                                className="uppercase font-mono"
-                                onKeyDown={e => e.key === 'Enter' && unitInputRef.current?.focus()}
-                            />
-                        </div>
+                            <div className="w-[90px] space-y-2">
+                                <Label className="text-blue-700">Unit/Pack</Label>
+                                <Input
+                                    ref={unitInputRef}
+                                    type="number"
+                                    value={currentItem.pack_size_quantity}
+                                    onChange={e => setCurrentItem(prev => ({ ...prev, pack_size_quantity: parseInt(e.target.value) || 1 }))}
+                                    className="bg-blue-50 border-blue-200"
+                                    onKeyDown={e => e.key === 'Enter' && qtyInputRef.current?.focus()}
+                                />
+                            </div>
 
-                        {/* NEW: Units Per Pack */}
-                        <div className="w-[90px] space-y-2">
-                            <Label className="text-blue-700">Unit/Pack</Label>
-                            <Input
-                                ref={unitInputRef}
-                                type="number"
-                                value={currentItem.pack_size_quantity}
-                                onWheel={(e) => e.currentTarget.blur()}
-                                onChange={e => setCurrentItem(prev => ({ ...prev, pack_size_quantity: parseInt(e.target.value) || 1 }))}
-                                className="bg-blue-50 border-blue-200"
-                                title="How many tablets in this strip?"
-                                onKeyDown={e => e.key === 'Enter' && qtyInputRef.current?.focus()}
-                            />
-                        </div>
+                            <div className="w-[90px] space-y-2">
+                                <Label>Qty (Packs)</Label>
+                                <Input
+                                    ref={qtyInputRef}
+                                    type="number"
+                                    value={currentItem.quantity}
+                                    onChange={e => setCurrentItem(prev => ({ ...prev, quantity: e.target.value }))}
+                                    placeholder="0"
+                                    onKeyDown={e => e.key === 'Enter' && freeQtyInputRef.current?.focus()}
+                                />
+                            </div>
 
-                        {/* 3. Quantity */}
-                        <div className="w-[90px] space-y-2">
-                            <Label>Qty (Packs)</Label>
-                            <Input
-                                ref={qtyInputRef}
-                                type="number"
-                                value={currentItem.quantity}
-                                onChange={e => setCurrentItem(prev => ({ ...prev, quantity: e.target.value }))}
-                                placeholder="0"
-                                onKeyDown={e => e.key === 'Enter' && freeQtyInputRef.current?.focus()}
-                            />
-                        </div>
+                            <div className="w-[90px] space-y-2">
+                                <Label className="text-green-600">Free Qty</Label>
+                                <Input
+                                    ref={freeQtyInputRef}
+                                    type="number"
+                                    value={currentItem.free_quantity}
+                                    onChange={e => setCurrentItem(prev => ({ ...prev, free_quantity: e.target.value }))}
+                                    placeholder="0"
+                                    className="bg-green-50 border-green-200"
+                                    onKeyDown={e => e.key === 'Enter' && mrpInputRef.current?.focus()}
+                                />
+                            </div>
 
-                        {/* 3.1 Free Quantity - NEW */}
-                        <div className="w-[90px] space-y-2">
-                            <Label className="text-green-600">Free Qty</Label>
-                            <Input
-                                ref={freeQtyInputRef}
-                                type="number"
-                                value={currentItem.free_quantity}
-                                onChange={e => setCurrentItem(prev => ({ ...prev, free_quantity: e.target.value }))}
-                                placeholder="0"
-                                className="bg-green-50 border-green-200"
-                                onKeyDown={e => e.key === 'Enter' && mrpInputRef.current?.focus()}
-                            />
-                        </div>
+                            <div className="w-[90px] space-y-2">
+                                <Label>MRP</Label>
+                                <Input
+                                    ref={mrpInputRef}
+                                    type="number"
+                                    step="0.01"
+                                    value={currentItem.mrp}
+                                    onChange={e => setCurrentItem(prev => ({ ...prev, mrp: e.target.value }))}
+                                    placeholder="0.00"
+                                    onKeyDown={e => e.key === 'Enter' && rateInputRef.current?.focus()}
+                                />
+                            </div>
 
-                        {/* 4. MRP */}
-                        <div className="w-[90px] space-y-2">
-                            <Label>MRP</Label>
-                            <Input
-                                ref={mrpInputRef}
-                                type="number"
-                                step="0.01"
-                                value={currentItem.mrp}
-                                onChange={e => setCurrentItem(prev => ({ ...prev, mrp: e.target.value }))}
-                                placeholder="0.00"
-                                onKeyDown={e => e.key === 'Enter' && rateInputRef.current?.focus()}
-                            />
-                        </div>
+                            <div className="w-[90px] space-y-2">
+                                <Label>Rate (Cost)</Label>
+                                <Input
+                                    ref={rateInputRef}
+                                    type="number"
+                                    step="0.01"
+                                    value={currentItem.unit_price}
+                                    onChange={e => setCurrentItem(prev => ({ ...prev, unit_price: e.target.value }))}
+                                    placeholder="0.00"
+                                    onKeyDown={e => e.key === 'Enter' && expiryInputRef.current?.focus()}
+                                />
+                            </div>
 
-                        {/* 5. Purchase Rate */}
-                        <div className="w-[90px] space-y-2">
-                            <Label>Rate (Cost)</Label>
-                            <Input
-                                ref={rateInputRef}
-                                type="number"
-                                step="0.01"
-                                value={currentItem.unit_price}
-                                onChange={e => setCurrentItem(prev => ({ ...prev, unit_price: e.target.value }))}
-                                placeholder="0.00"
-                                onKeyDown={e => e.key === 'Enter' && expiryInputRef.current?.focus()}
-                            />
-                        </div>
+                            <div className="w-[140px] space-y-2">
+                                <Label>Expiry Date</Label>
+                                <Input
+                                    ref={expiryInputRef}
+                                    type="date"
+                                    value={currentItem.expiry_date}
+                                    onChange={e => setCurrentItem(prev => ({ ...prev, expiry_date: e.target.value }))}
+                                    onKeyDown={e => e.key === 'Enter' && addButtonRef.current?.focus()}
+                                />
+                            </div>
 
-                        {/* 6. Expiry */}
-                        <div className="w-[140px] space-y-2">
-                            <Label>Expiry Date</Label>
-                            <Input
-                                ref={expiryInputRef}
-                                type="date"
-                                value={currentItem.expiry_date}
-                                onChange={e => setCurrentItem(prev => ({ ...prev, expiry_date: e.target.value }))}
-                                onKeyDown={e => e.key === 'Enter' && addButtonRef.current?.focus()}
-                            />
+                            <Button
+                                ref={addButtonRef}
+                                onClick={addToCart}
+                                className="bg-blue-600 hover:bg-blue-700 w-[100px]"
+                            >
+                                <Plus className="h-4 w-4 mr-1" /> Add
+                            </Button>
                         </div>
-
-                        {/* 7. Add Button */}
-                        <Button
-                            ref={addButtonRef}
-                            onClick={addToCart}
-                            className="bg-blue-600 hover:bg-blue-700 w-[100px]"
-                        >
-                            <Plus className="h-4 w-4 mr-1" /> Add
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Items Table */}
             <Card className="min-h-[300px]">
@@ -671,6 +712,7 @@ export default function PurchaseEntryPage() {
                             <TableHead className="w-[80px] text-right">Total Units</TableHead>
                             <TableHead className="text-right w-[100px]">Rate</TableHead>
                             <TableHead className="text-right w-[120px]">Purchase Amount</TableHead>
+                            <TableHead className="w-[60px] text-center">Ret?</TableHead>
                             <TableHead className="w-[50px]"></TableHead>
                         </TableRow>
                     </TableHeader>
@@ -699,11 +741,26 @@ export default function PurchaseEntryPage() {
                                     <div>₹{item.unit_price.toFixed(2)}</div>
                                     <div className="text-[10px]">MRP: ₹{item.mrp}</div>
                                 </TableCell>
-                                <TableCell className="text-right font-bold text-gray-900">₹{item.total.toFixed(2)}</TableCell>
+                                <TableCell className={cn("text-right font-bold", item.is_return ? "text-red-500" : "text-gray-900")}>
+                                    {item.is_return ? '-' : ''}₹{item.total.toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                    <input
+                                        type="checkbox"
+                                        className="w-4 h-4 accent-red-500"
+                                        checked={!!item.is_return}
+                                        onChange={(e) => {
+                                            const checked = e.target.checked
+                                            setCartItems(cartItems.map(c => c.id === item.id ? { ...c, is_return: checked } : c))
+                                        }}
+                                    />
+                                </TableCell>
                                 <TableCell>
-                                    <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700 h-8 w-8" onClick={() => removeCartItem(item.id)}>
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
+                                    {!editingId && (
+                                        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700 h-8 w-8" onClick={() => removeCartItem(item.id)}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))}

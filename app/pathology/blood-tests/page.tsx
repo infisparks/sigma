@@ -20,7 +20,9 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Edit } from "lucide-react"
+import { Search, Plus, Edit, FileSpreadsheet } from "lucide-react"
+import * as XLSX from "xlsx"
+import { saveAs } from "file-saver"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { generateReportPdf } from "@/app/pathology/download-report/[registrationId]/pdf-generator"
 import type { PatientData, BloodTestData } from "@/app/pathology/download-report/[registrationId]/types/report"
@@ -895,6 +897,22 @@ export default function BloodTestsPage() {
   const openInterpretationModal = (test: TestData) => { setSelectedTestForInterpretation(test); setShowInterpretationModal(true); }
   const closeInterpretationModal = () => { setShowInterpretationModal(false); setSelectedTestForInterpretation(null); fetchBloodTests(); }
 
+  const handleExport = () => {
+    const dataToExport = filteredTests.map((test) => ({
+      "Test Name": test.testName,
+      "Price": test.price,
+      "Service Name": test.type?.replace(/_/g, " ") || "Blood Test",
+      "Source": test.isOutsource ? "Outsource" : "In-House",
+    }))
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Blood Tests")
+    const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
+    const data = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" })
+    saveAs(data, "BloodTests_Export.xlsx")
+  }
+
   if (loading) return <div className="p-8 text-gray-500">Loading tests...</div>
 
   return (
@@ -916,6 +934,9 @@ export default function BloodTestsPage() {
                     <Input placeholder="Search tests..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 w-64" />
                   </div>
                   <Badge variant="outline">{filteredTests.length} tests</Badge>
+                  <Button onClick={handleExport} variant="outline" className="text-green-600 border-green-600 hover:bg-green-50">
+                    <FileSpreadsheet className="h-4 w-4 mr-2" /> Export XL
+                  </Button>
                   <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700">
                     <Plus className="h-4 w-4 mr-2" /> Add Test
                   </Button>
