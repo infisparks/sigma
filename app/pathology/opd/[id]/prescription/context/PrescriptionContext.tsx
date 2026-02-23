@@ -311,7 +311,8 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
                             pulse: data.pulse,
                             weight: data.weight,
                             spo2: data.spo2,
-                            temp: data.temp
+                            temp: data.temp,
+                            sugar: data.sugar
                         },
                         isLoading: false,
                         hasLocalChanges: false
@@ -342,7 +343,8 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
                             pulse: data.pulse,
                             weight: data.weight,
                             spo2: data.spo2,
-                            temp: data.temp
+                            temp: data.temp,
+                            sugar: data.sugar
                         },
                         isLoading: false
                     }));

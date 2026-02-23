@@ -78,4 +78,5 @@ export interface Vitals {
     weight?: string;
     spo2?: string;
     temp?: string;
+    sugar?: string;
 }

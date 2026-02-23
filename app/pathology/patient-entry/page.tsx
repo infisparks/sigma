@@ -112,6 +112,7 @@ interface OPDData {
   pulse: number | null;
   weight: number | null;
   spo2: string;
+  sugar: string;
   discountAmount: number;
   paymentEntries: any[];
 }
@@ -151,7 +152,7 @@ const getDefaultUnifiedFormValues = (): IUnifiedFormInput => ({
   sourceOpdId: null, sourceIpdId: null,
   pathology: { estimatedTime: "1100", bloodTests: [], discountAmount: 0, paymentEntries: [] },
   xray: { billNumber: "", remark: "", dateOfAppointment: new Date(), xrayTests: [{ examination: "", amount: 0 }], discount: 0, payments: [] },
-  opd: { treatingDoctorId: null, referringDoctorName: "", visitCategory: 'First Visit', bp: "", pulse: null, weight: null, spo2: "", discountAmount: 0, paymentEntries: [] },
+  opd: { treatingDoctorId: null, referringDoctorName: "", visitCategory: 'First Visit', bp: "", pulse: null, weight: null, spo2: "", sugar: "", discountAmount: 0, paymentEntries: [] },
 })
 
 const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => { return fn() }

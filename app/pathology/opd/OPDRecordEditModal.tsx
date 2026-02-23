@@ -58,6 +58,7 @@ interface FullOPDRecord {
     pulse: number | null;
     weight: number | null;
     spo2: string | null;
+    sugar: string | null;
     patient_detail: PatientDetails | null;
 }
 
@@ -112,6 +113,7 @@ interface EditFormFields {
     pulse: number | null;
     weight: number | null;
     spo2: string;
+    sugar: string;
     discountAmount: number;
     sendWhatsApp: boolean;
     paymentEntries: PaymentEntry[];
@@ -162,6 +164,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
         pulse: record?.pulse || null,
         weight: record?.weight || null,
         spo2: record?.spo2 || '',
+        sugar: record?.sugar || '',
         discountAmount: record?.discount_amount || 0,
         paymentEntries: record?.payment_entries || [],
         sendWhatsApp: true,
@@ -274,6 +277,7 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                 pulse: data.pulse || null,
                 weight: data.weight || null,
                 spo2: data.spo2 || null, // Added SpO2
+                sugar: data.sugar || null,
                 discount_amount: data.discountAmount,
                 total_fees: totalFees,
                 amount_paid: finalTotalPaid,
@@ -515,6 +519,10 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                     <div>
                                         <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> SpO2 (%)</Label>
                                         <Input type="text" {...register("spo2")} className="h-9" placeholder="e.g., 99%" />
+                                    </div>
+                                    <div>
+                                        <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> Sugar (mg/dL)</Label>
+                                        <Input type="text" {...register("sugar")} className="h-9" placeholder="e.g., 110" />
                                     </div>
                                     <div>
                                         <Label className="text-sm flex items-center"><Scale className="h-3 w-3 mr-1" /> Weight (Kg)</Label>

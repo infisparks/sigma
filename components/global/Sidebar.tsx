@@ -98,6 +98,7 @@ const pathologyMenuItems = [
       { title: 'Vendors', href: '/pharmacy/vendors' },
       { title: 'Purchase Entry', href: '/pharmacy/medicinePurchase' },
       { title: 'Purchase History', href: '/pharmacy/purchases' },
+      { title: 'Return to Vendor', href: '/pharmacy/purchases/return' },
     ]
   },
   {

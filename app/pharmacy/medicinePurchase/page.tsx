@@ -36,7 +36,8 @@ interface ClinicMedicine {
     id: number
     name: string
     pack_size_label: string
-    pack_size_quantity: number // NEW: Units per pack
+    pack_size_quantity: number
+    gst_percentage: number // NEW
 }
 
 interface PurchaseItem {
@@ -55,8 +56,12 @@ interface PurchaseItem {
 
     mrp: number
     unit_price: number // Cost Price
+    discount_percent: number // NEW
+    discount_amount: number // NEW
+    gst_percent: number
+    gst_amount: number
     total: number
-    is_return?: boolean // Added for purchase returns
+    is_return?: boolean
 }
 
 // NEW: Type for fetched previous batches
@@ -94,7 +99,9 @@ export default function PurchaseEntryPage() {
         quantity: '',
         free_quantity: '0',
         mrp: '',
-        unit_price: ''
+        unit_price: '',
+        discount_percent: '0', // NEW
+        gst_percent: '12' // NEW
     })
 
     // --- State: Search Logic ---
@@ -129,64 +136,12 @@ export default function PurchaseEntryPage() {
         const loadData = async () => {
             setLoadingResources(true)
             await Promise.all([fetchVendors(), fetchMedicines()])
-            if (editingId) {
-                await fetchExistingPurchase(editingId)
-            }
             setLoadingResources(false)
         }
         loadData()
-    }, [editingId])
+    }, [])
 
-    const fetchExistingPurchase = async (id: string) => {
-        try {
-            const { data: invoice, error: invError } = await supabase
-                .from('pharmacy_purchase_invoice')
-                .select(`
-                    *,
-                    items:pharmacy_stock_ledger(*)
-                `)
-                .eq('id', id)
-                .single()
 
-            if (invError) throw invError
-
-            setInvoiceData({
-                vendor_id: invoice.vendor_id,
-                invoice_number: invoice.invoice_number,
-                invoice_date: invoice.invoice_date
-            })
-
-            // Load medicines to map names
-            const medIds = (invoice.items || []).map((i: any) => i.medicine_id)
-            const { data: meds } = await supabase.from('clinic_medicine').select('id, name, pack_size_label').in('id', medIds)
-            const medMap = new Map((meds || []).map(m => [m.id, m]))
-
-            const hydratedCart: PurchaseItem[] = (invoice.items || []).map((item: any) => {
-                const med = medMap.get(item.medicine_id)
-                return {
-                    id: Math.random().toString(36),
-                    medicine_id: item.medicine_id,
-                    medicine_name: med?.name || 'Unknown',
-                    pack_size: med?.pack_size_label || '',
-                    batch_number: item.batch_number,
-                    expiry_date: item.expiry_date,
-                    quantity: item.quantity_billed || 0,
-                    free_quantity: item.quantity_free || 0,
-                    pack_size_quantity: item.pack_size_quantity || 1,
-                    total_units: item.total_units,
-                    mrp: Number(item.mrp),
-                    unit_price: Number(item.rate_per_unit),
-                    total: Number(item.total_amount),
-                    is_return: item.transaction_type === 'PUR_RET'
-                }
-            })
-
-            setCartItems(hydratedCart)
-        } catch (error) {
-            console.error('Error fetching purchase:', error)
-            alert('Failed to load purchase details')
-        }
-    }
 
     // --- Global Hotkeys ---
     useEffect(() => {
@@ -218,8 +173,7 @@ export default function PurchaseEntryPage() {
     }
 
     const fetchMedicines = async () => {
-        // Fetch only Local Clinic Medicines with their UNITS configuration
-        const { data } = await supabase.from('clinic_medicine').select('id, name, pack_size_label, pack_size_quantity').order('name')
+        const { data } = await supabase.from('clinic_medicine').select('id, name, pack_size_label, pack_size_quantity, gst_percentage').order('name')
         setMedicineList(data || [])
     }
 
@@ -282,6 +236,7 @@ export default function PurchaseEntryPage() {
             pack_size: med.pack_size_label,
             pack_size_quantity: med.pack_size_quantity || 1, // Auto-fill Unit from DB
             search: med.name,
+            gst_percent: med.gst_percentage?.toString() || '12',
             // Reset others
             batch_number: '',
             expiry_date: '',
@@ -336,8 +291,8 @@ export default function PurchaseEntryPage() {
             if (error) throw error
 
             // Update local state and select it
-            setMedicineList(prev => [...prev, data])
-            selectMedicine(data)
+            setMedicineList(prev => [...prev, data as any])
+            selectMedicine(data as any)
 
         } catch (e: any) {
             console.error(e)
@@ -361,8 +316,17 @@ export default function PurchaseEntryPage() {
         const qty = parseInt(currentItem.quantity)
         const free = parseInt(currentItem.free_quantity) || 0
         const units = currentItem.pack_size_quantity
-        const rate = parseFloat(currentItem.unit_price) // Cost per pack
-        const total = qty * rate
+        const rate = parseFloat(currentItem.unit_price) // Inclusive of GST
+        const discPercent = parseFloat(currentItem.discount_percent) || 0
+        const gstPercent = parseFloat(currentItem.gst_percent) || 0
+
+        const grossTotal = qty * rate
+        const discountAmountLine = (grossTotal * discPercent) / 100
+        const total = grossTotal - discountAmountLine
+
+        const taxableAmountLine = total / (1 + (gstPercent / 100))
+        const gstAmountLine = total - taxableAmountLine
+        const subtotalLine = taxableAmountLine
 
         const newItem: PurchaseItem = {
             id: Math.random().toString(36),
@@ -375,11 +339,15 @@ export default function PurchaseEntryPage() {
 
             quantity: qty,
             free_quantity: free,
-            pack_size_quantity: units, // Save this!
-            total_units: (qty + free) * units, // Calculated with FREE quantity
+            pack_size_quantity: units,
+            total_units: (qty + free) * units,
 
             mrp: parseFloat(currentItem.mrp),
-            unit_price: rate,
+            unit_price: subtotalLine / qty, // Taxable rate per pack
+            discount_percent: discPercent,
+            discount_amount: discountAmountLine,
+            gst_percent: gstPercent,
+            gst_amount: gstAmountLine,
             total: total
         }
 
@@ -397,7 +365,9 @@ export default function PurchaseEntryPage() {
             quantity: '',
             free_quantity: '0',
             mrp: '',
-            unit_price: ''
+            unit_price: '',
+            discount_percent: '0',
+            gst_percent: '12'
         })
         setExistingBatches([]) // Clear batch suggestions
         searchInputRef.current?.focus()
@@ -414,7 +384,7 @@ export default function PurchaseEntryPage() {
 
         setIsSubmitting(true)
 
-        const totalAmount = cartItems.reduce((sum, item) => sum + (item.is_return ? -item.total : item.total), 0)
+        const totalAmount = cartItems.reduce((sum, item) => sum + item.total, 0)
 
         // Prepare payload for NEW RPC
         const rpcPayload = {
@@ -431,25 +401,19 @@ export default function PurchaseEntryPage() {
                 pack_size_quantity: item.pack_size_quantity,
                 mrp: item.mrp,
                 unit_price: item.unit_price,
-                total_amount: item.is_return ? -item.total : item.total,
-                is_return: !!item.is_return
+                discount_percent: item.discount_percent,
+                discount_amount: item.discount_amount,
+                gst_percent: item.gst_percent,
+                gst_amount: item.gst_amount,
+                total_amount: item.total
             }))
         }
 
         try {
-            if (editingId) {
-                const { error } = await supabase.rpc('update_purchase_entry', {
-                    ...rpcPayload,
-                    p_purchase_id: editingId
-                })
-                if (error) throw error
-                alert('Purchase updated successfully')
-            } else {
-                const { data, error } = await supabase.rpc('save_purchase_entry', rpcPayload)
-                if (error) throw error
-                // Redirect to Bill Page
-                window.open(`/pharmacy/purchase_bill/${data}`, '_blank')
-            }
+            const { data, error } = await supabase.rpc('pharmacy_save_purchase_entry', rpcPayload)
+            if (error) throw error
+            // Redirect to Bill Page
+            window.open(`/pharmacy/purchase_bill/${data}`, '_blank')
 
             // Reload page to reset state and stock
             window.location.href = '/pharmacy/purchases'
@@ -469,7 +433,7 @@ export default function PurchaseEntryPage() {
             <div>
                 <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
                     <ShoppingCart className="h-8 w-8 text-blue-600" />
-                    {editingId ? 'Manage Purchase Return' : 'New Purchase Entry'}
+                    New Purchase Entry
                     <div className="ml-auto flex items-center gap-2 text-xs font-normal text-muted-foreground bg-white px-3 py-1 rounded-full border shadow-sm">
                         <Keyboard className="h-4 w-4" />
                         <span>Shortcuts:</span>
@@ -524,9 +488,13 @@ export default function PurchaseEntryPage() {
                             />
                         </div>
                         <div className="flex flex-col justify-end">
-                            <div className="bg-blue-50 text-blue-900 px-4 py-2 rounded-md border border-blue-100 flex justify-between items-center">
-                                <span className="text-sm font-medium">Invoice Total</span>
-                                <span className="text-xl font-bold">₹{totalInvoiceValue.toFixed(2)}</span>
+                            <div className="bg-blue-50 text-blue-900 px-4 py-3 rounded-md border border-blue-100 grid grid-cols-2 gap-x-4">
+                                <span className="text-xs text-blue-700">Subtotal</span>
+                                <span className="text-right font-medium">₹{(cartItems.reduce((s, i) => s + (i.total - i.gst_amount), 0)).toFixed(2)}</span>
+                                <span className="text-xs text-blue-700">Tax Total</span>
+                                <span className="text-right font-medium">₹{(cartItems.reduce((s, i) => s + i.gst_amount, 0)).toFixed(2)}</span>
+                                <span className="text-sm font-bold border-t border-blue-200 mt-1 pt-1">Invoice Total</span>
+                                <span className="text-xl font-bold border-t border-blue-200 mt-1 pt-1">₹{totalInvoiceValue.toFixed(2)}</span>
                             </div>
                         </div>
                     </div>
@@ -663,6 +631,17 @@ export default function PurchaseEntryPage() {
                                 />
                             </div>
 
+                            <div className="w-[80px] space-y-2">
+                                <Label>GST %</Label>
+                                <Input
+                                    type="number"
+                                    value={currentItem.gst_percent}
+                                    onChange={e => setCurrentItem(prev => ({ ...prev, gst_percent: e.target.value }))}
+                                    placeholder="12"
+                                    onKeyDown={e => e.key === 'Enter' && rateInputRef.current?.focus()}
+                                />
+                            </div>
+
                             <div className="w-[90px] space-y-2">
                                 <Label>Rate (Cost)</Label>
                                 <Input
@@ -672,6 +651,18 @@ export default function PurchaseEntryPage() {
                                     value={currentItem.unit_price}
                                     onChange={e => setCurrentItem(prev => ({ ...prev, unit_price: e.target.value }))}
                                     placeholder="0.00"
+                                    onKeyDown={e => e.key === 'Enter' && expiryInputRef.current?.focus()}
+                                />
+                            </div>
+
+                            <div className="w-[80px] space-y-2">
+                                <Label className="text-blue-600">Disc %</Label>
+                                <Input
+                                    type="number"
+                                    value={currentItem.discount_percent}
+                                    onChange={e => setCurrentItem(prev => ({ ...prev, discount_percent: e.target.value }))}
+                                    placeholder="0"
+                                    className="bg-blue-50 border-blue-200"
                                     onKeyDown={e => e.key === 'Enter' && expiryInputRef.current?.focus()}
                                 />
                             </div>
@@ -711,8 +702,9 @@ export default function PurchaseEntryPage() {
                             <TableHead className="w-[80px] text-right">Qty + Free</TableHead>
                             <TableHead className="w-[80px] text-right">Total Units</TableHead>
                             <TableHead className="text-right w-[100px]">Rate</TableHead>
-                            <TableHead className="text-right w-[120px]">Purchase Amount</TableHead>
-                            <TableHead className="w-[60px] text-center">Ret?</TableHead>
+                            <TableHead className="text-right w-[80px]">GST %</TableHead>
+                            <TableHead className="text-right w-[80px]">Disc %</TableHead>
+                            <TableHead className="w-[120px]">Purchase Amount</TableHead>
                             <TableHead className="w-[50px]"></TableHead>
                         </TableRow>
                     </TableHeader>
@@ -737,30 +729,28 @@ export default function PurchaseEntryPage() {
                                 <TableCell className="text-right font-medium text-blue-700 bg-blue-50/50">
                                     {item.total_units} units
                                 </TableCell>
-                                <TableCell className="text-right text-gray-500">
-                                    <div>₹{item.unit_price.toFixed(2)}</div>
-                                    <div className="text-[10px]">MRP: ₹{item.mrp}</div>
+                                <TableCell className="text-right">
+                                    <div className="text-xs">₹{item.unit_price.toFixed(2)}</div>
+                                    <div className="text-[10px] text-orange-600">Tax: ₹{item.gst_amount.toFixed(2)}</div>
                                 </TableCell>
-                                <TableCell className={cn("text-right font-bold", item.is_return ? "text-red-500" : "text-gray-900")}>
-                                    {item.is_return ? '-' : ''}₹{item.total.toFixed(2)}
+                                <TableCell className="text-right font-mono text-xs">
+                                    {item.gst_percent}%
                                 </TableCell>
-                                <TableCell className="text-center">
-                                    <input
-                                        type="checkbox"
-                                        className="w-4 h-4 accent-red-500"
-                                        checked={!!item.is_return}
-                                        onChange={(e) => {
-                                            const checked = e.target.checked
-                                            setCartItems(cartItems.map(c => c.id === item.id ? { ...c, is_return: checked } : c))
-                                        }}
-                                    />
+                                <TableCell className="text-right font-mono text-xs text-blue-600">
+                                    {item.discount_percent}%
+                                </TableCell>
+                                <TableCell className={cn("text-right font-bold text-gray-900")}>
+                                    ₹{item.total.toFixed(2)}
                                 </TableCell>
                                 <TableCell>
-                                    {!editingId && (
-                                        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700 h-8 w-8" onClick={() => removeCartItem(item.id)}>
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    )}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => removeCartItem(item.id)}
+                                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
                                 </TableCell>
                             </TableRow>
                         ))}

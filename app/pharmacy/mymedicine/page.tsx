@@ -18,9 +18,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Plus, Search, Save, Pill, Building2, Trash2, Check, ExternalLink, RefreshCw, X, Settings2, PenLine } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Textarea } from '@/components/ui/textarea'
 import { supabase } from '@/lib/supabase'
-
-// Types
 interface GlobalMedicine {
     id: number
     name: string
@@ -42,6 +42,15 @@ interface ClinicMedicine {
     hsn_code: string
     vendor_id?: string
     original_medicine_id?: number
+    // New Fields
+    manufacturer?: string
+    generic_name?: string
+    rack_location?: string
+    min_stock_alert?: number
+    category?: string
+    gst_percentage?: number
+    description?: string
+    max_stock_limit?: number
 }
 
 interface Vendor {
@@ -65,6 +74,11 @@ export default function MyMedicinePage() {
     const [importLoading, setImportLoading] = useState(false)
     const [selectedGlobalMeds, setSelectedGlobalMeds] = useState<SelectedImportMedicine[]>([])
     const [bulkVendor, setBulkVendor] = useState<string>('')
+
+    // Edit Mode State
+    const [editingProduct, setEditingProduct] = useState<ClinicMedicine | null>(null)
+    const [isEditOpen, setIsEditOpen] = useState(false)
+
 
     // --- Effects ---
     useEffect(() => {
@@ -175,8 +189,9 @@ export default function MyMedicinePage() {
                 pack_size_label: med.pack_size_label,
                 pack_size_quantity: med.items_per_pack,
                 hsn_code: med.hsn,
+                gst_percentage: 12, // Default
                 vendor_id: bulkVendor || null,
-                original_medicine_id: med.is_manual ? null : med.id // Null for manual entries
+                original_medicine_id: med.is_manual ? null : med.id
             }))
 
             const { error } = await supabase
@@ -216,6 +231,47 @@ export default function MyMedicinePage() {
             fetchClinicMedicines() // Revert on error
         }
     }
+
+    const openEditModal = (med: ClinicMedicine) => {
+        setEditingProduct(med)
+        setIsEditOpen(true)
+    }
+
+    const handleSaveProduct = async () => {
+        if (!editingProduct) return
+
+        try {
+            const { error } = await supabase
+                .from('clinic_medicine')
+                .update({
+                    name: editingProduct.name,
+                    manufacturer: editingProduct.manufacturer,
+                    generic_name: editingProduct.generic_name,
+                    pack_size_label: editingProduct.pack_size_label,
+                    pack_size_quantity: editingProduct.pack_size_quantity,
+                    hsn_code: editingProduct.hsn_code,
+                    rack_location: editingProduct.rack_location,
+                    min_stock_alert: editingProduct.min_stock_alert,
+                    category: editingProduct.category,
+                    gst_percentage: editingProduct.gst_percentage,
+                    description: editingProduct.description,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', editingProduct.id)
+
+            if (error) throw error
+
+            // Update local state
+            setClinicMedicines(prev => prev.map(m => m.id === editingProduct.id ? editingProduct : m))
+            setIsEditOpen(false)
+            setEditingProduct(null)
+
+        } catch (e: any) {
+            console.error("Error saving product:", e)
+            alert("Failed to save product details: " + e.message)
+        }
+    }
+
 
     // --- Filtering ---
     const filteredMedicines = clinicMedicines.filter(m =>
@@ -532,7 +588,7 @@ export default function MyMedicinePage() {
                             <div className="relative flex-1 max-w-sm">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
-                                    placeholder="Filter by name or HSN..."
+                                    placeholder="Filter by name, HSN or Generic..."
                                     className="pl-8 bg-white"
                                     value={searchTerm}
                                     onChange={e => setSearchTerm(e.target.value)}
@@ -554,50 +610,62 @@ export default function MyMedicinePage() {
                                 <TableHeader className="bg-gray-50">
                                     <TableRow>
                                         <TableHead className="w-[50px]">ID</TableHead>
-                                        <TableHead>Medicine Name</TableHead>
+                                        <TableHead>Medicine Info</TableHead>
                                         <TableHead className="w-[120px]">Units/Pack</TableHead>
-                                        <TableHead className="w-[150px]">HSN Code</TableHead>
+                                        <TableHead className="w-[100px]">Stock Limits</TableHead>
+                                        <TableHead className="w-[150px]">Rack / Location</TableHead>
                                         <TableHead className="w-[200px]">Vendor</TableHead>
-                                        <TableHead className="text-center w-[100px]">Linked</TableHead>
+                                        <TableHead className="w-[50px]"></TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {loading ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                                            <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                                                 Loading your medicines...
                                             </TableCell>
                                         </TableRow>
                                     ) : filteredMedicines.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                                            <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                                                 No medicines found. Click "Import Medicines" to add some!
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         filteredMedicines.map((med) => (
-                                            <TableRow key={med.id} className="hover:bg-blue-50/30 transition-colors">
+                                            <TableRow key={med.id} className="hover:bg-blue-50/30 transition-colors group">
                                                 <TableCell className="font-mono text-xs text-muted-foreground">#{med.id}</TableCell>
                                                 <TableCell>
                                                     <div className="font-medium text-gray-900">{med.name}</div>
-                                                    <div className="text-xs text-gray-500">{med.pack_size_label}</div>
+                                                    <div className="text-xs text-gray-500">{med.pack_size_label} {med.manufacturer && `• ${med.manufacturer}`}</div>
+                                                    {med.generic_name && <div className="text-[10px] text-blue-600 italic">{med.generic_name}</div>}
                                                 </TableCell>
                                                 {/* UNITS PER PACK EDIT */}
                                                 <TableCell>
-                                                    <Input
-                                                        type="number"
-                                                        className="h-8 w-20 border-transparent hover:border-gray-200 focus:border-blue-500 bg-transparent transition-all text-right font-mono"
-                                                        value={med.pack_size_quantity || 1}
-                                                        onWheel={(e) => e.currentTarget.blur()}
-                                                        onChange={e => updateMedicine(med.id, 'pack_size_quantity', parseInt(e.target.value))}
-                                                    />
+                                                    <div className="flex items-center gap-1">
+                                                        <Input
+                                                            type="number"
+                                                            className="h-7 w-16 text-right font-mono text-xs"
+                                                            value={med.pack_size_quantity || 1}
+                                                            onWheel={(e) => e.currentTarget.blur()}
+                                                            onChange={e => updateMedicine(med.id, 'pack_size_quantity', parseInt(e.target.value))}
+                                                        />
+                                                        <span className="text-[10px] text-gray-400">units</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="text-xs">
+                                                        <span className="text-red-500 font-medium" title="Min Alert">{med.min_stock_alert || 0}</span>
+                                                        <span className="text-gray-300 mx-1">/</span>
+                                                        <span className="text-green-600" title="Max Limit">{med.max_stock_limit || '-'}</span>
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Input
-                                                        className="h-8 w-full border-transparent hover:border-gray-200 focus:border-blue-500 bg-transparent transition-all"
-                                                        value={med.hsn_code || ''}
-                                                        onChange={e => updateMedicine(med.id, 'hsn_code', e.target.value)}
-                                                        placeholder="Enter HSN"
+                                                        className="h-7 w-full text-xs border-transparent hover:border-gray-200 focus:border-blue-500 bg-transparent transition-all"
+                                                        value={med.rack_location || ''}
+                                                        onChange={e => updateMedicine(med.id, 'rack_location', e.target.value)}
+                                                        placeholder="e.g. A1-R2"
                                                     />
                                                 </TableCell>
                                                 <TableCell>
@@ -605,7 +673,7 @@ export default function MyMedicinePage() {
                                                         value={med.vendor_id || 'none'}
                                                         onValueChange={v => updateMedicine(med.id, 'vendor_id', v === 'none' ? null : v)}
                                                     >
-                                                        <SelectTrigger className="h-8 border-transparent hover:border-gray-200 focus:border-blue-500 bg-transparent">
+                                                        <SelectTrigger className="h-7 text-xs border-transparent hover:border-gray-200 focus:border-blue-500 bg-transparent">
                                                             <SelectValue placeholder="Select Vendor" />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -616,14 +684,10 @@ export default function MyMedicinePage() {
                                                         </SelectContent>
                                                     </Select>
                                                 </TableCell>
-                                                <TableCell className="text-center">
-                                                    {med.original_medicine_id ? (
-                                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                                            Linked
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge variant="outline" className="text-gray-500">Manual</Badge>
-                                                    )}
+                                                <TableCell>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => openEditModal(med)}>
+                                                        <PenLine className="h-4 w-4" />
+                                                    </Button>
                                                 </TableCell>
                                             </TableRow>
                                         ))
@@ -634,6 +698,137 @@ export default function MyMedicinePage() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* EDIT DIALOG */}
+            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Product Profile</DialogTitle>
+                        <DialogDescription>
+                            Update details for {editingProduct?.name}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {editingProduct && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                            <div className="space-y-2 col-span-2">
+                                <Label>Product Name</Label>
+                                <Input
+                                    value={editingProduct.name}
+                                    onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Generic Name (Composition)</Label>
+                                <Input
+                                    value={editingProduct.generic_name || ''}
+                                    onChange={e => setEditingProduct({ ...editingProduct, generic_name: e.target.value })}
+                                    placeholder="e.g. Paracetamol 500mg"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Manufacturer</Label>
+                                <Input
+                                    value={editingProduct.manufacturer || ''}
+                                    onChange={e => setEditingProduct({ ...editingProduct, manufacturer: e.target.value })}
+                                    placeholder="e.g. GSK, Sun Pharma"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Category</Label>
+                                <Select
+                                    value={editingProduct.category || "Allopathic"}
+                                    onValueChange={v => setEditingProduct({ ...editingProduct, category: v })}
+                                >
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Allopathic">Allopathic</SelectItem>
+                                        <SelectItem value="Ayurvedic">Ayurvedic</SelectItem>
+                                        <SelectItem value="Surgical">Surgical</SelectItem>
+                                        <SelectItem value="General">General</SelectItem>
+                                        <SelectItem value="Cosmetic">Cosmetic</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Rack / Shelf Location</Label>
+                                <Input
+                                    value={editingProduct.rack_location || ''}
+                                    onChange={e => setEditingProduct({ ...editingProduct, rack_location: e.target.value })}
+                                    placeholder="e.g. Row 1, Shelf B"
+                                />
+                            </div>
+
+                            <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 col-span-2 grid grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                    <Label className="text-blue-700">Packing Label</Label>
+                                    <Input
+                                        value={editingProduct.pack_size_label}
+                                        onChange={e => setEditingProduct({ ...editingProduct, pack_size_label: e.target.value })}
+                                        className="bg-white"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-blue-700">Units per Pack</Label>
+                                    <Input
+                                        type="number"
+                                        value={editingProduct.pack_size_quantity}
+                                        onChange={e => setEditingProduct({ ...editingProduct, pack_size_quantity: parseInt(e.target.value) || 1 })}
+                                        className="bg-white"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-blue-700">HSN Code</Label>
+                                    <Input
+                                        value={editingProduct.hsn_code || ''}
+                                        onChange={e => setEditingProduct({ ...editingProduct, hsn_code: e.target.value })}
+                                        className="bg-white"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-blue-700">GST %</Label>
+                                    <Input
+                                        type="number"
+                                        value={editingProduct.gst_percentage || 12}
+                                        onChange={e => setEditingProduct({ ...editingProduct, gst_percentage: parseInt(e.target.value) || 0 })}
+                                        className="bg-white"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Min Stock Alert</Label>
+                                <Input
+                                    type="number"
+                                    value={editingProduct.min_stock_alert || 10}
+                                    onChange={e => setEditingProduct({ ...editingProduct, min_stock_alert: parseInt(e.target.value) || 0 })}
+                                />
+                            </div>
+
+
+
+                            <div className="col-span-2 space-y-2">
+                                <Label>Description</Label>
+                                <Textarea
+                                    value={editingProduct.description || ''}
+                                    onChange={e => setEditingProduct({ ...editingProduct, description: e.target.value })}
+                                    placeholder="Additional product details..."
+                                    className="h-20"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSaveProduct} className="bg-blue-600 hover:bg-blue-700">Save Changes</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

@@ -21,9 +21,8 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import {
-    Search, FileText, Calendar as CalendarIcon, FilterX,
     ArrowUpRight, CreditCard, Banknote, TrendingUp, History,
-    Eye, Printer, Trash2
+    Eye, Printer, Trash2, RefreshCcw, Search, FileText, Calendar as CalendarIcon, FilterX
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from "date-fns"
@@ -54,6 +53,7 @@ interface Sale {
     paid_amount_cash: number
     paid_amount_online: number
     subtotal: number
+    total_gst_amount: number // NEW
     discount_amount: number
     curr_total: number
     created_at: string
@@ -361,7 +361,7 @@ export default function SalesDashboardPage() {
                                 <TableHead className="w-[140px]">Date & Time</TableHead>
                                 <TableHead>Patient</TableHead>
                                 <TableHead>Doctor</TableHead>
-                                <TableHead className="text-center">Mode</TableHead>
+                                <TableHead className="text-right">Total Tax</TableHead>
                                 <TableHead className="text-right">Total Amount</TableHead>
                                 <TableHead className="text-right w-[100px]">Actions</TableHead>
                             </TableRow>
@@ -407,6 +407,9 @@ export default function SalesDashboardPage() {
                                             )}>
                                                 {sale.payment_mode}
                                             </span>
+                                        </TableCell>
+                                        <TableCell className="text-right font-medium text-gray-600">
+                                            ₹{(sale.total_gst_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 1 })}
                                         </TableCell>
                                         <TableCell className="text-right font-bold text-gray-900">
                                             ₹{(sale.curr_total || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
@@ -462,8 +465,8 @@ export default function SalesDashboardPage() {
                                                 <div className="font-medium">₹{(selectedSale.subtotal || 0).toLocaleString('en-IN')}</div>
                                             </div>
                                             <div className="text-right">
-                                                <div className="text-gray-500">Discount</div>
-                                                <div className="font-medium text-green-600">- ₹{(selectedSale.discount_amount || 0).toLocaleString('en-IN')}</div>
+                                                <div className="text-gray-500">Tax</div>
+                                                <div className="font-medium text-orange-600">+ ₹{(selectedSale.total_gst_amount || 0).toLocaleString('en-IN')}</div>
                                             </div>
                                         </>
                                     )}
@@ -527,7 +530,6 @@ export default function SalesDashboardPage() {
 
                             <div className="flex justify-end gap-2">
                                 <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>Close</Button>
-                                {/* Future: Add Print Bill functionality here */}
                                 <Button
                                     className="bg-blue-600 hover:bg-blue-700"
                                     onClick={() => window.open(`/pharmacy/bill/${selectedSale.id}`, '_blank')}
@@ -536,9 +538,15 @@ export default function SalesDashboardPage() {
                                 </Button>
                                 <Button
                                     className="bg-orange-600 hover:bg-orange-700 text-white ml-2"
+                                    onClick={() => window.location.href = `/pharmacy/sales/return?id=${selectedSale.id}`}
+                                >
+                                    <RefreshCcw className="h-4 w-4 mr-2" /> Return Items
+                                </Button>
+                                <Button
+                                    className="bg-blue-600 hover:bg-blue-700 text-white ml-2"
                                     onClick={() => window.location.href = `/pharmacy/billing?id=${selectedSale.id}`}
                                 >
-                                    <FileText className="h-4 w-4 mr-2" /> Edit / Return
+                                    <FileText className="h-4 w-4 mr-2" /> Edit Sale
                                 </Button>
                                 <Button
                                     className="bg-red-600 hover:bg-red-700 text-white ml-2"
@@ -552,6 +560,6 @@ export default function SalesDashboardPage() {
                 </DialogContent>
             </Dialog>
 
-        </div>
+        </div >
     )
 }

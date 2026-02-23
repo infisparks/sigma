@@ -35,6 +35,7 @@ interface OPDData {
     pulse: number | null;
     weight: number | null;
     spo2: string;
+    sugar: string;
     discountAmount: number;
     paymentEntries: any[];
 }
@@ -182,8 +183,8 @@ const OPDRegistration: React.FC<OPDProps> = ({
 
     // Sync form values to parent state
     React.useEffect(() => {
-        const { treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, discountAmount, paymentEntries, ...regDetails } = watchFields;
-        setOpdData({ treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, discountAmount, paymentEntries });
+        const { treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, sugar, discountAmount, paymentEntries, ...regDetails } = watchFields;
+        setOpdData({ treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, sugar, discountAmount, paymentEntries });
 
         // Sync CommonRegDetails (DoctorName here refers to the treating doctor's name)
         const doctor = doctorList.find(d => String(d.id) === String(treatingDoctorId));
@@ -257,6 +258,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                 pulse: data.pulse || null,
                 weight: data.weight || null,
                 spo2: data.spo2 || null,
+                sugar: data.sugar || null,
                 discount_amount: data.discountAmount,
                 amount_paid: finalTotalPaid,
                 payment_entries: finalPaymentEntries,
@@ -315,7 +317,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
             // 4. CLEAR FORM: Reset component-specific fields
             reset({
                 ...defaultRHFValues,
-                bp: '', pulse: null, weight: null, spo2: '',
+                bp: '', pulse: null, weight: null, spo2: '', sugar: '',
                 discountAmount: 0,
                 paymentEntries: [],
             });
@@ -435,6 +437,16 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                 placeholder="e.g., 65.5"
                                 disabled={!isExistingPatient}
                                 onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
+                            />
+                        </div>
+                        <div className="col-span-2">
+                            <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> Sugar (mg/dL)</Label>
+                            <Input
+                                type="text"
+                                {...control.register("sugar")}
+                                className="h-8"
+                                placeholder="e.g., 110"
+                                disabled={!isExistingPatient}
                             />
                         </div>
                         <div className="col-span-3">

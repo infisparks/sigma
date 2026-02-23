@@ -13,6 +13,7 @@ interface PatientVitalsTrendProps {
 export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendProps) {
     const [vitalsData, setVitalsData] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [updatingStatus, setUpdatingStatus] = useState<Record<string, boolean>>({}); // key: "id-field"
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const fetchVitals = async () => {
@@ -20,7 +21,7 @@ export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendPr
         try {
             const { data, error } = await supabase
                 .from('opd_registration')
-                .select('created_at, bp, pulse, weight, spo2')
+                .select('id, created_at, bp, pulse, weight, spo2, sugar')
                 .eq('uhid', patientUhid)
                 .order('created_at', { ascending: false })
                 .limit(10);
@@ -38,6 +39,28 @@ export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendPr
     useEffect(() => {
         if (patientUhid) fetchVitals();
     }, [patientUhid]);
+
+    const handleUpdateVital = async (id: number, field: string, value: any) => {
+        const key = `${id}-${field}`;
+        setUpdatingStatus(prev => ({ ...prev, [key]: true }));
+
+        try {
+            const { error } = await supabase
+                .from('opd_registration')
+                .update({ [field]: value })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            // Update local state
+            setVitalsData(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+        } catch (e) {
+            console.error("Error updating vital:", e);
+            alert("Failed to update vital.");
+        } finally {
+            setUpdatingStatus(prev => ({ ...prev, [key]: false }));
+        }
+    };
 
     // --- Render Helpers ---
     const formatDateLine1 = (dateStr: string) => {
@@ -85,6 +108,7 @@ export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendPr
                         <LabelRow icon={Heart} color="text-red-400" label="Blood Pressure" height={rowHeight} />
                         <LabelRow icon={Activity} color="text-blue-400" label="Pulse Rate" height={rowHeight} />
                         <LabelRow icon={Droplet} color="text-cyan-500" label="SpO2" height={rowHeight} />
+                        <LabelRow icon={Activity} color="text-emerald-500" label="Sugar (mg/dL)" height={rowHeight} />
                         <LabelRow icon={Monitor} color="text-orange-400" label="Body Weight" height={rowHeight} />
                     </div>
 
@@ -104,10 +128,40 @@ export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendPr
                                         </div>
 
                                         {/* Data Cells */}
-                                        <DataCell value={data.bp} unit="" isBold height={rowHeight} />
-                                        <DataCell value={data.pulse} unit="bpm" height={rowHeight} />
-                                        <DataCell value={data.spo2} unit="%" height={rowHeight} />
-                                        <DataCell value={data.weight} unit="kg" height={rowHeight} />
+                                        <DataCell
+                                            value={data.bp}
+                                            isBold
+                                            height={rowHeight}
+                                            isLoading={updatingStatus[`${data.id}-bp`]}
+                                            onSave={(val: any) => handleUpdateVital(data.id, 'bp', val)}
+                                        />
+                                        <DataCell
+                                            value={data.pulse}
+                                            unit="bpm"
+                                            height={rowHeight}
+                                            isLoading={updatingStatus[`${data.id}-pulse`]}
+                                            onSave={(val: any) => handleUpdateVital(data.id, 'pulse', val)}
+                                        />
+                                        <DataCell
+                                            value={data.spo2}
+                                            unit="%"
+                                            height={rowHeight}
+                                            isLoading={updatingStatus[`${data.id}-spo2`]}
+                                            onSave={(val: any) => handleUpdateVital(data.id, 'spo2', val)}
+                                        />
+                                        <DataCell
+                                            value={data.sugar}
+                                            height={rowHeight}
+                                            isLoading={updatingStatus[`${data.id}-sugar`]}
+                                            onSave={(val: any) => handleUpdateVital(data.id, 'sugar', val)}
+                                        />
+                                        <DataCell
+                                            value={data.weight}
+                                            unit="kg"
+                                            height={rowHeight}
+                                            isLoading={updatingStatus[`${data.id}-weight`]}
+                                            onSave={(val: any) => handleUpdateVital(data.id, 'weight', val)}
+                                        />
                                     </div>
                                 );
                             })}
@@ -128,14 +182,52 @@ function LabelRow({ icon: Icon, color, label, height }: any) {
     );
 }
 
-function DataCell({ value, unit, isBold, height }: any) {
+function DataCell({ value, unit, isBold, height, onSave, isLoading }: any) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [tempValue, setTempValue] = useState(value || "");
+
+    useEffect(() => {
+        setTempValue(value || "");
+    }, [value]);
+
+    const handleBlur = () => {
+        setIsEditing(false);
+        if (String(tempValue) !== String(value || "")) {
+            onSave(tempValue);
+        }
+    };
+
+    if (isEditing) {
+        return (
+            <div className={cn(height, "flex items-center justify-center border-t border-slate-100 px-1")}>
+                <input
+                    autoFocus
+                    value={tempValue}
+                    onChange={(e) => setTempValue(e.target.value)}
+                    onBlur={handleBlur}
+                    onKeyDown={(e) => e.key === 'Enter' && handleBlur()}
+                    className="w-full h-8 text-center text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+            </div>
+        );
+    }
+
     const isEmpty = !value || value === "--";
     return (
-        <div className={cn(height, "flex items-center justify-center border-t border-slate-100")}>
-            <span className={cn("text-sm", isBold && !isEmpty ? "font-bold text-slate-800" : "text-slate-600", isEmpty && "text-slate-300")}>
-                {value || "--"}
-            </span>
-            {!isEmpty && unit && <span className="text-[10px] text-slate-400 ml-1">{unit}</span>}
+        <div
+            className={cn(height, "flex items-center justify-center border-t border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors group relative")}
+            onClick={() => setIsEditing(true)}
+        >
+            {isLoading ? (
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent animate-spin rounded-full"></div>
+            ) : (
+                <>
+                    <span className={cn("text-sm", isBold && !isEmpty ? "font-bold text-slate-800" : "text-slate-600", isEmpty && "text-slate-300")}>
+                        {value || "--"}
+                    </span>
+                    {!isEmpty && unit && <span className="text-[10px] text-slate-400 ml-1">{unit}</span>}
+                </>
+            )}
         </div>
     );
 }

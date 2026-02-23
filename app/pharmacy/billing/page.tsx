@@ -36,6 +36,7 @@ interface ClinicMedicine {
     name: string
     pack_size_label: string
     pack_size_quantity: number
+    gst_percentage: number // NEW
 }
 
 interface BatchStock {
@@ -45,6 +46,7 @@ interface BatchStock {
     remaining_units: number
     pack_size_quantity: number
     quantity: number // Full Packs
+    gst_percent: number // NEW
 }
 
 interface CartItem {
@@ -68,6 +70,8 @@ interface CartItem {
 
     total_price: number
     pack_size_quantity: number
+    gst_percent: number // NEW
+    gst_amount: number // NEW
     is_return?: boolean // Added for Return Logic
 }
 
@@ -200,6 +204,8 @@ export default function PharmacyBillingPage() {
                     medicine_name: medMap.get(item.medicine_id) || 'Unknown',
                     batch_number: item.batch_number,
                     expiry_date: item.expiry_date,
+                    gst_percent: Number(item.gst_percent || 0),
+                    gst_amount: Number(item.gst_amount || 0),
                     quantity_mode: item.quantity_mode as 'Pack' | 'Unit',
                     quantity: Number(item.total_units) / (item.pack_size_quantity || 1), // Approximate original qty
                     total_units_sold: Math.abs(item.total_units),
@@ -303,16 +309,13 @@ export default function PharmacyBillingPage() {
 
 
     useEffect(() => {
-        if (selectedMed) return // Don't search if selected
-        if (medSearch.length < 2) { setFilteredMeds([]); setShowMedSuggestions(false); return }
-
-        if (selectedMed) return // Don't search if selected
+        if (selectedMed) return
         if (medSearch.length < 2) { setFilteredMeds([]); setShowMedSuggestions(false); return }
 
         const matches = medicineList.filter(m => m.name.toLowerCase().includes(medSearch.toLowerCase())).slice(0, 50)
         setFilteredMeds(matches)
         setShowMedSuggestions(true)
-        setFocusedMedIndex(-1) // Reset focus on new search
+        setFocusedMedIndex(-1)
     }, [medSearch, medicineList, selectedMed])
 
     const selectMedicine = async (med: ClinicMedicine) => {
@@ -320,8 +323,8 @@ export default function PharmacyBillingPage() {
         setMedSearch(med.name)
         setShowMedSuggestions(false)
 
-        // Fetch Batches via RPC for this specific medicine
-        const { data } = await supabase.rpc('get_current_stock', { p_medicine_id: med.id })
+        // Fetch Batches via NEW RPC for this specific medicine
+        const { data } = await supabase.rpc('pharmacy_get_current_stock', { p_medicine_id: med.id })
 
         if (data && data.length > 0) {
             setMedBatches(data)
@@ -371,7 +374,12 @@ export default function PharmacyBillingPage() {
             return
         }
 
-        const total = baseTotal - discAmount
+        const totalLine = baseTotal - discAmount
+        const gstPercent = selectedBatch.gst_percent || 0
+        const taxableAmountLine = totalLine / (1 + (gstPercent / 100))
+        const gstAmountLine = totalLine - taxableAmountLine
+
+        const total = totalLine
 
         // Calculate Total Units for Inventory Deduction
         let totalUnitsSold = 0
@@ -399,6 +407,8 @@ export default function PharmacyBillingPage() {
             unit_price: price,
             discount_amount: discAmount,
             total_price: total,
+            gst_percent: gstPercent,
+            gst_amount: gstAmountLine,
             total_units_sold: totalUnitsSold,
             pack_size_quantity: selectedBatch.pack_size_quantity
         }
@@ -416,7 +426,6 @@ export default function PharmacyBillingPage() {
         medSearchRef.current?.focus()
     }
 
-    // --- 3. Discount Logic ---
     // --- 3. Discount Logic ---
     const subtotal = cart.reduce((sum, i) => {
         if (i.is_return) return sum - i.total_price
@@ -442,7 +451,10 @@ export default function PharmacyBillingPage() {
             const pct = parseFloat(discountValue) || 0
             setCalculatedDiscountAmt((subtotal * pct) / 100)
         }
-    }, [subtotal]) // Logic simplification: if subtotal changes, amount updates based on %
+    }, [subtotal, discountValue, discountType])
+
+    const summaryGstAmount = cart.reduce((sum, i) => sum + (i.is_return ? -i.gst_amount : i.gst_amount), 0)
+    const summarySubtotalTaxable = subtotal - summaryGstAmount
 
     const finalTotal = Math.max(0, subtotal - calculatedDiscountAmt)
 
@@ -485,6 +497,7 @@ export default function PharmacyBillingPage() {
             p_paid_cash: cash,
             p_paid_online: online,
             p_subtotal: subtotal,
+            p_total_gst_amount: summaryGstAmount,
             p_discount_amount: calculatedDiscountAmt,
             p_final_total: finalTotal,
             p_items: cart,
@@ -831,7 +844,10 @@ export default function PharmacyBillingPage() {
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right font-bold">{item.quantity}</TableCell>
-                                        <TableCell className="text-right text-gray-600">₹{item.unit_price.toFixed(2)}</TableCell>
+                                        <TableCell className="text-right">₹{item.unit_price.toFixed(2)}</TableCell>
+                                        <TableCell className="text-right text-[10px] text-gray-400">
+                                            GST {item.gst_percent}% (₹{item.gst_amount.toFixed(2)})
+                                        </TableCell>
                                         <TableCell className="text-right text-red-500 text-xs">
                                             {item.discount_amount > 0 ? `-₹${item.discount_amount}` : '-'}
                                         </TableCell>
@@ -943,9 +959,16 @@ export default function PharmacyBillingPage() {
                         <Separator className="bg-gray-300" />
 
                         {/* Final Total */}
-                        <div className="flex justify-between items-end">
+                        <div className="grid grid-cols-2 gap-y-2 items-end">
+                            <div className="text-sm font-medium text-gray-600">Subtotal (Taxable)</div>
+                            <div className="text-sm font-bold text-gray-900 text-right">{formatCurrency(summarySubtotalTaxable)}</div>
+
+                            <div className="text-sm font-medium text-gray-600">GST Amount</div>
+                            <div className="text-sm font-bold text-gray-900 text-right">{formatCurrency(summaryGstAmount)}</div>
+
+                            <Separator className="col-span-2 my-1" />
                             <span className="text-xl font-bold text-gray-800">Net Payable</span>
-                            <span className="text-4xl font-black text-gray-900 tracking-tighter">
+                            <span className="text-4xl font-black text-gray-900 tracking-tighter text-right">
                                 <span className="text-2xl text-gray-400 font-normal mr-1">₹</span>
                                 {formatCurrency(finalTotal).replace('₹', '')}
                             </span>

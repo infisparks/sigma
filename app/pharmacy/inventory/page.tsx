@@ -105,7 +105,7 @@ export default function InventoryMasterPage() {
 
             // 2. Fetch All Active Batches
             const { data: batches, error: batchError } = await supabase
-                .rpc('get_current_stock')
+                .rpc('pharmacy_get_current_stock')
 
             if (batchError) throw batchError
 

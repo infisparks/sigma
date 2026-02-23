@@ -215,19 +215,6 @@ export default function PurchasesHistoryPage() {
                                     <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-none">
                                         {invoice.status.toUpperCase()}
                                     </Badge>
-                                    <div className="mt-2 text-xs">
-                                        <Button
-                                            variant="link"
-                                            size="sm"
-                                            className="h-auto p-0 text-blue-600 font-semibold"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                window.location.href = `/pharmacy/medicinePurchase?id=${invoice.id}`;
-                                            }}
-                                        >
-                                            Manage Invoice
-                                        </Button>
-                                    </div>
                                 </div>
                             </div>
 
@@ -263,8 +250,8 @@ export default function PurchasesHistoryPage() {
                                                         </div>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="text-right text-gray-600">₹{item.unit_price}</TableCell>
-                                                <TableCell className="text-right text-gray-600">₹{item.mrp}</TableCell>
+                                                <TableCell className="text-right text-gray-600">₹{Number(item.unit_price).toFixed(2)}</TableCell>
+                                                <TableCell className="text-right text-gray-600">₹{Number(item.mrp).toFixed(2)}</TableCell>
                                                 <TableCell className="text-right font-bold">₹{item.total_amount.toLocaleString()}</TableCell>
                                             </TableRow>
                                         ))}
