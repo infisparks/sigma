@@ -296,7 +296,7 @@ function ItemCard({ item, isSelected, onClick, onLongPress }: { item: string, is
     const handlePointerUp = (e: React.PointerEvent) => {
         if (timerRef.current) {
             clearTimeout(timerRef.current);
-            if (!isLongPress.current && e.type !== 'pointerleave') {
+            if (!isLongPress.current && e.type !== 'pointerleave' && e.type !== 'pointercancel') {
                 onClick();
             }
         }
@@ -307,9 +307,10 @@ function ItemCard({ item, isSelected, onClick, onLongPress }: { item: string, is
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
+            onPointerCancel={handlePointerUp}
             onContextMenu={(e) => e.preventDefault()}
             className={cn(
-                "flex items-center gap-2.5 p-2.5 rounded-lg border transition-all cursor-pointer select-none touch-none",
+                "flex items-center gap-2.5 p-2.5 rounded-lg border transition-all cursor-pointer select-none touch-pan-y",
                 isSelected
                     ? "bg-blue-50 border-blue-200 shadow-sm"
                     : "bg-white border-slate-200 hover:border-blue-200"

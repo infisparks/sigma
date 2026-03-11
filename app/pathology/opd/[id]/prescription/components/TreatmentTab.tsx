@@ -494,7 +494,7 @@ function MedicineCard({ med, isSelected, onClick, onLongPress }: { med: any, isS
     const handlePointerUp = (e: React.PointerEvent) => {
         if (timerRef.current) {
             clearTimeout(timerRef.current);
-            if (!isLongPress.current && e.type !== 'pointerleave') {
+            if (!isLongPress.current && e.type !== 'pointerleave' && e.type !== 'pointercancel') {
                 onClick();
             }
         }
@@ -505,9 +505,10 @@ function MedicineCard({ med, isSelected, onClick, onLongPress }: { med: any, isS
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
+            onPointerCancel={handlePointerUp}
             onContextMenu={(e) => e.preventDefault()}
             className={cn(
-                "p-2 rounded-lg border cursor-pointer transition-all flex items-center gap-2 select-none touch-none",
+                "p-2 rounded-lg border cursor-pointer transition-all flex items-center gap-2 select-none touch-pan-y",
                 isSelected ? "bg-blue-50 border-blue-200 shadow-sm" : "bg-white border-slate-200 hover:border-blue-200"
             )}
         >

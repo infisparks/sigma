@@ -337,7 +337,7 @@ function SelectedChip({
     const handlePointerUp = (e: React.PointerEvent) => {
         if (timerRef.current) {
             clearTimeout(timerRef.current);
-            if (!isLongPress.current && e.type !== 'pointerleave') {
+            if (!isLongPress.current && e.type !== 'pointerleave' && e.type !== 'pointercancel') {
                 onClick();
             }
         }
@@ -348,9 +348,10 @@ function SelectedChip({
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
+            onPointerCancel={handlePointerUp}
             onContextMenu={(e) => e.preventDefault()}
             className={cn(
-                "flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg border text-[10px] font-bold cursor-pointer transition-all shadow-sm select-none touch-none",
+                "flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg border text-[10px] font-bold cursor-pointer transition-all shadow-sm select-none touch-pan-y",
                 isViewing ? activeColor : inactiveColor
             )}
         >

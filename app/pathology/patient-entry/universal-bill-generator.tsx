@@ -93,19 +93,20 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
         console.error("Failed to load bill logo", e);
     }
 
-    // CHANGED: A5 Landscape configuration
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a5" })
+    // CHANGED: A4 Portrait configuration, but content restricted to top half (A5 area)
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
     const pageWidth = doc.internal.pageSize.getWidth()
     const pageHeight = doc.internal.pageSize.getHeight()
+    const contentHeight = pageHeight / 2 // This is the A5 area height (approx 148.5mm)
 
     let headerHeight = 20; // Default if no logo - reduced
 
     // --- Custom Header Function ---
     const drawHeader = (pageNumber = 1) => {
-        // --- 🟢 NEW: Add Page Border ---
+        // --- 🟢 NEW: Add Page Border restricted to top half ---
         doc.setDrawColor(41, 128, 185); // Professional Blue
         doc.setLineWidth(0.5);
-        doc.rect(5, 5, pageWidth - 10, pageHeight - 10, "S");
+        doc.rect(5, 5, pageWidth - 10, contentHeight - 10, "S");
 
         if (logoData) {
             const imgProps = doc.getImageProperties(logoData);
@@ -142,13 +143,13 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
             const watermarkData = await loadImage("/watermark.png");
             const imgProps = doc.getImageProperties(watermarkData);
 
-            // Calculate size - approx 35% of page height
-            const targetHeight = pageHeight * 0.35;
+            // Calculate size - approx 35% of content height
+            const targetHeight = contentHeight * 0.35;
             const targetWidth = (imgProps.width * targetHeight) / imgProps.height;
 
-            // Position: Center horizontally, slightly below center vertically
+            // Position: Center horizontally, slightly below center vertically within content area
             const x = (pageWidth - targetWidth) / 2;
-            const y = (pageHeight - targetHeight) / 2 + 30; // Shifted 15mm down
+            const y = (contentHeight - targetHeight) / 2 + 15; // Shifted 15mm down within top half
 
             // Set transparency for watermark - slightly darker (0.2)
             doc.saveGraphicsState();
@@ -265,8 +266,8 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
     let totalCharges = 0
 
     services.forEach((m: BillServiceItem, i: number) => {
-        // Page break logic
-        if (yPos > pageHeight - 35) { // Increased bottom margin trigger to account for larger footer
+        // Page break logic - Restricted to top half
+        if (yPos > contentHeight - 35) {
             doc.addPage()
             drawWatermark();
             drawHeader();
@@ -314,8 +315,8 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
 
     yPos += 2;
 
-    // Check availability for summary
-    if (yPos > pageHeight - 40) { // Increased bottom margin trigger to account for larger footer
+    // Check availability for summary within top half
+    if (yPos > contentHeight - 40) {
         doc.addPage();
         drawWatermark();
         drawHeader();
@@ -369,8 +370,8 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
         doc.setTextColor(0, 0, 0);
     }
 
-    // Footer
-    const footerY = pageHeight - 15;
+    // Footer - Positioned relative to contentHeight (top half)
+    const footerY = contentHeight - 15;
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     doc.text("Authorized Signatory", pageWidth - 15, footerY, { align: "right" });
@@ -379,8 +380,8 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
     doc.setFont("helvetica", "normal");
     const addrLine1 = "Cigma Clinic And Diagnostic Centre : Ground Floor, Virani Plaza, Beside Bank of Maharashtra, Near Kausa Petrol Pump, Kausa,";
     const addrLine2 = "Mumbra - 612. Mob.: 8928805286 / 91671 97303";
-    doc.text(addrLine1, pageWidth / 2, pageHeight - 10, { align: "center" });
-    doc.text(addrLine2, pageWidth / 2, pageHeight - 7, { align: "center" });
+    doc.text(addrLine1, pageWidth / 2, contentHeight - 10, { align: "center" });
+    doc.text(addrLine2, pageWidth / 2, contentHeight - 7, { align: "center" });
 
     return doc
 }
