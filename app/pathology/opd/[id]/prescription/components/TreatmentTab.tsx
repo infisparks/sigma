@@ -54,13 +54,15 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
 
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, id: string, name: string } | null>(null);
 
-    // Derived
-    const selectedMed = medicines.find(m => m.id === selectedMedId);
-
     // --- Search Logic (Instant from Cache) ---
     useEffect(() => {
         setSearchResults(searchMedicines(searchQuery));
     }, [searchQuery, searchMedicines]);
+
+    // Derived
+    const selectedMed = React.useMemo(() =>
+        medicines.find(m => m.id === selectedMedId),
+        [medicines, selectedMedId]);
 
     // --- History Logic ---
     useEffect(() => {
@@ -117,17 +119,25 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
         updateMedicine(id, updates);
     };
 
-    const handleUpdateTiming = (id: string, key: keyof TimingSchedule, val: boolean) => {
+    const handleUpdateTiming = useCallback((id: string, key: keyof TimingSchedule, val: boolean) => {
         const med = medicines.find(m => m.id === id);
         if (med) {
             updateMedicine(id, { timing: { ...med.timing, [key]: val } });
         }
-    };
+    }, [medicines, updateMedicine]);
 
-    const handleRemoveMedicine = (id: string) => {
+    const handleRemoveMedicine = useCallback((id: string) => {
         removeMedicine(id);
         if (selectedMedId === id) setSelectedMedId(null);
-    };
+    }, [removeMedicine, selectedMedId]);
+
+    const handleSelectMed = useCallback((id: string) => {
+        setSelectedMedId(id);
+    }, []);
+
+    const handleLongPressMed = useCallback((id: string, name: string) => {
+        setDeleteConfirm({ isOpen: true, id, name });
+    }, []);
 
     const copyFromHistory = (items: any[]) => {
         const newItems = items.map(item => ({
@@ -217,8 +227,8 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                                 key={med.id}
                                                 med={med}
                                                 isSelected={selectedMedId === med.id}
-                                                onClick={() => setSelectedMedId(med.id)}
-                                                onLongPress={() => setDeleteConfirm({ isOpen: true, id: med.id, name: med.name })}
+                                                onClick={handleSelectMed}
+                                                onLongPress={handleLongPressMed}
                                             />
                                         ))}
                                     </div>
@@ -470,24 +480,26 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
 
 // --- Sub Components ---
 
-function SectionHeader({ title, icon: Icon }: { title: string, icon: any }) {
+const SectionHeader = React.memo(({ title, icon: Icon }: { title: string, icon: any }) => {
     return (
         <div className="flex items-center gap-1.5 text-slate-400">
             <Icon className="w-3 h-3" />
             <span className="text-[9px] font-black tracking-widest uppercase">{title}</span>
         </div>
     );
-}
+});
+SectionHeader.displayName = 'SectionHeader';
 
-function MedicineCard({ med, isSelected, onClick, onLongPress }: { med: any, isSelected: boolean, onClick: () => void, onLongPress: () => void }) {
-    const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+const MedicineCard = React.memo(({ med, isSelected, onClick, onLongPress }: { med: any, isSelected: boolean, onClick: (id: string) => void, onLongPress: (id: string, name: string) => void }) => {
+    const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const isLongPress = React.useRef(false);
 
     const handlePointerDown = (e: React.PointerEvent) => {
+        // Immediate visual feedback handled by CSS active class
         isLongPress.current = false;
         timerRef.current = setTimeout(() => {
             isLongPress.current = true;
-            onLongPress();
+            onLongPress(med.id, med.name);
         }, 500);
     };
 
@@ -495,7 +507,7 @@ function MedicineCard({ med, isSelected, onClick, onLongPress }: { med: any, isS
         if (timerRef.current) {
             clearTimeout(timerRef.current);
             if (!isLongPress.current && e.type !== 'pointerleave' && e.type !== 'pointercancel') {
-                onClick();
+                onClick(med.id);
             }
         }
     };
@@ -508,7 +520,7 @@ function MedicineCard({ med, isSelected, onClick, onLongPress }: { med: any, isS
             onPointerCancel={handlePointerUp}
             onContextMenu={(e) => e.preventDefault()}
             className={cn(
-                "p-2 rounded-lg border cursor-pointer transition-all flex items-center gap-2 select-none touch-pan-y",
+                "p-2 rounded-lg border cursor-pointer transition-all flex items-center gap-2 select-none touch-pan-y active:scale-[0.98] active:bg-slate-50",
                 isSelected ? "bg-blue-50 border-blue-200 shadow-sm" : "bg-white border-slate-200 hover:border-blue-200"
             )}
         >
@@ -517,9 +529,10 @@ function MedicineCard({ med, isSelected, onClick, onLongPress }: { med: any, isS
             {isSelected && <Edit3 className="w-3 h-3 text-blue-600 shrink-0" />}
         </div>
     );
-}
+});
+MedicineCard.displayName = 'MedicineCard';
 
-function DeleteConfirmation({ isOpen, onClose, onConfirm, itemName }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, itemName: string }) {
+const DeleteConfirmation = React.memo(({ isOpen, onClose, onConfirm, itemName }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, itemName: string }) => {
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[300px]">
@@ -536,9 +549,10 @@ function DeleteConfirmation({ isOpen, onClose, onConfirm, itemName }: { isOpen: 
             </DialogContent>
         </Dialog>
     );
-}
+});
+DeleteConfirmation.displayName = 'DeleteConfirmation';
 
-function TimingBlock({ label, icon: Icon, before, after, onToggleBefore, onToggleAfter }: any) {
+const TimingBlock = React.memo(({ label, before, after, onToggleBefore, onToggleAfter }: any) => {
     return (
         <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
             <div className="p-1.5 flex justify-center border-b border-slate-100">
@@ -560,4 +574,5 @@ function TimingBlock({ label, icon: Icon, before, after, onToggleBefore, onToggl
             </div>
         </div>
     );
-}
+});
+TimingBlock.displayName = 'TimingBlock';

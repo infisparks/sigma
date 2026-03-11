@@ -291,6 +291,13 @@ const OPDRegistration: React.FC<OPDProps> = ({
                     paymentMode: p.paymentMode.toLowerCase() as 'online' | 'cash' | 'card',
                     time: new Date().toISOString()
                 })),
+                vitals: {
+                    bp: data.bp,
+                    pulse: String(data.pulse || ""),
+                    weight: String(data.weight || ""),
+                    spo2: data.spo2,
+                    sugar: data.sugar,
+                },
                 sendWhatsApp: data.sendWhatsApp
             };
 

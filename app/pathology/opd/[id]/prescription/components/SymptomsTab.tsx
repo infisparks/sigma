@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Search, Check, X, Heart, Settings, Plus, Trash2,
     Clock, Activity, AlertCircle
@@ -93,7 +93,7 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
     // --- Logic ---
     const isSymptom = (name: string) => rawSymptoms.includes(name);
 
-    const selectSymptom = (label: string) => {
+    const selectSymptom = useCallback((label: string) => {
         if (!symptoms[label]) {
             addSymptom({
                 name: label,
@@ -103,14 +103,14 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
             });
         }
         setSelectedSymptomForDetail(label);
-    };
+    }, [symptoms, addSymptom]);
 
-    const handleRemoveSymptom = (label: string) => {
+    const handleRemoveSymptom = useCallback((label: string) => {
         removeSymptom(label);
         if (selectedSymptomForDetail === label) {
             setSelectedSymptomForDetail(null);
         }
-    };
+    }, [removeSymptom, selectedSymptomForDetail]);
 
     const handleUpdateDetail = (label: string, field: keyof SymptomDetail, value: any) => {
         updateSymptom(label, { [field]: value });
@@ -314,23 +314,23 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
 
 // --- Sub Components ---
 
-function SelectedChip({
+const SelectedChip = React.memo(({
     detail, isViewing, isSym, onClick, onRemove, onLongPress
 }: {
     detail: SymptomDetail, isViewing: boolean, isSym: boolean,
-    onClick: () => void, onRemove: () => void, onLongPress: () => void
-}) {
+    onClick: (name: string) => void, onRemove: (name: string) => void, onLongPress: (name: string) => void
+}) => {
     const activeColor = isSym ? "bg-pink-500 border-pink-500 text-white" : "bg-orange-500 border-orange-500 text-white";
     const inactiveColor = isSym ? "bg-pink-50 border-pink-200 text-pink-700" : "bg-orange-50 border-orange-200 text-orange-700";
 
-    const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+    const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const isLongPress = React.useRef(false);
 
     const handlePointerDown = (e: React.PointerEvent) => {
         isLongPress.current = false;
         timerRef.current = setTimeout(() => {
             isLongPress.current = true;
-            onLongPress();
+            onLongPress(detail.name);
         }, 500);
     };
 
@@ -338,7 +338,7 @@ function SelectedChip({
         if (timerRef.current) {
             clearTimeout(timerRef.current);
             if (!isLongPress.current && e.type !== 'pointerleave' && e.type !== 'pointercancel') {
-                onClick();
+                onClick(detail.name);
             }
         }
     };
@@ -351,19 +351,20 @@ function SelectedChip({
             onPointerCancel={handlePointerUp}
             onContextMenu={(e) => e.preventDefault()}
             className={cn(
-                "flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg border text-[10px] font-bold cursor-pointer transition-all shadow-sm select-none touch-pan-y",
+                "flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg border text-[10px] font-bold cursor-pointer transition-all shadow-sm select-none touch-pan-y active:scale-95 active:opacity-80",
                 isViewing ? activeColor : inactiveColor
             )}
         >
             <span className="truncate max-w-[80px]">{detail.name}</span>
-            <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="hover:bg-black/10 rounded-full p-0.5">
+            <button onClick={(e) => { e.stopPropagation(); onRemove(detail.name); }} className="hover:bg-black/10 rounded-full p-0.5">
                 <X className="w-2.5 h-2.5" />
             </button>
         </div>
     );
-}
+});
+SelectedChip.displayName = 'SelectedChip';
 
-function DeleteConfirmation({ isOpen, onClose, onConfirm, itemName }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, itemName: string }) {
+const DeleteConfirmation = React.memo(({ isOpen, onClose, onConfirm, itemName }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, itemName: string }) => {
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[300px]">
@@ -380,11 +381,12 @@ function DeleteConfirmation({ isOpen, onClose, onConfirm, itemName }: { isOpen: 
             </DialogContent>
         </Dialog>
     );
-}
+});
+DeleteConfirmation.displayName = 'DeleteConfirmation';
 
-function DetailPanel({ detail, isSym, onUpdate, onRemove, onToggleCustom, onAddGroup }: {
+const DetailPanel = React.memo(({ detail, isSym, onUpdate, onRemove, onToggleCustom, onAddGroup }: {
     detail: SymptomDetail, isSym: boolean, onUpdate: (f: keyof SymptomDetail, v: any) => void, onRemove: () => void, onToggleCustom: (o: string) => void, onAddGroup: () => void
-}) {
+}) => {
     const accentColor = isSym ? "text-pink-500" : "text-orange-500";
     const accentBg = isSym ? "bg-pink-50" : "bg-orange-50";
 
@@ -576,18 +578,20 @@ function DetailPanel({ detail, isSym, onUpdate, onRemove, onToggleCustom, onAddG
             </div>
         </div>
     );
-}
+});
+DetailPanel.displayName = 'DetailPanel';
 
-function SectionHeader({ title, icon: Icon }: { title: string, icon: any }) {
+const SectionHeader = React.memo(({ title, icon: Icon }: { title: string, icon: any }) => {
     return (
         <div className="flex items-center gap-1.5 text-slate-400">
             <Icon className="w-3 h-3" />
             <span className="text-[9px] font-black tracking-widest uppercase">{title}</span>
         </div>
     );
-}
+});
+SectionHeader.displayName = 'SectionHeader';
 
-function AddOptionDialog({ isOpen, onClose, onSave }: { isOpen: boolean, onClose: () => void, onSave: (g: CustomOptionGroup) => void }) {
+const AddOptionDialog = React.memo(({ isOpen, onClose, onSave }: { isOpen: boolean, onClose: () => void, onSave: (g: CustomOptionGroup) => void }) => {
     const [title, setTitle] = useState("");
     const [options, setOptions] = useState<string[]>([""]);
 
@@ -648,4 +652,5 @@ function AddOptionDialog({ isOpen, onClose, onSave }: { isOpen: boolean, onClose
             </DialogContent>
         </Dialog>
     );
-}
+});
+AddOptionDialog.displayName = 'AddOptionDialog';

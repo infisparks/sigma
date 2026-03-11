@@ -368,6 +368,13 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                 paymentMode: p.paymentMode.toLowerCase() as 'online' | 'cash' | 'card',
                 time: p.time
             })),
+            vitals: {
+                bp: watchedFields.bp,
+                pulse: String(watchedFields.pulse || ""),
+                weight: String(watchedFields.weight || ""),
+                spo2: watchedFields.spo2,
+                sugar: watchedFields.sugar,
+            },
             sendWhatsApp: false
         };
 

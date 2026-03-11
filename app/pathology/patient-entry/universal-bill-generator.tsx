@@ -52,6 +52,14 @@ export interface UniversalBillData {
     discount: number;
     services: BillServiceItem[];
     paymentEntries: PaymentEntry[];
+    vitals?: {
+        bp?: string;
+        pulse?: string;
+        weight?: string;
+        spo2?: string;
+        sugar?: string;
+        temp?: string;
+    };
     sendWhatsApp: boolean;
 }
 
@@ -231,6 +239,28 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
         const addressText = String(patientInfo.address.length > 55 ? `${patientInfo.address.slice(0, 55)}...` : patientInfo.address);
         doc.text(addressText, col1X + 18, yPos);
         yPos += 4.5; // Reduced from 5
+    }
+
+    yPos += 2; // Spacer
+
+    // --- Vitals Section (Optional) ---
+    if (billData.vitals && (billData.vitals.bp || billData.vitals.pulse || billData.vitals.temp || billData.vitals.weight || billData.vitals.spo2 || billData.vitals.sugar)) {
+        const v = billData.vitals;
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(100, 100, 100);
+
+        let vTextParts = [];
+        if (v.bp) vTextParts.push(`BP: ${v.bp}`);
+        if (v.pulse) vTextParts.push(`P: ${v.pulse}`);
+        if (v.temp) vTextParts.push(`T: ${v.temp}`);
+        if (v.sugar) vTextParts.push(`Sugar: ${v.sugar}`);
+        if (v.spo2) vTextParts.push(`SpO2: ${v.spo2}`);
+        if (v.weight) vTextParts.push(`Wt: ${v.weight}kg`);
+
+        doc.text(vTextParts.join("  |  "), 15, yPos);
+        yPos += 5;
+        doc.setTextColor(0, 0, 0);
     }
 
     yPos += 2; // Spacer

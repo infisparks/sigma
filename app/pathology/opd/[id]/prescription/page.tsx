@@ -100,7 +100,7 @@ export default function PrescriptionPage() {
             <div className={`fixed inset-0 z-[100] flex flex-col overflow-hidden overscroll-none select-none touch-pan-x touch-pan-y ${ModernTheme.background}`}>
 
                 {/* --- APP BAR --- */}
-                <header className={`${ModernTheme.surface} border-b border-slate-200 px-3 py-1.5 flex items-center justify-between sticky top-0 z-50 shrink-0 select-none`}>
+                <header className={cn(ModernTheme.surface, "border-b border-slate-200 px-3 py-1.5 flex items-center justify-between sticky top-0 z-50 shrink-0 select-none no-print")}>
                     <div className="flex items-center gap-3">
                         <button onClick={() => router.back()} className="p-1.5 hover:bg-slate-100 rounded-full">
                             <ArrowLeft className="w-4 h-4 text-slate-900" />
@@ -128,7 +128,7 @@ export default function PrescriptionPage() {
                 </main>
 
                 {/* --- BOTTOM DOCK --- */}
-                <div className="px-3 py-2 bg-slate-100 z-50 select-none">
+                <div className="px-3 py-2 bg-slate-100 z-50 select-none no-print">
                     <div className="bg-white rounded-xl shadow-md border border-slate-100 h-[55px] flex items-center overflow-hidden">
                         {/* Exit Button */}
                         <button onClick={() => router.back()} className="w-[50px] h-full bg-red-50 hover:bg-red-100 flex items-center justify-center border-r border-slate-100">

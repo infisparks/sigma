@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     Search, Check, X,
     List, CheckCircle, Plus
@@ -137,13 +137,13 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
         setSearchQuery("");
     };
 
-    const toggleSelection = (item: string) => {
+    const toggleSelection = useCallback((item: string) => {
         if (currentContextList.includes(item)) {
             removeAction(item);
         } else {
             addAction(item);
         }
-    };
+    }, [currentContextList, removeAction, addAction]);
 
     const currentList = useMemo(() => {
         // Master list + Any currently selected items that are NOT in master (custom)
@@ -281,15 +281,15 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
     );
 }
 
-function ItemCard({ item, isSelected, onClick, onLongPress }: { item: string, isSelected: boolean, onClick: () => void, onLongPress: () => void }) {
-    const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+const ItemCard = React.memo(({ item, isSelected, onClick, onLongPress }: { item: string, isSelected: boolean, onClick: (name: string) => void, onLongPress: (name: string) => void }) => {
+    const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const isLongPress = React.useRef(false);
 
     const handlePointerDown = (e: React.PointerEvent) => {
         isLongPress.current = false;
         timerRef.current = setTimeout(() => {
             isLongPress.current = true;
-            onLongPress();
+            onLongPress(item);
         }, 500);
     };
 
@@ -297,7 +297,7 @@ function ItemCard({ item, isSelected, onClick, onLongPress }: { item: string, is
         if (timerRef.current) {
             clearTimeout(timerRef.current);
             if (!isLongPress.current && e.type !== 'pointerleave' && e.type !== 'pointercancel') {
-                onClick();
+                onClick(item);
             }
         }
     };
@@ -310,7 +310,7 @@ function ItemCard({ item, isSelected, onClick, onLongPress }: { item: string, is
             onPointerCancel={handlePointerUp}
             onContextMenu={(e) => e.preventDefault()}
             className={cn(
-                "flex items-center gap-2.5 p-2.5 rounded-lg border transition-all cursor-pointer select-none touch-pan-y",
+                "flex items-center gap-2.5 p-2.5 rounded-lg border transition-all cursor-pointer select-none touch-pan-y active:scale-95 active:bg-slate-50",
                 isSelected
                     ? "bg-blue-50 border-blue-200 shadow-sm"
                     : "bg-white border-slate-200 hover:border-blue-200"
@@ -328,9 +328,10 @@ function ItemCard({ item, isSelected, onClick, onLongPress }: { item: string, is
             )}>{item}</span>
         </div>
     );
-}
+});
+ItemCard.displayName = 'ItemCard';
 
-function DeleteConfirmation({ isOpen, onClose, onConfirm, itemName }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, itemName: string }) {
+const DeleteConfirmation = React.memo(({ isOpen, onClose, onConfirm, itemName }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, itemName: string }) => {
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[300px]">
@@ -347,9 +348,10 @@ function DeleteConfirmation({ isOpen, onClose, onConfirm, itemName }: { isOpen: 
             </DialogContent>
         </Dialog>
     );
-}
+});
+DeleteConfirmation.displayName = 'DeleteConfirmation';
 
-function SegmentTab({ title, index, selectedIndex, onSelect }: { title: string, index: number, selectedIndex: number, onSelect: (i: number) => void }) {
+const SegmentTab = React.memo(({ title, index, selectedIndex, onSelect }: { title: string, index: number, selectedIndex: number, onSelect: (i: number) => void }) => {
     const isSelected = index === selectedIndex;
     return (
         <button
@@ -362,4 +364,5 @@ function SegmentTab({ title, index, selectedIndex, onSelect }: { title: string, 
             {title}
         </button>
     );
-}
+});
+SegmentTab.displayName = 'SegmentTab';

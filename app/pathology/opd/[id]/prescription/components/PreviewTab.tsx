@@ -146,7 +146,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
     return (
         <div className="flex h-full bg-slate-200">
             {/* --- LEFT SIDEBAR (Controls) --- */}
-            <div className="w-[260px] flex flex-col bg-white border-r border-slate-200">
+            <div className="w-[260px] flex flex-col bg-white border-r border-slate-200 no-print">
                 <div className="p-3 border-b border-slate-100 flex items-center gap-2.5">
                     <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600"><Settings className="w-3.5 h-3.5" /></div>
                     <span className="font-black text-[11px] uppercase tracking-wider text-slate-900">Report Settings</span>
@@ -302,7 +302,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                     className="bg-white shadow-2xl transition-all origin-top"
                     style={{
                         width: '794px', // A4 Width
-                        minHeight: '1123px', // A4 Height
+                        height: '1122px', // A4 Height (safely within limit)
                         paddingTop: `${margins.top}px`,
                         paddingBottom: `${margins.bottom}px`,
                         paddingLeft: '45px',
@@ -323,7 +323,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                     </div>
 
                     {/* Vitals */}
-                    {(vitals.bp || vitals.pulse || vitals.temp || vitals.weight || vitals.spo2) && (
+                    {(vitals.bp || vitals.pulse || vitals.temp || vitals.weight || vitals.spo2 || vitals.sugar) && (
                         <div className="flex flex-wrap gap-4 mb-6 py-2 border-y border-slate-100 bg-slate-50/50 px-3">
                             {vitals.bp && (
                                 <div className="flex flex-col">
@@ -347,6 +347,12 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                                 <div className="flex flex-col">
                                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">SpO2</span>
                                     <span className="text-[11px] font-bold text-slate-800">{vitals.spo2} <span className="text-[9px] font-normal text-slate-500">%</span></span>
+                                </div>
+                            )}
+                            {vitals.sugar && (
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Sugar (R)</span>
+                                    <span className="text-[11px] font-bold text-slate-800">{vitals.sugar} <span className="text-[9px] font-normal text-slate-500">mg/dL</span></span>
                                 </div>
                             )}
                             {vitals.weight && (
@@ -560,41 +566,51 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                         size: A4;
                         margin: 0mm;
                     }
-                    /* Hide everything by default */
-                    body * {
-                        visibility: hidden;
-                    }
                     
-                    /* Show print area and its children */
-                    #print-area, #print-area * {
-                        visibility: visible;
+                    html, body {
+                        height: 297mm !important;
+                        overflow: hidden !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
                     }
 
-                    /* Position print area */
+                    body * {
+                        visibility: hidden !important;
+                    }
+
+                    .no-print {
+                        display: none !important;
+                    }
+
                     #print-area {
-                        position: fixed;
-                        left: 0;
-                        top: 0;
+                        visibility: visible !important;
+                        position: absolute !important;
+                        left: 0 !important;
+                        top: 0 !important;
                         width: 210mm !important;
-                        min-height: 297mm !important;
+                        height: 297mm !important;
                         margin: 0 !important;
-                        /* padding: 0 !important;  <-- REMOVED to allow inline styles (user margins) to work */
-                        overflow: visible !important;
-                        transform: none !important; /* Remove screen scaling */
+                        padding-top: ${margins.top}px !important;
+                        padding-bottom: ${margins.bottom}px !important;
+                        padding-left: 45px !important;
+                        padding-right: 45px !important;
+                        transform: none !important;
                         box-shadow: none !important;
                         border: none !important;
                         background: white !important;
+                        overflow: hidden !important;
+                        display: block !important;
+                        z-index: 99999 !important;
+                    }
+
+                    #print-area * {
+                        visibility: visible !important;
                     }
 
                     /* Ensure background colors print */
                     * {
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
-                    }
-
-                    /* Hide scrollbars and UI elements */
-                    ::-webkit-scrollbar {
-                        display: none;
                     }
                 }
             `}</style>
