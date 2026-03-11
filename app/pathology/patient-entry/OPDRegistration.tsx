@@ -417,6 +417,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                             <Label className="text-sm flex items-center"><Stethoscope className="h-3 w-3 mr-1" /> Pulse (BPM)</Label>
                             <Input
                                 type="number"
+                                inputMode="numeric"
                                 {...control.register("pulse", { valueAsNumber: true })}
                                 className="h-8"
                                 placeholder="e.g., 72"
@@ -428,6 +429,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                             <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> SpO2 (%)</Label>
                             <Input
                                 type="text"
+                                inputMode="numeric"
                                 {...control.register("spo2")}
                                 className="h-8"
                                 placeholder="e.g., 98"
@@ -439,6 +441,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                             <Input
                                 type="number"
                                 step="0.1"
+                                inputMode="decimal"
                                 {...control.register("weight", { valueAsNumber: true })}
                                 className="h-8"
                                 placeholder="e.g., 65.5"
@@ -450,6 +453,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                             <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> Sugar (mg/dL)</Label>
                             <Input
                                 type="text"
+                                inputMode="numeric"
                                 {...control.register("sugar")}
                                 className="h-8"
                                 placeholder="e.g., 110"

@@ -521,19 +521,19 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                     </div>
                                     <div>
                                         <Label className="text-sm flex items-center"><Stethoscope className="h-3 w-3 mr-1" /> Pulse (BPM)</Label>
-                                        <Input type="number" {...register("pulse", { valueAsNumber: true })} className="h-9" placeholder="e.g., 72" />
+                                        <Input type="number" inputMode="numeric" {...register("pulse", { valueAsNumber: true })} className="h-9" placeholder="e.g., 72" />
                                     </div>
                                     <div>
                                         <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> SpO2 (%)</Label>
-                                        <Input type="text" {...register("spo2")} className="h-9" placeholder="e.g., 99%" />
+                                        <Input type="text" inputMode="numeric" {...register("spo2")} className="h-9" placeholder="e.g., 99%" />
                                     </div>
                                     <div>
                                         <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> Sugar (mg/dL)</Label>
-                                        <Input type="text" {...register("sugar")} className="h-9" placeholder="e.g., 110" />
+                                        <Input type="text" inputMode="numeric" {...register("sugar")} className="h-9" placeholder="e.g., 110" />
                                     </div>
                                     <div>
                                         <Label className="text-sm flex items-center"><Scale className="h-3 w-3 mr-1" /> Weight (Kg)</Label>
-                                        <Input type="number" step="0.1" {...register("weight", { valueAsNumber: true })} className="h-9" placeholder="e.g., 65.5" />
+                                        <Input type="number" step="0.1" inputMode="decimal" {...register("weight", { valueAsNumber: true })} className="h-9" placeholder="e.g., 65.5" />
                                     </div>
                                 </div>
                             </div>

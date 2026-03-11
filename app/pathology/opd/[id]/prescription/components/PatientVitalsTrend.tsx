@@ -139,6 +139,7 @@ export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendPr
                                             value={data.pulse}
                                             unit="bpm"
                                             height={rowHeight}
+                                            inputMode="numeric"
                                             isLoading={updatingStatus[`${data.id}-pulse`]}
                                             onSave={(val: any) => handleUpdateVital(data.id, 'pulse', val)}
                                         />
@@ -146,12 +147,14 @@ export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendPr
                                             value={data.spo2}
                                             unit="%"
                                             height={rowHeight}
+                                            inputMode="numeric"
                                             isLoading={updatingStatus[`${data.id}-spo2`]}
                                             onSave={(val: any) => handleUpdateVital(data.id, 'spo2', val)}
                                         />
                                         <DataCell
                                             value={data.sugar}
                                             height={rowHeight}
+                                            inputMode="numeric"
                                             isLoading={updatingStatus[`${data.id}-sugar`]}
                                             onSave={(val: any) => handleUpdateVital(data.id, 'sugar', val)}
                                         />
@@ -159,6 +162,7 @@ export default function PatientVitalsTrend({ patientUhid }: PatientVitalsTrendPr
                                             value={data.weight}
                                             unit="kg"
                                             height={rowHeight}
+                                            inputMode="decimal"
                                             isLoading={updatingStatus[`${data.id}-weight`]}
                                             onSave={(val: any) => handleUpdateVital(data.id, 'weight', val)}
                                         />
@@ -182,7 +186,7 @@ function LabelRow({ icon: Icon, color, label, height }: any) {
     );
 }
 
-function DataCell({ value, unit, isBold, height, onSave, isLoading }: any) {
+function DataCell({ value, unit, isBold, height, onSave, isLoading, type = "text", inputMode = "text" }: any) {
     const [isEditing, setIsEditing] = useState(false);
     const [tempValue, setTempValue] = useState(value || "");
 
@@ -202,6 +206,8 @@ function DataCell({ value, unit, isBold, height, onSave, isLoading }: any) {
             <div className={cn(height, "flex items-center justify-center border-t border-slate-100 px-1")}>
                 <input
                     autoFocus
+                    type={type}
+                    inputMode={inputMode}
                     value={tempValue}
                     onChange={(e) => setTempValue(e.target.value)}
                     onBlur={handleBlur}
