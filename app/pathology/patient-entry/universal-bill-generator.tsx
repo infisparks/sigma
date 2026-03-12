@@ -377,6 +377,7 @@ async function generatePdfDocument({ billData, doctors }: GeneratePdfArgs): Prom
     return doc
 }
 
+
 // --- React Component and Programmatic Utility ---
 
 interface UniversalBillGeneratorProps {
