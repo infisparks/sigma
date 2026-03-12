@@ -135,11 +135,36 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
 
     // --- Render Helpers ---
     const renderSection = (title: string, content: React.ReactNode) => (
-        <div className="mb-1.5 flex items-start text-[11px]">
-            <div className="w-[100px] shrink-0 font-black text-slate-900 uppercase tracking-wide pt-0.5">{title}</div>
+        <div className="mb-3 flex items-start text-[11.5px]">
+            <div className="shrink-0 font-bold text-slate-900 pr-2">{title}:</div>
             <div className="flex-1 text-slate-800 leading-tight">{content}</div>
         </div>
     );
+
+    const formatDuration = (val: string) => {
+        if (!val) return "";
+        let formatted = val.toLowerCase();
+        formatted = formatted.replace(/(\d+)\s*d/g, '$1 Days');
+        formatted = formatted.replace(/(\d+)\s*w/g, '$1 Weeks');
+        formatted = formatted.replace(/(\d+)\s*m/g, '$1 Months');
+        formatted = formatted.replace(/(\d+)\s*y/g, '$1 Years');
+        formatted = formatted.replace(/(\d+)\s*h/g, '$1 Hours');
+
+        // Capitalize first letter of each word and return
+        return formatted.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    };
+
+    const getTimingNote = (t: any) => {
+        if (!t) return "";
+        const parts = [];
+        if (t.bb) parts.push("Before Breakfast");
+        if (t.ab) parts.push("After Breakfast");
+        if (t.bl) parts.push("Before Lunch");
+        if (t.al) parts.push("After Lunch");
+        if (t.bd) parts.push("Before Dinner");
+        if (t.ad) parts.push("After Dinner");
+        return parts.join(", ");
+    };
 
     if (isLoading) return <div className="flex items-center justify-center h-full">Generating Preview...</div>;
 
@@ -216,18 +241,21 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                             {followUpDuration && <button onClick={() => setFollowUp("", "")} className="text-[9px] text-red-500 font-black uppercase">Reset</button>}
                         </div>
                         <div className="flex flex-wrap gap-1.5 mb-2.5">
-                            {["3d", "5d", "1w", "2w", "1m", "3m"].map(d => (
-                                <button
-                                    key={d}
-                                    onClick={() => setFollowUp(d, followUpNote)}
-                                    className={cn(
-                                        "w-9 h-7 rounded text-[10px] font-black border transition-all",
-                                        followUpDuration === d ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-200"
-                                    )}
-                                >
-                                    {d}
-                                </button>
-                            ))}
+                            {["3d", "5d", "1w", "2w", "1m", "3m"].map(d => {
+                                const label = d.replace('d', ' Days').replace('w', ' Weeks').replace('m', ' Months');
+                                return (
+                                    <button
+                                        key={d}
+                                        onClick={() => setFollowUp(d, followUpNote)}
+                                        className={cn(
+                                            "px-2 h-7 rounded text-[9px] font-black border transition-all whitespace-nowrap",
+                                            followUpDuration === d ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-200"
+                                        )}
+                                    >
+                                        {label}
+                                    </button>
+                                );
+                            })}
                         </div>
                         {followUpDuration && (
                             <input
@@ -322,64 +350,32 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                         </div>
                     </div>
 
-                    {/* Vitals */}
+                    {/* 1. Symptoms */}
+                    {toggles["Symptoms"] && symptomsList.length > 0 &&
+                        renderSection("Symptoms", symptomsList.map(s => {
+                            const d = [s.severity, s.duration].filter(Boolean).join(", ");
+                            return `${s.name}${d ? ` (${d})` : ''}`;
+                        }).join(", "))
+                    }
+
+                    {/* 2. Vitals */}
                     {(vitals.bp || vitals.pulse || vitals.temp || vitals.weight || vitals.spo2 || vitals.sugar) && (
-                        <div className="flex flex-wrap gap-4 mb-6 py-2 border-y border-slate-100 bg-slate-50/50 px-3">
-                            {vitals.bp && (
-                                <div className="flex flex-col">
-                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">BP</span>
-                                    <span className="text-[11px] font-bold text-slate-800">{vitals.bp} <span className="text-[9px] font-normal text-slate-500">mmHg</span></span>
-                                </div>
-                            )}
-                            {vitals.pulse && (
-                                <div className="flex flex-col">
-                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Pulse</span>
-                                    <span className="text-[11px] font-bold text-slate-800">{vitals.pulse} <span className="text-[9px] font-normal text-slate-500">bpm</span></span>
-                                </div>
-                            )}
-                            {vitals.temp && (
-                                <div className="flex flex-col">
-                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Temp</span>
-                                    <span className="text-[11px] font-bold text-slate-800">{vitals.temp} <span className="text-[9px] font-normal text-slate-500">°F</span></span>
-                                </div>
-                            )}
-                            {vitals.spo2 && (
-                                <div className="flex flex-col">
-                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">SpO2</span>
-                                    <span className="text-[11px] font-bold text-slate-800">{vitals.spo2} <span className="text-[9px] font-normal text-slate-500">%</span></span>
-                                </div>
-                            )}
-                            {vitals.sugar && (
-                                <div className="flex flex-col">
-                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Sugar (R)</span>
-                                    <span className="text-[11px] font-bold text-slate-800">{vitals.sugar} <span className="text-[9px] font-normal text-slate-500">mg/dL</span></span>
-                                </div>
-                            )}
-                            {vitals.weight && (
-                                <div className="flex flex-col">
-                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Weight</span>
-                                    <span className="text-[11px] font-bold text-slate-800">{vitals.weight} <span className="text-[9px] font-normal text-slate-500">kg</span></span>
-                                </div>
-                            )}
-                        </div>
+                        renderSection("Vitals", (
+                            <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                {vitals.weight && <span className="font-medium">Weight: {vitals.weight} kg</span>}
+                                {vitals.bp && <span className="font-medium">BP: {vitals.bp} mmHg</span>}
+                                {vitals.pulse && <span className="font-medium">Pulse: {vitals.pulse} bpm</span>}
+                                {vitals.temp && <span className="font-medium">Temp: {vitals.temp} °F</span>}
+                                {vitals.spo2 && <span className="font-medium">SpO2: {vitals.spo2} %</span>}
+                                {vitals.sugar && <span className="font-medium">Sugar (R): {vitals.sugar} mg/dL</span>}
+                            </div>
+                        ))
                     )}
 
-
-
-                    {/* 1. Medical History (Not strictly in context yet, preserving or suppressing?) */}
-                    {/* Assuming Medical History is not yet in Context or handled separately. If user removed localStorage, we can't show it from draft. 
-                        If it's in DB, we'd need it in Context. 
-                        The user instruction was "Refactor Prescription Tabs". 
-                        I will assume Medical History is handled elsewhere or I should suppress it for now if it creates errors.
-                        Actually, existing code used `reportData.medical_history`.
-                        Context doesn't expose it. I will leave it out or placeholder if needed.
-                        For now, removing it to avoid errors as requested "eliminate local storage".
-                    */}
-
-                    {/* 2. Diagnosis - Detailed */}
+                    {/* 3. Diagnosis */}
                     {toggles["Diagnosis"] && diagnosisList.length > 0 &&
                         renderSection("Diagnosis", (
-                            <div className="space-y-0">
+                            <div className="space-y-0.5">
                                 {diagnosisList.map((d, idx) => {
                                     const details = [];
                                     if (d.status && d.status !== 'Suspected') details.push(d.status);
@@ -396,7 +392,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                                             <span className="font-bold text-slate-900">{d.name}</span>
                                             {details.length > 0 && (
                                                 <span className="text-slate-600 ml-1">
-                                                    — {details.join(' | ')}
+                                                    ({details.join(' | ')})
                                                 </span>
                                             )}
                                         </div>
@@ -406,30 +402,36 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                         ))
                     }
 
-                    {/* 3. Medicine Table */}
+                    {/* 4. Medicine Table */}
                     {medicines.length > 0 && (
-                        <div className="mb-6">
-                            <table className="w-full border-collapse border border-slate-300 text-[11px]">
+                        <div className="mb-6 mt-4">
+                            <table className="w-full border-collapse border border-slate-300 text-[11.5px]">
                                 <thead>
-                                    <tr className="bg-slate-100">
-                                        <th className="border border-slate-300 p-1.5 text-left w-8">#</th>
-                                        <th className="border border-slate-300 p-1.5 text-left">Medicine</th>
-                                        <th className="border border-slate-300 p-1.5 text-left w-20">Freq</th>
-                                        <th className="border border-slate-300 p-1.5 text-left w-16">Dur</th>
-                                        <th className="border border-slate-300 p-1.5 text-left w-1/3">Instr</th>
+                                    <tr className="bg-slate-50">
+                                        <th className="border border-slate-300 p-2 text-left w-10">Rx</th>
+                                        <th className="border border-slate-300 p-2 text-left">Name</th>
+                                        <th className="border border-slate-300 p-2 text-center w-24">Frequency</th>
+                                        <th className="border border-slate-300 p-2 text-left w-24">Duration</th>
+                                        <th className="border border-slate-300 p-2 text-left">Notes</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {medicines.map((rx, i) => {
                                         const t = rx.timing || {};
-                                        const freq = `${(t.bb || t.ab) ? 1 : 0}-${(t.bl || t.al) ? 1 : 0}-${(t.bd || t.ad) ? 1 : 0}`;
+                                        const freq = `${(t.bb || t.ab) ? 1 : 0} - ${(t.bl || t.al) ? 1 : 0} - ${(t.bd || t.ad) ? 1 : 0}`;
+                                        const timingNote = getTimingNote(rx.timing);
                                         return (
                                             <tr key={i}>
-                                                <td className="border border-slate-300 p-1.5 text-center">{i + 1}</td>
-                                                <td className="border border-slate-300 p-1.5 font-bold">{rx.name} <span className="font-normal text-slate-500">{rx.dosage}</span></td>
-                                                <td className="border border-slate-300 p-1.5 font-bold">{freq}</td>
-                                                <td className="border border-slate-300 p-1.5">{rx.duration}</td>
-                                                <td className="border border-slate-300 p-1.5 text-slate-600">{rx.note}</td>
+                                                <td className="border border-slate-300 p-2 text-center">{i + 1}</td>
+                                                <td className="border border-slate-300 p-2">
+                                                    <span className="text-slate-500">{rx.type || 'Tablet'}</span> <span className="font-bold text-slate-900">{rx.name}</span> <span className="text-slate-600">{rx.dosage}</span>
+                                                </td>
+                                                <td className="border border-slate-300 p-2 text-center font-bold text-slate-800">{freq}</td>
+                                                <td className="border border-slate-300 p-2 font-medium">{formatDuration(rx.duration)}</td>
+                                                <td className="border border-slate-300 p-2 text-slate-700">
+                                                    {timingNote && <div className="font-medium mb-0.5 text-slate-900">{timingNote}</div>}
+                                                    {rx.note && <div className="text-[10px] italic text-slate-500">{rx.note}</div>}
+                                                </td>
                                             </tr>
                                         );
                                     })}
@@ -438,15 +440,9 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                         </div>
                     )}
 
-                    {/* 4. Symptoms */}
-                    {toggles["Symptoms"] && symptomsList.length > 0 &&
-                        renderSection("Complaints", symptomsList.map(s => {
-                            const d = [s.severity, s.duration].filter(Boolean).join(", ");
-                            return `${s.name}${d ? ` (${d})` : ''}`;
-                        }).join(", "))
-                    }
+                    {/* 5. Instructions & Other sections */}
                     {toggles["Instructions"] && instructions.length > 0 &&
-                        renderSection("Advice", instructions.join("\n"))
+                        renderSection("Instructions", instructions.join("\n"))
                     }
 
                     {toggles["Investigation Results"] && investigations.length > 0 &&
@@ -463,20 +459,22 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
 
                     {/* Footer */}
                     {(followUpDuration || referringDoctor) && (
-                        <div className="mt-8 border border-slate-200 rounded p-3 flex justify-between items-center">
-                            {followUpDuration && <div className="text-xs font-bold text-blue-600">Next Review: After {followUpDuration}</div>}
+                        <div className="mt-8 border-t border-slate-200 pt-3 flex justify-between items-center">
+                            {followUpDuration && <div className="text-xs font-bold text-slate-900 uppercase">Next Review: After {formatDuration(followUpDuration)} {followUpNote && `(${followUpNote})`}</div>}
                             {referringDoctor && <div className="text-xs italic text-slate-600">Ref: Dr. {referringDoctor}</div>}
                         </div>
                     )}
 
+                    {/* Signature */}
                     {toggles["Signature"] && (
                         <div className="mt-12 text-right">
-                            <div className="inline-block text-center">
+                            <div className="inline-block text-center mr-8">
                                 <div className="h-10 w-32 border-b border-slate-400 mb-1"></div>
-                                <div className="text-[10px] text-slate-500">Authorized Signature</div>
+                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Authorized Signature</div>
                             </div>
                         </div>
                     )}
+
 
                 </div>
             </div>

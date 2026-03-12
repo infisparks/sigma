@@ -12,7 +12,7 @@ import {
     Search, User, Calendar, Filter,
     ArrowLeft, ArrowRight, FilePenLine,
     Activity, CreditCard, AlertCircle, Pill, X,
-    Users, Trash2
+    Users, Trash2, CheckCircle
 } from "lucide-react"
 import { useUserRole } from "@/components/userrole"
 import { useRouter } from "next/navigation"
@@ -41,6 +41,8 @@ interface OPDRecord {
     patient_number?: string;
     doctor_name?: string;
     referring_doctor_name: string;
+    payment_entries?: { amount: number; paymentMode: string }[];
+    is_finalized?: boolean;
 }
 
 interface DoctorFee {
@@ -162,7 +164,7 @@ export default function OPDDashboard() {
             let query = supabase
                 .from(TABLE.OPD_REGISTRATION)
                 .select(`
-                    id, uhid, treating_doctor_id, total_fees, discount_amount, amount_paid, created_at, referring_doctor_name,
+                    id, uhid, treating_doctor_id, total_fees, discount_amount, amount_paid, created_at, referring_doctor_name, payment_entries, is_finalized,
                     ${TABLE.PATIENT}!inner (name, number)
                 `);
 
@@ -252,10 +254,12 @@ export default function OPDDashboard() {
                 amount_paid: r.amount_paid,
                 created_at: r.created_at,
                 referring_doctor_name: r.referring_doctor_name,
+                payment_entries: Array.isArray(r.payment_entries) ? r.payment_entries : [],
 
                 patient_name: r[TABLE.PATIENT]?.name || 'Unknown Patient',
                 patient_number: r[TABLE.PATIENT]?.number || '',
                 doctor_name: fetchedDoctors.find(d => d.id === r.treating_doctor_id)?.doctor_name || 'Unknown Doctor',
+                is_finalized: r.is_finalized,
             }));
 
             setRecords(mappedRecords);
@@ -306,7 +310,25 @@ export default function OPDDashboard() {
         const totalPatients = displayedRecords.length;
         const totalRevenue = displayedRecords.reduce((acc, curr) => acc + curr.amount_paid, 0);
         const totalDue = displayedRecords.reduce((acc, curr) => acc + (curr.total_fees - (curr.discount_amount || 0) - curr.amount_paid), 0);
-        return { totalPatients, totalRevenue, totalDue };
+
+        // Revenue Breakdown
+        let cashRevenue = 0;
+        let onlineRevenue = 0;
+
+        displayedRecords.forEach(r => {
+            if (r.payment_entries && r.payment_entries.length > 0) {
+                r.payment_entries.forEach(p => {
+                    const mode = (p.paymentMode || "").toLowerCase();
+                    if (mode === 'cash') cashRevenue += (p.amount || 0);
+                    else onlineRevenue += (p.amount || 0);
+                });
+            } else {
+                // Fallback for legacy records or missing entries: assume Cash if amount_paid > 0
+                cashRevenue += r.amount_paid;
+            }
+        });
+
+        return { totalPatients, totalRevenue, totalDue, cashRevenue, onlineRevenue };
     }, [displayedRecords]);
 
     // --- Handlers ---
@@ -418,6 +440,16 @@ export default function OPDDashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-slate-900">{formatCurrency(stats.totalRevenue)}</div>
+                        <div className="flex gap-3 mt-1.5 pt-1.5 border-t border-slate-100/50">
+                            <div className="flex items-center gap-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Cash:</span>
+                                <span className="text-[11px] font-black text-slate-600">{formatCurrency(stats.cashRevenue)}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Online:</span>
+                                <span className="text-[11px] font-black text-blue-600">{formatCurrency(stats.onlineRevenue)}</span>
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
                 <Card className="border-none shadow-sm bg-white ring-1 ring-slate-200/60">
@@ -572,6 +604,7 @@ export default function OPDDashboard() {
                                         <TableHead>Patient Info</TableHead>
                                         <TableHead>Doctor</TableHead>
                                         <TableHead>Date</TableHead>
+                                        <TableHead className="text-center">Report</TableHead>
                                         <TableHead className="text-right">Total</TableHead>
                                         <TableHead className="text-right">Status</TableHead>
                                         <TableHead className="w-[80px]"></TableHead>
@@ -604,6 +637,17 @@ export default function OPDDashboard() {
                                                 </TableCell>
                                                 <TableCell className="text-slate-500 text-sm">
                                                     {formatDate(r.created_at)}
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    {r.is_finalized ? (
+                                                        <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-100 flex items-center gap-1 mx-auto w-fit">
+                                                            <CheckCircle className="w-3 h-3" /> Finalized
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-slate-400 font-normal mx-auto w-fit border-slate-200">
+                                                            Draft
+                                                        </Badge>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell className="text-right font-medium">
                                                     {r.discount_amount > 0 ? (

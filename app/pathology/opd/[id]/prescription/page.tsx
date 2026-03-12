@@ -79,7 +79,7 @@ export default function PrescriptionPage() {
             case 5: return <PreviewTab opdId={opdId} patient={record!.patient_detail} />;
             case 6: return <PreviousVisitsTab currentOpdId={opdId} patientUhid={record!.patient_detail.uhid} />;
             case 7: return <DiagnosisTab opdId={opdId} />;
-            case 8: return <BloodTestTab patientUhid={record!.patient_detail.uhid} />;
+            case 8: return <BloodTestTab opdId={opdId} patientUhid={record!.patient_detail.uhid} />;
             case 9: return (
                 <div className="flex-1 p-4 bg-slate-100 overflow-auto flex items-start justify-center">
                     <div className="w-full max-w-5xl">
