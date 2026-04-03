@@ -402,6 +402,25 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                 disabled={!isExistingPatient}
                             />
                         </div>
+
+                        {/* 5. Hospital Selection */}
+                        <div className="col-span-4 mt-2">
+                            <Label className="text-sm font-bold text-blue-800">Clinic / Hospital Name *</Label>
+                            <Select
+                                value={watch("hospitalName")}
+                                onValueChange={(v) => setValue("hospitalName", v)}
+                            >
+                                <SelectTrigger className="h-8 bg-blue-50 border-blue-200">
+                                    <SelectValue placeholder="Select Clinic/Hospital" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
+                                    <SelectItem value="Rehmania Hospital">Rehmania Hospital</SelectItem>
+                                    <SelectItem value="Jeevdani Hospital">Jeevdani Hospital</SelectItem>
+                                    <SelectItem value="Dausup Hospital">Dausup Hospital</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 </div>
 

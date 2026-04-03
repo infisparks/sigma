@@ -365,7 +365,12 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                     <div className="grid grid-cols-12 gap-2">
                         <div className="col-span-3"><Label className="text-sm">Hospital</Label>
                             <Select value={watch("hospitalName")} onValueChange={(v) => setValue("hospitalName", v)}><SelectTrigger className={`h-8`}><SelectValue /></SelectTrigger>
-                                <SelectContent><SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem><SelectItem value="Cigma clinic">Cigma clinic</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
+                                <SelectContent>
+                                    <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
+                                    <SelectItem value="Rehmania Hospital">Rehmania Hospital</SelectItem>
+                                    <SelectItem value="Jeevdani Hospital">Jeevdani Hospital</SelectItem>
+                                    <SelectItem value="Dausup Hospital">Dausup Hospital</SelectItem>
+                                </SelectContent></Select></div>
                         <div className="col-span-4 relative"><Label className="text-sm">Doctor Name</Label>
                             <Input {...control.register("doctorName", { required: "Doctor is required" })} className="h-8" placeholder="Referring Doctor" />
                             {errors.doctorName && <p className="text-red-500 text-xs mt-1">{errors.doctorName.message}</p>}</div>

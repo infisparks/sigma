@@ -145,15 +145,22 @@ export interface IUnifiedFormInput {
   opd: OPDData;
 }
 
-const getDefaultUnifiedFormValues = (): IUnifiedFormInput => ({
-  title: "", name: "", contact: "", age: 0, dayType: "year", gender: "", address: "", uhid: "",
-  hospitalName: "Cigma Clinic", visitType: "direct", doctorName: "", tpa: false,
-  registrationDate: defaultDate, registrationTime: defaultTime, sendWhatsApp: true,
-  sourceOpdId: null, sourceIpdId: null,
-  pathology: { estimatedTime: "1100", bloodTests: [], discountAmount: 0, paymentEntries: [] },
-  xray: { billNumber: "", remark: "", dateOfAppointment: new Date(), xrayTests: [{ examination: "", amount: 0 }], discount: 0, payments: [] },
-  opd: { treatingDoctorId: null, referringDoctorName: "", visitCategory: 'First Visit', bp: "", pulse: null, weight: null, spo2: "", sugar: "", discountAmount: 0, paymentEntries: [] },
-})
+const getDefaultUnifiedFormValues = (): IUnifiedFormInput => {
+  let savedHospital = "Cigma Clinic";
+  if (typeof window !== "undefined") {
+    savedHospital = localStorage.getItem("selectedHospital") || "Cigma Clinic";
+  }
+
+  return {
+    title: "", name: "", contact: "", age: 0, dayType: "year", gender: "", address: "", uhid: "",
+    hospitalName: savedHospital, visitType: "direct", doctorName: "", tpa: false,
+    registrationDate: defaultDate, registrationTime: defaultTime, sendWhatsApp: true,
+    sourceOpdId: null, sourceIpdId: null,
+    pathology: { estimatedTime: "1100", bloodTests: [], discountAmount: 0, paymentEntries: [] },
+    xray: { billNumber: "", remark: "", dateOfAppointment: new Date(), xrayTests: [{ examination: "", amount: 0 }], discount: 0, payments: [] },
+    opd: { treatingDoctorId: null, referringDoctorName: "", visitCategory: 'First Visit', bp: "", pulse: null, weight: null, spo2: "", sugar: "", discountAmount: 0, paymentEntries: [] },
+  }
+}
 
 const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => { return fn() }
 
@@ -350,6 +357,14 @@ export default function UnifiedPatientEntry() {
     else if (female.has(titleValue)) setValue("gender", "female")
     else if (none.has(titleValue)) setValue("gender", "")
   }, [watch("title"), setValue])
+
+  // --- Persistence for Hospital Name ---
+  useEffect(() => {
+    const hospital = watch("hospitalName");
+    if (hospital && typeof window !== "undefined") {
+      localStorage.setItem("selectedHospital", hospital);
+    }
+  }, [watch("hospitalName")]);
 
   // --- Click Outside Handler for Hints and Popover ---
   useEffect(() => {

@@ -41,6 +41,7 @@ interface OPDRecord {
     patient_number?: string;
     doctor_name?: string;
     referring_doctor_name: string;
+    hospital_name?: string;
     payment_entries?: { amount: number; paymentMode: string }[];
     is_finalized?: boolean;
 }
@@ -115,6 +116,7 @@ export default function OPDDashboard() {
     const [appliedSearch, setAppliedSearch] = useState(''); // What we actually search (for 'All' mode)
     const [searchField, setSearchField] = useState<'uhid' | 'name' | 'number' | 'doctor'>('name');
     const [selectedDoctorId, setSelectedDoctorId] = useState<string>('0');
+    const [selectedHospital, setSelectedHospital] = useState<string>('All');
 
     // Pagination
     const [page, setPage] = useState(0);
@@ -124,6 +126,26 @@ export default function OPDDashboard() {
     // Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
+
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    // --- Initial Load of Saved Hospital ---
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const savedHospital = localStorage.getItem('opdDashboardHospital');
+            if (savedHospital) {
+                setSelectedHospital(savedHospital);
+            }
+            setIsLoaded(true);
+        }
+    }, []);
+
+    // --- Persistence for Hospital Selection ---
+    useEffect(() => {
+        if (isLoaded && typeof window !== 'undefined') {
+            localStorage.setItem('opdDashboardHospital', selectedHospital);
+        }
+    }, [selectedHospital, isLoaded]);
 
     // --- Fetch Logic ---
     const fetchDashboardData = useCallback(async (searchOverride?: string) => {
@@ -164,7 +186,7 @@ export default function OPDDashboard() {
             let query = supabase
                 .from(TABLE.OPD_REGISTRATION)
                 .select(`
-                    id, uhid, treating_doctor_id, total_fees, discount_amount, amount_paid, created_at, referring_doctor_name, payment_entries, is_finalized,
+                    id, uhid, hospital_name, treating_doctor_id, total_fees, discount_amount, amount_paid, created_at, referring_doctor_name, payment_entries, is_finalized,
                     ${TABLE.PATIENT}!inner (name, number)
                 `);
 
@@ -176,6 +198,11 @@ export default function OPDDashboard() {
             // Apply Doctor Filter
             if (selectedDoctorId && selectedDoctorId !== '0') {
                 query = query.eq('treating_doctor_id', Number(selectedDoctorId));
+            }
+
+            // Apply Hospital Filter
+            if (selectedHospital && selectedHospital !== 'All') {
+                query = query.eq('hospital_name', selectedHospital);
             }
 
             // Apply Server-Side Search (Specifically for 'All' mode or explicit search)
@@ -254,6 +281,7 @@ export default function OPDDashboard() {
                 amount_paid: r.amount_paid,
                 created_at: r.created_at,
                 referring_doctor_name: r.referring_doctor_name,
+                hospital_name: r.hospital_name,
                 payment_entries: Array.isArray(r.payment_entries) ? r.payment_entries : [],
 
                 patient_name: r[TABLE.PATIENT]?.name || 'Unknown Patient',
@@ -270,16 +298,17 @@ export default function OPDDashboard() {
         } finally {
             setLoading(false);
         }
-    }, [doctorList, filterType, customStartDate, customEndDate, selectedDoctorId, appliedSearch, page]);
+    }, [doctorList, filterType, customStartDate, customEndDate, selectedDoctorId, selectedHospital, appliedSearch, page]);
 
     // --- Effects ---
 
     // Initial Load & Filter Changes
-    // Initial Load & Filter Changes
     useEffect(() => {
         // If switching to 'All', clear search result unless user types again
-        fetchDashboardData();
-    }, [filterType, customStartDate, customEndDate, selectedDoctorId, page]);
+        if (isLoaded) {
+            fetchDashboardData();
+        }
+    }, [filterType, customStartDate, customEndDate, selectedDoctorId, selectedHospital, page, isLoaded]);
 
     // specific effect for search trigger in All mode is handled by the button
     // specific effect for doctor change triggers fetch via dependency above
@@ -353,6 +382,7 @@ export default function OPDDashboard() {
         setFilterType(val as DateFilterType);
         setSearchInput('');
         setAppliedSearch('');
+        // NOTE: We don't clear selectedHospital here because user might want to keep the filter
         setPage(0); // Reset page
     };
 
@@ -520,6 +550,20 @@ export default function OPDDashboard() {
                                 ))}
                             </SelectContent>
                         </Select>
+
+                        {/* Hospital Filter */}
+                        <Select value={selectedHospital} onValueChange={(val) => { setSelectedHospital(val); setPage(0); }}>
+                            <SelectTrigger className="w-[180px] h-9 bg-blue-50 border-blue-200">
+                                <SelectValue placeholder="All Hospitals" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="All">All Hospitals</SelectItem>
+                                <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
+                                <SelectItem value="Rehmania Hospital">Rehmania Hospital</SelectItem>
+                                <SelectItem value="Jeevdani Hospital">Jeevdani Hospital</SelectItem>
+                                <SelectItem value="Dausup Hospital">Dausup Hospital</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     {/* 2. Intelligent Search Bar */}
@@ -625,6 +669,9 @@ export default function OPDDashboard() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="font-medium text-slate-900">{r.patient_name}</div>
+                                                    <div className="text-[10px] text-slate-500 font-bold">
+                                                        {r.hospital_name || 'No Hospital'}
+                                                    </div>
                                                     <div className="text-[10px] text-slate-400">
                                                         {r.patient_number ? `+91 ${r.patient_number}` : 'No Number'}
                                                     </div>
