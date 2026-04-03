@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import {
     ArrowLeft, Monitor, FileText, History, StickyNote,
     CheckCircle, Search, Check, List, Activity,
-    FileOutput, Heart, Printer, Power, User, Stethoscope, FlaskConical
+    FileOutput, Heart, Printer, Power, User, Stethoscope, FlaskConical, Code
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -23,7 +23,10 @@ import PatientVitalsTrend from './components/PatientVitalsTrend';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Patient, OPDRecord } from './types';
 import { ModernTheme } from './theme';
-import { PrescriptionProvider } from './context/PrescriptionContext';
+import { PrescriptionProvider, usePrescription } from './context/PrescriptionContext';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 export default function PrescriptionPage() {
     const params = useParams();
@@ -113,6 +116,8 @@ export default function PrescriptionPage() {
                     <div className="flex items-center gap-2">
                         {/* <HeaderAction icon={Activity} label="Vitals" onClick={() => setCurrentTabIndex(9)} /> */}
                         {/* Moved Vitals to Bottom Dock for better visibility as requested */}
+                        <DevJsonImporter />
+                        <div className="h-5 w-px bg-slate-200 mx-1"></div>
                         <HeaderAction icon={FileText} label="Reports" onClick={() => setCurrentTabIndex(2)} />
                         <HeaderAction icon={History} label="Previous" onClick={() => setCurrentTabIndex(6)} />
                         <HeaderAction icon={FlaskConical} label="Blood Test" onClick={() => setCurrentTabIndex(8)} />
@@ -161,6 +166,152 @@ export default function PrescriptionPage() {
 }
 
 // --- Sub Components ---
+
+function DevJsonImporter() {
+    const { addSymptom, addDiagnosis, addMedicine, setInvestigations, setClinicalNote, setFollowUp } = usePrescription();
+    const [open, setOpen] = useState(false);
+    const [jsonInput, setJsonInput] = useState('');
+
+    const handleImport = () => {
+        try {
+            const data = JSON.parse(jsonInput);
+
+            // 1. Symptoms
+            if (Array.isArray(data.symptoms)) {
+                data.symptoms.forEach((s: any) => {
+                    addSymptom({
+                        name: s.name || '',
+                        note: s.note || '',
+                        duration: s.duration || '',
+                        severity: s.severity || '',
+                        customGroups: [],
+                        selectedCustomOptions: []
+                    });
+                });
+            }
+
+            // 2. Diagnoses
+            if (Array.isArray(data.diagnoses)) {
+                data.diagnoses.forEach((d: any) => {
+                    addDiagnosis({
+                        name: d.name || '',
+                        note: d.note || '',
+                        status: d.status || 'Suspected',
+                        customGroups: [],
+                        selectedCustomOptions: []
+                    });
+                });
+            }
+
+            // 3. Rx (Medicines)
+            if (Array.isArray(data.medicines)) {
+                data.medicines.forEach((m: any) => {
+                    addMedicine({
+                        id: Math.random().toString(36).substr(2, 9),
+                        name: m.name || '',
+                        type: m.type || 'Tablet',
+                        dosage: m.dosage || '',
+                        duration: m.duration || '',
+                        note: m.note || '',
+                        timing: m.timing || { bb: false, ab: true, bl: false, al: true, bd: false, ad: true }
+                    });
+                });
+            }
+
+            // 4. Reports (Investigations)
+            if (Array.isArray(data.reports)) {
+                setInvestigations(data.reports);
+            }
+
+            // 5. Global Notes & Follow Up
+            if (data.clinical_note) setClinicalNote(data.clinical_note);
+            if (data.follow_up_duration || data.follow_up_note) {
+                setFollowUp(data.follow_up_duration || '', data.follow_up_note || '');
+            }
+
+            toast.success("Prescription data imported successfully!");
+            setOpen(false);
+            setJsonInput('');
+        } catch (err) {
+            console.error(err);
+            toast.error("Invalid JSON structure. Please check the format.");
+        }
+    };
+
+    const exampleJson = `{
+  "symptoms": [
+    { "name": "Toothache", "duration": "3 days", "severity": "Severe", "note": "On left lower side" }
+  ],
+  "diagnoses": [
+    { "name": "Dental Caries", "status": "Confirmed", "note": "Caries in 36, 37" }
+  ],
+  "medicines": [
+    { 
+      "name": "Amoxicillin 500mg", 
+      "dosage": "1 Tab", 
+      "duration": "5 Days", 
+      "timing": { "bb": false, "ab": true, "bl": false, "al": true, "bd": false, "ad": true },
+      "note": "Take with warm water"
+    }
+  ],
+  "reports": ["X-Ray OPG", "CBC"],
+  "clinical_note": "Patient advised rest for 3 days.",
+  "follow_up_duration": "1w",
+  "follow_up_note": "Review with reports"
+}`;
+
+    return (
+        <>
+            <HeaderAction icon={Code} label="Developer" onClick={() => setOpen(true)} />
+
+            <Dialog open={open} onOpenChange={setOpen}>
+                <DialogContent className="max-w-2xl bg-white">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Code className="w-5 h-5 text-blue-600" />
+                            Developer JSON Import
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="bg-slate-900 rounded-lg p-3 relative group">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Example JSON Structure</span>
+                                <button 
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(exampleJson);
+                                        toast.success("Example JSON copied!");
+                                    }}
+                                    className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+                                >
+                                    Copy Format
+                                </button>
+                            </div>
+                            <pre className="text-[11px] font-mono text-blue-300 overflow-x-auto">
+                                {exampleJson}
+                            </pre>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">Paste your JSON here</label>
+                            <Textarea 
+                                placeholder='{ "symptoms": [...], "diagnoses": [...], "medicines": [...], "reports": [...] }'
+                                value={jsonInput}
+                                onChange={(e) => setJsonInput(e.target.value)}
+                                className="min-h-[200px] font-mono text-xs border-slate-200 focus:ring-blue-500"
+                            />
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-2">
+                            <Button variant="ghost" onClick={() => setOpen(false)} className="text-slate-500">Cancel</Button>
+                            <Button onClick={handleImport} className="bg-blue-600 hover:bg-blue-700 text-white px-8">Import Data</Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+}
 
 function HeaderAction({ icon: Icon, label, onClick }: { icon: any, label: string, onClick: () => void }) {
     return (

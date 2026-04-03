@@ -143,15 +143,16 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
 
     const formatDuration = (val: string) => {
         if (!val) return "";
-        let formatted = val.toLowerCase();
-        formatted = formatted.replace(/(\d+)\s*d/g, '$1 Days');
-        formatted = formatted.replace(/(\d+)\s*w/g, '$1 Weeks');
-        formatted = formatted.replace(/(\d+)\s*m/g, '$1 Months');
-        formatted = formatted.replace(/(\d+)\s*y/g, '$1 Years');
-        formatted = formatted.replace(/(\d+)\s*h/g, '$1 Hours');
+        let formatted = val.toLowerCase().trim();
 
-        // Capitalize first letter of each word and return
-        return formatted.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        // Shorthand handling (e.g. 5d, 1w)
+        if (formatted.endsWith('d') || /^\d+$/.test(formatted)) return (formatted.match(/\d+/) || [""])[0] + " Day";
+        if (formatted.endsWith('w')) return (formatted.match(/\d+/) || [""])[0] + " Week";
+        if (formatted.endsWith('m')) return (formatted.match(/\d+/) || [""])[0] + " Month";
+        if (formatted.endsWith('y')) return (formatted.match(/\d+/) || [""])[0] + " Year";
+        if (formatted.endsWith('h')) return (formatted.match(/\d+/) || [""])[0] + " Hour";
+
+        return val;
     };
 
     const getTimingNote = (t: any) => {
@@ -164,6 +165,19 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
         if (t.bd) parts.push("Before Dinner");
         if (t.ad) parts.push("After Dinner");
         return parts.join(", ");
+    };
+
+    const getDoseValue = (dosage: string) => {
+        if (!dosage) return "1";
+        const clean = dosage.toLowerCase();
+
+        // Map common keywords and symbols to fractions
+        if (clean.includes('half') || clean.includes('½')) return "1/2";
+        if (clean.includes('quarter') || clean.includes('¼')) return "1/4";
+
+        // Extract numeric part or short fraction (e.g., "1/2", "1.5", "2")
+        const match = dosage.match(/(\d+\/\d+|\d+\.\d+|\d+)/);
+        return match ? match[0] : dosage;
     };
 
     if (isLoading) return <div className="flex items-center justify-center h-full">Generating Preview...</div>;
@@ -353,8 +367,10 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                     {/* 1. Symptoms */}
                     {toggles["Symptoms"] && symptomsList.length > 0 &&
                         renderSection("Symptoms", symptomsList.map(s => {
-                            const d = [s.severity, s.duration].filter(Boolean).join(", ");
-                            return `${s.name}${d ? ` (${d})` : ''}`;
+                            const details = [s.severity, s.duration].filter(Boolean);
+                            if (s.note) details.push(`Note: ${s.note}`);
+                            const ds = details.join(", ");
+                            return `${s.name}${ds ? ` (${ds})` : ''}`;
                         }).join(", "))
                     }
 
@@ -418,13 +434,14 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                                 <tbody>
                                     {medicines.map((rx, i) => {
                                         const t = rx.timing || {};
-                                        const freq = `${(t.bb || t.ab) ? 1 : 0} - ${(t.bl || t.al) ? 1 : 0} - ${(t.bd || t.ad) ? 1 : 0}`;
+                                        const dv = getDoseValue(rx.dosage);
+                                        const freq = `${(t.bb || t.ab) ? dv : 0} - ${(t.bl || t.al) ? dv : 0} - ${(t.bd || t.ad) ? dv : 0}`;
                                         const timingNote = getTimingNote(rx.timing);
                                         return (
                                             <tr key={i}>
                                                 <td className="border border-slate-300 p-2 text-center">{i + 1}</td>
                                                 <td className="border border-slate-300 p-2">
-                                                    <span className="text-slate-500">{rx.type || 'Tablet'}</span> <span className="font-bold text-slate-900">{rx.name}</span> <span className="text-slate-600">{rx.dosage}</span>
+                                                    <span className="text-slate-500">{rx.type || 'Tablet'}</span> <span className="font-bold text-slate-900">{rx.name}</span>
                                                 </td>
                                                 <td className="border border-slate-300 p-2 text-center font-bold text-slate-800">{freq}</td>
                                                 <td className="border border-slate-300 p-2 font-medium">{formatDuration(rx.duration)}</td>
