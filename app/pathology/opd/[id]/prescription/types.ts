@@ -66,6 +66,7 @@ export interface PrescriptionEntry {
     id: string;
     name: string;
     type: string;
+    unit: string;
     dosage: string;
     duration: string;
     note: string;

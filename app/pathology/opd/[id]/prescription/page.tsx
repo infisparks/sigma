@@ -6,7 +6,8 @@ import { supabase } from "@/lib/supabase";
 import {
     ArrowLeft, Monitor, FileText, History, StickyNote,
     CheckCircle, Search, Check, List, Activity,
-    FileOutput, Heart, Printer, Power, User, Stethoscope, FlaskConical, Code
+    FileOutput, Heart, Printer, Power, User, Stethoscope, FlaskConical, Code,
+    Camera, Upload, Loader2, Sparkles, AlertCircle, Trash2
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -114,16 +115,7 @@ export default function PrescriptionPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {/* <HeaderAction icon={Activity} label="Vitals" onClick={() => setCurrentTabIndex(9)} /> */}
-                        {/* Moved Vitals to Bottom Dock for better visibility as requested */}
-                        <DevJsonImporter />
-                        <div className="h-5 w-px bg-slate-200 mx-1"></div>
-                        <HeaderAction icon={FileText} label="Reports" onClick={() => setCurrentTabIndex(2)} />
-                        <HeaderAction icon={History} label="Previous" onClick={() => setCurrentTabIndex(6)} />
-                        <HeaderAction icon={FlaskConical} label="Blood Test" onClick={() => setCurrentTabIndex(8)} />
-                        <div className="h-5 w-px bg-slate-200 mx-1"></div>
-                        <StatusPill label="Normal" color="text-green-600" bgColor="bg-green-50" borderColor="border-green-200" />
-                        <StatusPill label="Bill Pending" color="text-orange-600" bgColor="bg-orange-50" borderColor="border-orange-200" />
+                        <PrescriptionControls onTabChange={setCurrentTabIndex} />
                     </div>
                 </header>
 
@@ -167,144 +159,315 @@ export default function PrescriptionPage() {
 
 // --- Sub Components ---
 
-function DevJsonImporter() {
+function PrescriptionControls({ onTabChange }: { onTabChange: (i: number) => void }) {
+    const { clearPrescription } = usePrescription();
+
+    return (
+        <div className="flex items-center gap-2">
+            <button 
+                onClick={clearPrescription}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all border border-red-100 shadow-sm font-bold text-[10px] uppercase"
+            >
+                <Trash2 className="w-3.5 h-3.5" />
+                Clear
+            </button>
+            <div className="h-4 w-px bg-slate-200 mx-1"></div>
+            <PrescriptionScanner />
+            <div className="h-4 w-px bg-slate-200 mx-1"></div>
+            <HeaderAction icon={FileText} label="Reports" onClick={() => onTabChange(2)} />
+            <HeaderAction icon={History} label="Previous" onClick={() => onTabChange(6)} />
+            <HeaderAction icon={FlaskConical} label="Blood Test" onClick={() => onTabChange(8)} />
+            <div className="h-4 w-px bg-slate-200 mx-1"></div>
+            <StatusPill label="Normal" color="text-green-600" bgColor="bg-green-50" borderColor="border-green-200" />
+            <StatusPill label="Bill Pending" color="text-orange-600" bgColor="bg-orange-50" borderColor="border-orange-200" />
+        </div>
+    );
+}
+
+function PrescriptionScanner() {
     const { addSymptom, addDiagnosis, addMedicine, setInvestigations, setClinicalNote, setFollowUp } = usePrescription();
     const [open, setOpen] = useState(false);
-    const [jsonInput, setJsonInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [selectedModel, setSelectedModel] = useState('gemini-3.1-flash-lite-preview'); // Default model as requested
 
-    const handleImport = () => {
-        try {
-            const data = JSON.parse(jsonInput);
+    // Custom models as requested by user
+    const currentModels = [
+        { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite (Fast)' },
+        { id: 'gemini-3-flash-preview', name: 'Gemini 3.0 Flash (Heavy)' }
+    ];
 
-            // 1. Symptoms
-            if (Array.isArray(data.symptoms)) {
-                data.symptoms.forEach((s: any) => {
-                    addSymptom({
-                        name: s.name || '',
-                        note: s.note || '',
-                        duration: s.duration || '',
-                        severity: s.severity || '',
-                        customGroups: [],
-                        selectedCustomOptions: []
-                    });
+    const importData = (data: any) => {
+        // 1. Symptoms
+        if (Array.isArray(data.symptoms)) {
+            data.symptoms.forEach((s: any) => {
+                addSymptom({
+                    name: s.name || '',
+                    note: s.note || '',
+                    duration: s.duration || '',
+                    severity: s.severity || '',
+                    customGroups: [],
+                    selectedCustomOptions: []
                 });
-            }
+            });
+        }
 
-            // 2. Diagnoses
-            if (Array.isArray(data.diagnoses)) {
-                data.diagnoses.forEach((d: any) => {
-                    addDiagnosis({
-                        name: d.name || '',
-                        note: d.note || '',
-                        status: d.status || 'Suspected',
-                        customGroups: [],
-                        selectedCustomOptions: []
-                    });
+        // 2. Diagnoses
+        if (Array.isArray(data.diagnoses)) {
+            data.diagnoses.forEach((d: any) => {
+                addDiagnosis({
+                    name: d.name || '',
+                    note: d.note || '',
+                    status: d.status || 'Suspected',
+                    customGroups: [],
+                    selectedCustomOptions: []
                 });
-            }
+            });
+        }
 
-            // 3. Rx (Medicines)
-            if (Array.isArray(data.medicines)) {
-                data.medicines.forEach((m: any) => {
-                    addMedicine({
-                        id: Math.random().toString(36).substr(2, 9),
-                        name: m.name || '',
-                        type: m.type || 'Tablet',
-                        dosage: m.dosage || '',
-                        duration: m.duration || '',
-                        note: m.note || '',
-                        timing: m.timing || { bb: false, ab: true, bl: false, al: true, bd: false, ad: true }
-                    });
+        // 3. Rx (Medicines)
+        if (Array.isArray(data.medicines)) {
+            data.medicines.forEach((m: any) => {
+                // Normalize Dosage (AI often returns 0.5 or 'half', UI wants '1/2')
+                let normalizedDosage = String(m.dosage || '1').toLowerCase();
+                if (normalizedDosage === '0.5' || normalizedDosage === 'half') normalizedDosage = '1/2';
+                if (normalizedDosage === '0.25' || normalizedDosage === 'quarter') normalizedDosage = '1/4';
+                if (normalizedDosage === '1.5') normalizedDosage = '1 1/2';
+
+                addMedicine({
+                    id: Math.random().toString(36).substr(2, 9),
+                    name: m.name || '',
+                    type: m.type || 'Tab',
+                    unit: m.unit || (m.type?.toLowerCase() === 'syrup' ? 'ml' : 'mg'),
+                    dosage: normalizedDosage,
+                    duration: (() => {
+                        const d = (m.duration || '5d').toLowerCase();
+                        if (d.includes('1 week') || d === '7 days' || d === '7 day') return '7d';
+                        if (d.includes('2 week') || d === '14 days') return '14d';
+                        if (d.includes('1 month') || d === '30 days') return '1m';
+                        if (d.includes('3 month') || d === '90 days') return '3m';
+                        // Normalize 5 days -> 5d etc
+                        const num = d.match(/\d+/);
+                        if (num) {
+                            if (d.includes('day') || d.includes('d')) return num[0] + 'd';
+                            if (d.includes('week') || d.includes('w')) return (Number(num[0]) * 7) + 'd';
+                        }
+                        return d;
+                    })(),
+                    note: m.note || '',
+                    timing: m.timing || { bb: false, ab: true, bl: false, al: true, bd: false, ad: true }
                 });
-            }
+            });
+        }
 
-            // 4. Reports (Investigations)
-            if (Array.isArray(data.reports)) {
-                setInvestigations(data.reports);
-            }
+        // 4. Reports (Investigations)
+        if (Array.isArray(data.reports)) {
+            setInvestigations(data.reports);
+        }
 
-            // 5. Global Notes & Follow Up
-            if (data.clinical_note) setClinicalNote(data.clinical_note);
-            if (data.follow_up_duration || data.follow_up_note) {
-                setFollowUp(data.follow_up_duration || '', data.follow_up_note || '');
-            }
-
-            toast.success("Prescription data imported successfully!");
-            setOpen(false);
-            setJsonInput('');
-        } catch (err) {
-            console.error(err);
-            toast.error("Invalid JSON structure. Please check the format.");
+        // 5. Global Notes & Follow Up
+        if (data.clinical_note) setClinicalNote(data.clinical_note);
+        if (data.follow_up_duration || data.follow_up_note) {
+            setFollowUp(data.follow_up_duration || '', data.follow_up_note || '');
         }
     };
 
-    const exampleJson = `{
+    const toBase64 = (file: File) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+    });
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setLoading(true);
+        try {
+            const base64 = await toBase64(file);
+            const base64Data = (base64 as string).split(',')[1];
+
+            const prompt = `You are a professional medical prescription analyst. Extract information from the provided prescription image into the following strict JSON format:
+{
   "symptoms": [
-    { "name": "Toothache", "duration": "3 days", "severity": "Severe", "note": "On left lower side" }
+    { "name": "...", "duration": "...", "severity": "...", "note": "..." }
   ],
   "diagnoses": [
-    { "name": "Dental Caries", "status": "Confirmed", "note": "Caries in 36, 37" }
+    { "name": "...", "status": "Confirmed/Suspected", "note": "..." }
   ],
   "medicines": [
     { 
-      "name": "Amoxicillin 500mg", 
-      "dosage": "1 Tab", 
-      "duration": "5 Days", 
-      "timing": { "bb": false, "ab": true, "bl": false, "al": true, "bd": false, "ad": true },
-      "note": "Take with warm water"
+      "name": "...", 
+      "type": "Tab/Syrup/Cap/Inj/...",
+      "unit": "mg/ml/...",
+      "dosage": "Clinical fraction (if '0-0-0.5', dosage is '1/2'; if '1-0-1', dosage is '1')", 
+      "duration": "Days like '3d', '7d', '8d', '15d', etc.", 
+      "timing": { "bb": boolean, "ab": boolean, "bl": boolean, "al": boolean, "bd": boolean, "ad": boolean },
+      "note": "..."
     }
   ],
-  "reports": ["X-Ray OPG", "CBC"],
-  "clinical_note": "Patient advised rest for 3 days.",
-  "follow_up_duration": "1w",
-  "follow_up_note": "Review with reports"
-}`;
+  "reports": ["Investigation 1", "Investigation 2"],
+  "clinical_note": "...",
+  "follow_up_duration": "...",
+  "follow_up_note": "..."
+}
+RULES for Medicine Timings:
+- For Tablets/Capsules: The 'dosage' is the numeric multiplier per dose (e.g., if frequency is '1-0-1', 'dosage' is '1'). The strength (like '40 mg') should be extracted into the 'unit' field.
+- For Syrups: Extract the volume (e.g., '10') into 'dosage' and 'ml' into 'unit'.
+- If the frequency is '1/2 - 0 - 1/2', set 'dosage': '0.5' and mapping timings accordingly.
+- If notes say 'After Breakfast', 'After Lunch', 'After Dinner', map to 'ab', 'al', 'ad' respectively.
+- If notes say 'Before...', map to 'bb', 'bl', 'bd'.
+
+Only return the JSON object and nothing else.`;
+
+            const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+            const modelToUse = selectedModel;
+
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: prompt },
+                            { inlineData: { mimeType: file.type || 'image/jpeg', data: base64Data } }
+                        ]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json"
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || "Failed to call Gemini API");
+            }
+
+            const result = await response.json();
+            const extractedText = result.candidates[0].content.parts[0].text;
+            const data = JSON.parse(extractedText);
+
+            importData(data);
+            toast.success("Prescription scanned and filled!");
+            setOpen(false);
+        } catch (err: any) {
+            console.error("Scanning Error:", err);
+            toast.error(err.message || "Failed to scan prescription. Check API Key or Image.");
+        } finally {
+            setLoading(false);
+            // Reset input
+            e.target.value = '';
+        }
+    };
 
     return (
         <>
-            <HeaderAction icon={Code} label="Developer" onClick={() => setOpen(true)} />
+            <HeaderAction 
+                icon={Sparkles} 
+                label="AI Scan" 
+                onClick={() => setOpen(true)} 
+            />
 
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="max-w-2xl bg-white">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <Code className="w-5 h-5 text-blue-600" />
-                            Developer JSON Import
-                        </DialogTitle>
-                    </DialogHeader>
-
-                    <div className="space-y-4 py-2">
-                        <div className="bg-slate-900 rounded-lg p-3 relative group">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Example JSON Structure</span>
-                                <button 
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(exampleJson);
-                                        toast.success("Example JSON copied!");
-                                    }}
-                                    className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
-                                >
-                                    Copy Format
-                                </button>
-                            </div>
-                            <pre className="text-[11px] font-mono text-blue-300 overflow-x-auto">
-                                {exampleJson}
-                            </pre>
+                <DialogContent className="max-w-md bg-white border-0 shadow-2xl overflow-hidden rounded-3xl p-0">
+                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 px-6 py-8 text-white relative">
+                        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+                            <Sparkles className="w-32 h-32 rotate-12" />
                         </div>
+                        <DialogHeader>
+                            <DialogTitle className="text-2xl font-bold flex items-center gap-3">
+                                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
+                                    <Camera className="w-6 h-6 text-white" />
+                                </div>
+                                AI Prescription Scanner
+                            </DialogTitle>
+                        </DialogHeader>
+                        <p className="text-blue-100 text-sm mt-2 opacity-90">
+                            Upload a photo of the prescription and Gemini will automatically fill the form for you.
+                        </p>
+                    </div>
 
+                    <div className="p-6 space-y-6">
+                        {/* Model Selector */}
                         <div className="space-y-2">
-                            <label className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">Paste your JSON here</label>
-                            <Textarea 
-                                placeholder='{ "symptoms": [...], "diagnoses": [...], "medicines": [...], "reports": [...] }'
-                                value={jsonInput}
-                                onChange={(e) => setJsonInput(e.target.value)}
-                                className="min-h-[200px] font-mono text-xs border-slate-200 focus:ring-blue-500"
-                            />
+                            <div className="flex justify-between items-center px-1">
+                                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Engine Efficiency</label>
+                                <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full">Automated Selection</span>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2">
+                                {currentModels.map((m) => (
+                                    <button
+                                        key={m.id}
+                                        onClick={() => setSelectedModel(m.id)}
+                                        className={cn(
+                                            "flex items-center justify-between p-3 rounded-2xl border-2 transition-all text-left",
+                                            selectedModel === m.id 
+                                                ? "border-blue-600 bg-blue-50/50 shadow-sm" 
+                                                : "border-slate-100 hover:border-slate-200 hover:bg-slate-50"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn(
+                                                "w-2 h-2 rounded-full",
+                                                selectedModel === m.id ? "bg-blue-600 animate-pulse" : "bg-slate-300"
+                                            )} />
+                                            <span className={cn(
+                                                "text-sm font-medium",
+                                                selectedModel === m.id ? "text-blue-900" : "text-slate-600"
+                                            )}>{m.name}</span>
+                                        </div>
+                                        {selectedModel === m.id && <Check className="w-4 h-4 text-blue-600" />}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
-                        <div className="flex justify-end gap-3 pt-2">
-                            <Button variant="ghost" onClick={() => setOpen(false)} className="text-slate-500">Cancel</Button>
-                            <Button onClick={handleImport} className="bg-blue-600 hover:bg-blue-700 text-white px-8">Import Data</Button>
+                        {/* Upload Area */}
+                        <div className="relative">
+                            <input 
+                                type="file" 
+                                id="prescription-upload" 
+                                className="hidden" 
+                                accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                                onChange={handleFileUpload}
+                                disabled={loading}
+                            />
+                            <label 
+                                htmlFor="prescription-upload"
+                                className={cn(
+                                    "flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-3xl transition-all cursor-pointer group",
+                                    loading 
+                                        ? "bg-slate-50 border-slate-200 cursor-not-allowed opacity-70" 
+                                        : "border-slate-200 hover:border-blue-500 hover:bg-blue-50/30"
+                                )}
+                            >
+                                {loading ? (
+                                    <div className="flex flex-col items-center gap-4">
+                                        <div className="relative">
+                                            <div className="absolute inset-0 bg-blue-400 blur-xl opacity-20 animate-pulse" />
+                                            <Loader2 className="w-12 h-12 text-blue-600 animate-spin relative" />
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-900">Parsing Prescription...</p>
+                                        <p className="text-xs text-slate-500 text-center max-w-[200px]">Extracting text and organizing medical data via {selectedModel}</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="p-4 bg-slate-100 rounded-full group-hover:bg-blue-100 transition-colors mb-4">
+                                            <Upload className="w-8 h-8 text-slate-500 group-hover:text-blue-600" />
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700">Drop image or click to upload</p>
+                                        <p className="text-xs text-slate-500 mt-1">Supports JPG, PNG up to 10MB</p>
+                                    </>
+                                )}
+                            </label>
+                        </div>
+
+                        <div className="flex items-center gap-3 p-4 bg-orange-50 rounded-2xl border border-orange-100">
+                            <AlertCircle className="w-5 h-5 text-orange-500 shrink-0" />
+                            <p className="text-[10px] text-orange-800 font-medium">
+                                AI extraction may occasionally miss details. Please review all fields after scanning for accuracy and manual correction.
+                            </p>
                         </div>
                     </div>
                 </DialogContent>

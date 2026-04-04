@@ -136,8 +136,8 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
     // --- Render Helpers ---
     const renderSection = (title: string, content: React.ReactNode) => (
         <div className="mb-3 flex items-start text-[11.5px]">
-            <div className="shrink-0 font-bold text-slate-900 pr-2">{title}:</div>
-            <div className="flex-1 text-slate-800 leading-tight">{content}</div>
+            <div className="shrink-0 font-semibold text-slate-900 pr-2">{title}:</div>
+            <div className="flex-1 text-slate-800 leading-tight font-medium">{content}</div>
         </div>
     );
 
@@ -146,11 +146,13 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
         let formatted = val.toLowerCase().trim();
 
         // Shorthand handling (e.g. 5d, 1w)
-        if (formatted.endsWith('d') || /^\d+$/.test(formatted)) return (formatted.match(/\d+/) || [""])[0] + " Day";
-        if (formatted.endsWith('w')) return (formatted.match(/\d+/) || [""])[0] + " Week";
-        if (formatted.endsWith('m')) return (formatted.match(/\d+/) || [""])[0] + " Month";
-        if (formatted.endsWith('y')) return (formatted.match(/\d+/) || [""])[0] + " Year";
-        if (formatted.endsWith('h')) return (formatted.match(/\d+/) || [""])[0] + " Hour";
+        const count = (formatted.match(/\d+/) || ["1"])[0];
+        const n = parseInt(count);
+        if (formatted.endsWith('d') || /^\d+$/.test(formatted)) return `${count} Day${n > 1 ? 's' : ''}`;
+        if (formatted.endsWith('w')) return `${count} Week${n > 1 ? 's' : ''}`;
+        if (formatted.endsWith('m')) return `${count} Month${n > 1 ? 's' : ''}`;
+        if (formatted.endsWith('y')) return `${count} Year${n > 1 ? 's' : ''}`;
+        if (formatted.endsWith('h')) return `${count} Hour${n > 1 ? 's' : ''}`;
 
         return val;
     };
@@ -350,31 +352,23 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                         paddingLeft: '45px',
                         paddingRight: '45px',
                         transform: 'scale(0.7)',
+                        fontFamily: 'var(--font-poppins), sans-serif',
                     }}
                 >
                     {/* Header */}
                     <div className="flex justify-between items-start mb-6 pb-4 border-b border-slate-200">
                         <div>
-                            <h1 className="text-xl font-bold text-slate-900">{patient.name}</h1>
-                            <p className="text-xs text-slate-600 mt-1">{patient.age} {patient.age_unit} / {patient.gender} | PID: {patient.uhid}</p>
+                            <h1 className="text-xl font-bold text-slate-900 tracking-tight">{patient.name}</h1>
+                            <p className="text-xs text-slate-600 mt-1 font-medium">{patient.age} {patient.age_unit} / {patient.gender} | PID: {patient.uhid}</p>
                         </div>
                         <div className="text-right">
-                            <p className="text-sm font-black text-slate-900">OPD ID: #{opdId}</p>
-                            <p className="text-xs text-slate-600 mt-1">{new Date().toLocaleDateString()}</p>
+                            <p className="text-sm font-bold text-slate-900">OPD ID: #{opdId}</p>
+                            <p className="text-xs text-slate-600 mt-1 font-medium">{new Date().toLocaleDateString()}</p>
                         </div>
                     </div>
 
-                    {/* 1. Symptoms */}
-                    {toggles["Symptoms"] && symptomsList.length > 0 &&
-                        renderSection("Symptoms", symptomsList.map(s => {
-                            const details = [s.severity, s.duration].filter(Boolean);
-                            if (s.note) details.push(`Note: ${s.note}`);
-                            const ds = details.join(", ");
-                            return `${s.name}${ds ? ` (${ds})` : ''}`;
-                        }).join(", "))
-                    }
-
-                    {/* 2. Vitals */}
+                    {/* Clinical Sections */}
+                    {/* 1. Vitals */}
                     {(vitals.bp || vitals.pulse || vitals.temp || vitals.weight || vitals.spo2 || vitals.sugar) && (
                         renderSection("Vitals", (
                             <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -388,6 +382,16 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                         ))
                     )}
 
+                    {/* 2. Symptoms */}
+                    {toggles["Symptoms"] && symptomsList.length > 0 &&
+                        renderSection("Symptoms", symptomsList.map(s => {
+                            const details = [s.severity, s.duration].filter(Boolean);
+                            if (s.note) details.push(`Note: ${s.note}`);
+                            const ds = details.join(", ");
+                            return `${s.name}${ds ? ` (${ds})` : ''}`;
+                        }).join(", "))
+                    }
+
                     {/* 3. Diagnosis */}
                     {toggles["Diagnosis"] && diagnosisList.length > 0 &&
                         renderSection("Diagnosis", (
@@ -397,15 +401,13 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                                     if (d.status && d.status !== 'Suspected') details.push(d.status);
                                     if (d.location) details.push(`Loc: ${d.location}`);
                                     if (d.note) details.push(`Note: ${d.note}`);
-
-                                    // Custom Options / History
                                     if (d.selectedCustomOptions && d.selectedCustomOptions.length > 0) {
                                         details.push(`History: ${d.selectedCustomOptions.join(', ')}`);
                                     }
 
                                     return (
                                         <div key={idx}>
-                                            <span className="font-bold text-slate-900">{d.name}</span>
+                                            <span className="font-semibold text-slate-900">{d.name}</span>
                                             {details.length > 0 && (
                                                 <span className="text-slate-600 ml-1">
                                                     ({details.join(' | ')})
@@ -424,30 +426,33 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                             <table className="w-full border-collapse border border-slate-300 text-[11.5px]">
                                 <thead>
                                     <tr className="bg-slate-50">
-                                        <th className="border border-slate-300 p-2 text-left w-10">Rx</th>
-                                        <th className="border border-slate-300 p-2 text-left">Name</th>
-                                        <th className="border border-slate-300 p-2 text-center w-24">Frequency</th>
-                                        <th className="border border-slate-300 p-2 text-left w-24">Duration</th>
-                                        <th className="border border-slate-300 p-2 text-left">Notes</th>
+                                        <th className="border border-slate-300 p-2 text-left w-10 font-bold uppercase text-[9px] text-slate-500">Rx</th>
+                                        <th className="border border-slate-300 p-2 text-left font-bold uppercase text-[9px] text-slate-500">Name</th>
+                                        <th className="border border-slate-300 p-2 text-center w-24 font-bold uppercase text-[9px] text-slate-500">Frequency</th>
+                                        <th className="border border-slate-300 p-2 text-left w-24 font-bold uppercase text-[9px] text-slate-500">Duration</th>
+                                        <th className="border border-slate-300 p-2 text-left font-bold uppercase text-[9px] text-slate-500">Notes</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {medicines.map((rx, i) => {
                                         const t = rx.timing || {};
                                         const dv = getDoseValue(rx.dosage);
-                                        const freq = `${(t.bb || t.ab) ? dv : 0} - ${(t.bl || t.al) ? dv : 0} - ${(t.bd || t.ad) ? dv : 0}`;
                                         const timingNote = getTimingNote(rx.timing);
                                         return (
                                             <tr key={i}>
                                                 <td className="border border-slate-300 p-2 text-center">{i + 1}</td>
                                                 <td className="border border-slate-300 p-2">
-                                                    <span className="text-slate-500">{rx.type || 'Tablet'}</span> <span className="font-bold text-slate-900">{rx.name}</span>
+                                                    <span className="text-slate-500 text-[9px] font-bold uppercase mr-1">{rx.type}</span> 
+                                                    <span className="font-bold text-slate-900 text-[13px]">{rx.name}</span>
+                                                    {rx.unit && <span className="ml-1 text-[11px] font-medium text-slate-500">({rx.unit})</span>}
                                                 </td>
-                                                <td className="border border-slate-300 p-2 text-center font-bold text-slate-800">{freq}</td>
-                                                <td className="border border-slate-300 p-2 font-medium">{formatDuration(rx.duration)}</td>
+                                                <td className="border border-slate-300 p-2 text-center font-bold text-slate-800">
+                                                    {`${(t.bb || t.ab) ? dv : 0} - ${(t.bl || t.al) ? dv : 0} - ${(t.bd || t.ad) ? dv : 0}`}
+                                                </td>
+                                                <td className="border border-slate-300 p-2 font-bold">{formatDuration(rx.duration)}</td>
                                                 <td className="border border-slate-300 p-2 text-slate-700">
-                                                    {timingNote && <div className="font-medium mb-0.5 text-slate-900">{timingNote}</div>}
-                                                    {rx.note && <div className="text-[10px] italic text-slate-500">{rx.note}</div>}
+                                                    {timingNote && <div className="font-semibold mb-0.5 text-slate-900 text-[10px]">{timingNote}</div>}
+                                                    {rx.note && <div className="text-[9px] font-medium text-slate-500 italic">{rx.note}</div>}
                                                 </td>
                                             </tr>
                                         );
@@ -491,8 +496,6 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                             </div>
                         </div>
                     )}
-
-
                 </div>
             </div>
 
@@ -616,6 +619,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                         overflow: hidden !important;
                         display: block !important;
                         z-index: 99999 !important;
+                        font-family: var(--font-poppins), sans-serif !important;
                     }
 
                     #print-area * {

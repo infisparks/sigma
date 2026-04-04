@@ -74,6 +74,7 @@ interface PrescriptionActions {
     // Core
     saveAndFinalize: () => Promise<void>;
     refreshData: () => Promise<void>;
+    clearPrescription: () => void;
 }
 
 const PrescriptionContext = createContext<(PrescriptionState & PrescriptionActions) | null>(null);
@@ -133,39 +134,7 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
     }, []);
 
     // --- Local Storage Persistence ---
-    // Save to local storage on every change
-    useEffect(() => {
-        if (state.isLoading || state.isFinalized) return;
-
-        const timer = setTimeout(() => {
-            const dataToSave = {
-                symptoms: state.symptoms,
-                diagnoses: state.diagnoses,
-                medicines: state.medicines,
-                instructions: state.instructions,
-                investigations: state.investigations,
-                procedures: state.procedures,
-                clinicalNote: state.clinicalNote,
-                followUpDuration: state.followUpDuration,
-                followUpNote: state.followUpNote,
-                referringDoctor: state.referringDoctor,
-                updatedAt: new Date().toISOString()
-            };
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-            setState(prev => ({
-                ...prev,
-                hasLocalChanges: true,
-                lastSavedAt: dataToSave.updatedAt
-            }));
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, [
-        state.symptoms, state.diagnoses, state.medicines,
-        state.instructions, state.investigations, state.procedures,
-        state.clinicalNote, state.followUpDuration, state.followUpNote,
-        state.referringDoctor, state.isLoading, state.isFinalized
-    ]);
+    // (Disabled to prevent lag as requested)
 
     // --- AI Prediction Engine ---
     useEffect(() => {
@@ -256,29 +225,7 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
     const loadData = async () => {
         setState(prev => ({ ...prev, isLoading: true }));
 
-        // 1. Try Load from Local Storage first for instant UI
-        const savedDraft = localStorage.getItem(STORAGE_KEY);
-        if (savedDraft) {
-            try {
-                const parsed = JSON.parse(savedDraft);
-                setState(prev => ({
-                    ...prev,
-                    symptoms: parsed.symptoms || {},
-                    diagnoses: parsed.diagnoses || {},
-                    medicines: parsed.medicines || [],
-                    instructions: parsed.instructions || [],
-                    investigations: parsed.investigations || [],
-                    procedures: parsed.procedures || [],
-                    clinicalNote: parsed.clinicalNote || "",
-                    followUpDuration: parsed.followUpDuration || "",
-                    followUpNote: parsed.followUpNote || "",
-                    referringDoctor: parsed.referringDoctor || "",
-                    vitals: parsed.vitals || {},
-                }));
-            } catch (e) {
-                console.error("Failed to parse local draft", e);
-            }
-        }
+        // Draft loading disabled to prevent lag
 
         try {
             const { data, error } = await supabase
@@ -538,6 +485,27 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
         }
     };
 
+    const clearPrescription = () => {
+        if (!confirm("Are you sure you want to clear ALL prescription data? This cannot be undone.")) return;
+        
+        setState(prev => ({
+            ...prev,
+            hasLocalChanges: false,
+            lastSavedAt: null,
+            vitals: {},
+            symptoms: {},
+            diagnoses: {},
+            medicines: [],
+            instructions: [],
+            investigations: [],
+            procedures: [],
+            clinicalNote: "",
+            followUpDuration: "",
+            followUpNote: "",
+            referringDoctor: "",
+        }));
+    };
+
     return (
         <PrescriptionContext.Provider value={{
             ...state,
@@ -546,7 +514,7 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
             addMedicine, removeMedicine, updateMedicine, setMedicines,
             setInstructions, setInvestigations, setProcedures,
             setClinicalNote, setFollowUp, setReferringDoctor,
-            saveAndFinalize, refreshData
+            saveAndFinalize, refreshData, clearPrescription
         }}>
             {children}
         </PrescriptionContext.Provider>

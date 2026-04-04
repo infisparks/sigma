@@ -103,7 +103,8 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
         const newMed: PrescriptionEntry = {
             id: Date.now().toString() + Math.random().toString().slice(2),
             name,
-            type: type || 'TAB',
+            type: type || 'Tab',
+            unit: (type?.toLowerCase() === 'syrup' || type?.toLowerCase() === 'susp') ? 'ml' : 'mg',
             dosage: "1",
             duration: "5d",
             note: "",
@@ -356,8 +357,24 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                     <Plus className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <div className="flex items-center gap-1.5 mb-0.5">
-                                        <span className="text-[8px] font-black bg-slate-100 px-1 py-0.5 rounded text-slate-500 uppercase">{selectedMed.type}</span>
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <select 
+                                            value={selectedMed.type}
+                                            onChange={(e) => handleUpdateMedicine(selectedMed.id, { type: e.target.value })}
+                                            className="text-[9px] font-black bg-slate-100 px-2 py-1 rounded text-slate-600 uppercase border-0 focus:ring-1 focus:ring-blue-200 outline-none cursor-pointer"
+                                        >
+                                            {["Tab", "Cap", "Syrup", "Inj", "Susp", "Drop", "Cream", "Oint"].map(t => (
+                                                <option key={t} value={t}>{t}</option>
+                                            ))}
+                                        </select>
+                                        <div className="h-3 w-px bg-slate-200"></div>
+                                        <input 
+                                            type="text"
+                                            value={selectedMed.unit}
+                                            onChange={(e) => handleUpdateMedicine(selectedMed.id, { unit: e.target.value })}
+                                            className="text-[9px] font-bold bg-blue-50 px-2 py-1 rounded text-blue-600 uppercase w-14 border-0 focus:ring-1 focus:ring-blue-200 outline-none"
+                                            placeholder="Unit..."
+                                        />
                                     </div>
                                     <h2 className="text-lg font-black text-slate-900 leading-tight">{selectedMed.name}</h2>
                                 </div>
@@ -371,22 +388,30 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                         <div className="flex-1 overflow-y-auto p-4 space-y-6">
                             {/* Dosage */}
                             <div>
-                                <SectionHeader title="DOSAGE PER INTAKE" icon={PieChart} />
+                                <SectionHeader title={`DOSAGE PER INTAKE (${selectedMed.unit})`} icon={PieChart} />
                                 <div className="mt-2 flex flex-wrap gap-2">
-                                    {["1/4", "1/2", "1", "1½", "2", "3"].map(d => (
+                                    {["1/4", "1/2", "1", "1½", "2", "3", "5", "10"].map(d => (
                                         <button
                                             key={d}
                                             onClick={() => handleUpdateMedicine(selectedMed.id, { dosage: d })}
                                             className={cn(
-                                                "w-10 h-10 rounded-full border flex items-center justify-center text-[11px] font-black transition-all",
+                                                "w-10 h-10 rounded-full border flex flex-col items-center justify-center text-[11px] font-black transition-all",
                                                 selectedMed.dosage === d
                                                     ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200"
                                                     : "bg-white text-slate-500 border-slate-200 hover:border-blue-300"
                                             )}
                                         >
-                                            {d}
+                                            <span>{d}</span>
+                                            <span className="text-[7px] opacity-70 uppercase">{selectedMed.unit}</span>
                                         </button>
                                     ))}
+                                    <input 
+                                        type="text"
+                                        value={selectedMed.dosage}
+                                        onChange={(e) => handleUpdateMedicine(selectedMed.id, { dosage: e.target.value })}
+                                        className="w-12 h-10 rounded-full border border-slate-200 text-[10px] font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-100"
+                                        placeholder="Custom"
+                                    />
                                 </div>
                             </div>
 
@@ -424,21 +449,31 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                             {/* Duration */}
                             <div>
                                 <SectionHeader title="DURATION" icon={Calendar} />
-                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                <div className="mt-2 flex flex-wrap gap-2">
                                     {["3d", "5d", "7d", "10d", "15d", "1m", "3m"].map(d => (
                                         <button
                                             key={d}
                                             onClick={() => handleUpdateMedicine(selectedMed.id, { duration: d })}
                                             className={cn(
-                                                "px-3 py-1.5 rounded-md text-[10px] font-black border transition-all",
+                                                "px-3 py-1.5 rounded-lg border text-[11px] font-bold transition-all uppercase",
                                                 selectedMed.duration === d
-                                                    ? "bg-slate-800 text-white border-slate-800"
-                                                    : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
+                                                    ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                                                    : "bg-white text-slate-500 border-slate-200 hover:border-blue-300"
                                             )}
                                         >
                                             {d}
                                         </button>
                                     ))}
+                                    <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                                        <input 
+                                            type="text"
+                                            value={selectedMed.duration.replace(/[^0-9]/g, '')}
+                                            onChange={(e) => handleUpdateMedicine(selectedMed.id, { duration: e.target.value + 'd' })}
+                                            className="w-8 bg-transparent text-[11px] font-bold text-center focus:outline-none"
+                                            placeholder="..."
+                                        />
+                                        <span className="text-[9px] font-black text-slate-400 uppercase">Days</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -524,7 +559,10 @@ const MedicineCard = React.memo(({ med, isSelected, onClick, onLongPress }: { me
                 isSelected ? "bg-blue-50 border-blue-200 shadow-sm" : "bg-white border-slate-200 hover:border-blue-200"
             )}
         >
-            <div className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-500">{med.type}</div>
+            <div className="flex flex-col items-center gap-0.5">
+                <div className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-500 uppercase">{med.type}</div>
+                <div className="text-[8px] font-black text-blue-500 bg-blue-50 px-1 rounded uppercase tracking-tighter">{med.unit}</div>
+            </div>
             <div className="flex-1 font-bold text-[11px] text-slate-900 leading-tight">{med.name}</div>
             {isSelected && <Edit3 className="w-3 h-3 text-blue-600 shrink-0" />}
         </div>
