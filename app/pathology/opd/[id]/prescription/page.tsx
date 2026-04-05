@@ -7,7 +7,7 @@ import {
     ArrowLeft, Monitor, FileText, History, StickyNote,
     CheckCircle, Search, Check, List, Activity,
     FileOutput, Heart, Printer, Power, User, Stethoscope, FlaskConical, Code,
-    Camera, Upload, Loader2, Sparkles, AlertCircle, Trash2
+    Camera, Upload, Loader2, Sparkles, AlertCircle, Trash2, Save
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -69,11 +69,6 @@ export default function PrescriptionPage() {
     // --- Main Content Switch ---
     const renderContent = () => {
         if (!record) return null;
-
-        // We use display: none for inactive tabs to preserve state if needed, 
-        // BUT since we implemented localStorage persistence in tabs, we can conditionally render safely.
-        // However, for smoother switching, let's stick to conditional rendering as per React best practices 
-        // unless performance is an issue. The tabs load from LS on mount so state is preserved.
 
         switch (currentTabIndex) {
 
@@ -160,7 +155,7 @@ export default function PrescriptionPage() {
 // --- Sub Components ---
 
 function PrescriptionControls({ onTabChange }: { onTabChange: (i: number) => void }) {
-    const { clearPrescription } = usePrescription();
+    const { clearPrescription, saveAndFinalize, isSaving } = usePrescription();
 
     return (
         <div className="flex items-center gap-2">
@@ -170,6 +165,14 @@ function PrescriptionControls({ onTabChange }: { onTabChange: (i: number) => voi
             >
                 <Trash2 className="w-3.5 h-3.5" />
                 Clear
+            </button>
+            <button 
+                onClick={saveAndFinalize}
+                disabled={isSaving}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-sm font-bold text-[10px] uppercase ml-1"
+            >
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                {isSaving ? "Saving..." : "Store Data"}
             </button>
             <div className="h-4 w-px bg-slate-200 mx-1"></div>
             <PrescriptionScanner />

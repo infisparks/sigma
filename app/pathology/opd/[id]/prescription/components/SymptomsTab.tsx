@@ -49,42 +49,19 @@ export default function SymptomsTab({ opdId }: SymptomsTabProps) {
     // --- Fetch Master Data Only ---
     useEffect(() => {
         const fetchMasterData = async () => {
-            const cacheKey = 'OPD_MASTER_SYMPTOMS_CACHE';
-
-            // 1. Try Cache
-            try {
-                const cached = localStorage.getItem(cacheKey);
-                if (cached) {
-                    const parsed = JSON.parse(cached);
-                    if (parsed.symptoms) setRawSymptoms(parsed.symptoms);
-                    if (parsed.findings) setRawFindings(parsed.findings);
-                }
-            } catch (e) { console.error("Cache read error", e); }
-
-            // 2. Fetch Network
+            // Fetch Network
             const { data: masterData } = await supabase.from('opd_datasets').select('dataname, datajson');
-
-            let fetchedSymptoms: string[] = [];
-            let fetchedFindings: string[] = [];
 
             if (masterData) {
                 masterData.forEach((row: any) => {
                     const list = Array.isArray(row.datajson) ? row.datajson : [];
                     if (row.dataname === 'Symptoms') {
                         setRawSymptoms(list);
-                        fetchedSymptoms = list;
                     }
                     else if (row.dataname === 'Findings') {
                         setRawFindings(list);
-                        fetchedFindings = list;
                     }
                 });
-
-                // 3. Update Cache
-                try {
-                    const cachePayload = { symptoms: fetchedSymptoms, findings: fetchedFindings };
-                    localStorage.setItem(cacheKey, JSON.stringify(cachePayload));
-                } catch (e) { console.error("Cache write error", e); }
             }
         };
         fetchMasterData();

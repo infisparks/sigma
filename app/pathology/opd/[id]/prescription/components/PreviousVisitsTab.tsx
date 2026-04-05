@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { ChevronLeft, ChevronRight, FileText, Calendar, User, Clock, Search, AlertCircle, Copy, Check } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
+import { usePrescription } from '../context/PrescriptionContext';
 
 interface PreviousVisitsTabProps {
     patientUhid: string;
@@ -18,6 +19,7 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [copiedId, setCopiedId] = useState<number | null>(null);
+    const context = usePrescription();
 
     // --- Fetch Data ---
     useEffect(() => {
@@ -26,7 +28,13 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
             try {
                 const { data, error } = await supabase
                     .from('opd_registration')
-                    .select('*')
+                    .select(`
+                        *,
+                        opd_reg_symptoms(*),
+                        opd_reg_diagnosis(*),
+                        opd_reg_rx(*),
+                        opd_reg_reports(*)
+                    `)
                     .eq('uhid', patientUhid)
                     .neq('id', currentOpdId)
                     .order('created_at', { ascending: false });
@@ -53,44 +61,56 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
         if (!confirm("This will overwrite your current form drafts with data from this visit. Are you sure?")) return;
 
         try {
-            // 1. Checkup
-            if (visit.checkup_data_json) {
-                localStorage.setItem(`draft_checkup_${currentOpdId}`, JSON.stringify(visit.checkup_data_json));
-            }
+            // Clear current first
+            context.clearPrescription();
 
-            // 2. Rx (Treatment)
-            if (visit.rx_list_json) {
-                localStorage.setItem(`draft_rx_${currentOpdId}`, JSON.stringify(visit.rx_list_json));
-            }
-
-            // 3. Instructions
-            const instructionsData = {
-                instructions: visit.instructions_list_json || [],
-                investigations: visit.investigations_list_json || [],
-                procedures: visit.procedures_list_json || []
-            };
-            localStorage.setItem(`draft_instructions_${currentOpdId}`, JSON.stringify(instructionsData));
-
-            // 4. Symptoms
-            const symptomsRecord: Record<string, any> = {};
-            (visit.symptoms_list_json || []).forEach((item: any) => {
-                symptomsRecord[item.name] = item;
+            // 1. Symptoms
+            const symptoms = visit.opd_reg_symptoms || [];
+            symptoms.forEach((s: any) => {
+                context.addSymptom({
+                    name: s.name,
+                    note: s.note || "",
+                    duration: s.duration || "",
+                    severity: s.severity || "",
+                    customGroups: s.custom_groups || [],
+                    selectedCustomOptions: s.selected_options || []
+                });
             });
-            localStorage.setItem(`draft_symptom_details_${currentOpdId}`, JSON.stringify(symptomsRecord));
-            localStorage.setItem(`draft_symptoms_${currentOpdId}`, JSON.stringify(Object.keys(symptomsRecord)));
 
-            // 5. Diagnosis
-            const diagnosisRecord: Record<string, any> = {};
-            (visit.diagnosis_list_json || []).forEach((item: any) => {
-                diagnosisRecord[item.name] = item;
+            // 2. Diagnosis
+            const diagnosis = visit.opd_reg_diagnosis || [];
+            diagnosis.forEach((d: any) => {
+                context.addDiagnosis({
+                    name: d.name,
+                    note: d.note || "",
+                    status: "Confirmed",
+                    customGroups: [],
+                    selectedCustomOptions: []
+                });
             });
-            localStorage.setItem(`draft_diagnosis_details_${currentOpdId}`, JSON.stringify(diagnosisRecord));
-            localStorage.setItem(`draft_diagnosis_${currentOpdId}`, JSON.stringify(Object.keys(diagnosisRecord)));
 
-            // 6. Fitness
-            if (visit.fitness_plan_json) {
-                localStorage.setItem(`draft_fitness_${currentOpdId}`, JSON.stringify(visit.fitness_plan_json));
-            }
+            // 3. Rx
+            const rx = visit.opd_reg_rx || [];
+            context.setMedicines(rx.map((m: any) => ({
+                id: Math.random().toString(36).substr(2, 9), // Generate a fresh frontend ID
+                name: m.medicine_name,
+                type: m.medicine_type || "Tab",
+                unit: m.unit || "",
+                dosage: m.dosage || "1",
+                duration: m.duration || "5d",
+                note: m.note || "",
+                timing: m.timing_json || { bb: false, ab: true, bl: false, al: true, bd: false, ad: true }
+            })));
+
+            // 4. Reports
+            const reports = visit.opd_reg_reports || [];
+            context.setInstructions(reports.filter((r: any) => r.report_type === 'instruction').map((r: any) => r.item_name));
+            context.setInvestigations(reports.filter((r: any) => r.report_type === 'investigation').map((r: any) => r.item_name));
+            context.setProcedures(reports.filter((r: any) => r.report_type === 'procedure').map((r: any) => r.item_name));
+
+            // 5. Global
+            context.setClinicalNote(visit.clinical_notes || "");
+            context.setFollowUp(visit.follow_up_duration || "", visit.follow_up_note || "");
 
             setCopiedId(visit.id);
             setTimeout(() => setCopiedId(null), 3000);
@@ -307,7 +327,7 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
                                         <div className="mb-8">
                                             <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">Diagnosis</h3>
                                             <div className="space-y-2">
-                                                {currentVisit.diagnosis_list_json?.length > 0 ? currentVisit.diagnosis_list_json.map((d: any, i: number) => (
+                                                {currentVisit.opd_reg_diagnosis?.length > 0 ? currentVisit.opd_reg_diagnosis.map((d: any, i: number) => (
                                                     <div key={i} className="flex items-baseline gap-2">
                                                         <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
                                                         <span className="font-bold text-slate-800 text-sm">{d.name}</span>
@@ -320,7 +340,7 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
                                         {/* Rx */}
                                         <div className="mb-8">
                                             <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">Medications</h3>
-                                            {currentVisit.rx_list_json?.length > 0 ? (
+                                            {currentVisit.opd_reg_rx?.length > 0 ? (
                                                 <table className="w-full text-sm text-left">
                                                     <thead className="text-xs text-slate-400 uppercase font-black">
                                                         <tr>
@@ -330,13 +350,13 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
                                                         </tr>
                                                     </thead>
                                                     <tbody className="text-slate-700 divide-y divide-slate-100">
-                                                        {currentVisit.rx_list_json.map((rx: any, i: number) => {
-                                                            const t = rx.timing || {};
+                                                        {currentVisit.opd_reg_rx.map((rx: any, i: number) => {
+                                                            const t = rx.timing_json || {};
                                                             return (
                                                                 <tr key={i}>
                                                                     <td className="py-2.5">
-                                                                        <div className="font-bold text-slate-900">{rx.name}</div>
-                                                                        <div className="text-xs text-slate-500">{rx.dosage} • {rx.type}</div>
+                                                                        <div className="font-bold text-slate-900">{rx.medicine_name}</div>
+                                                                        <div className="text-xs text-slate-500">{rx.dosage} • {rx.medicine_type}</div>
                                                                     </td>
                                                                     <td className="py-2.5 text-center font-mono text-xs font-bold bg-slate-50/50 rounded">
                                                                         {`${(t.bb || t.ab) ? 1 : 0}-${(t.bl || t.al) ? 1 : 0}-${(t.bd || t.ad) ? 1 : 0}`}
@@ -355,7 +375,7 @@ export default function PreviousVisitsTab({ patientUhid, currentOpdId }: Previou
                                             <div>
                                                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">Complaints</h3>
                                                 <ul className="space-y-1.5">
-                                                    {currentVisit.symptoms_list_json?.map((s: any, i: number) => (
+                                                    {currentVisit.opd_reg_symptoms?.map((s: any, i: number) => (
                                                         <li key={i} className="text-xs text-slate-700 font-medium">• {s.name}</li>
                                                     )) || <li className="text-slate-400 italic text-xs">None</li>}
                                                 </ul>

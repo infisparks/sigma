@@ -2,11 +2,11 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 import {
     SymptomDetail,
     DiagnosisDetail,
     PrescriptionEntry,
-    TimingSchedule,
     Vitals
 } from '../types';
 
@@ -16,8 +16,6 @@ interface PrescriptionState {
     isSaving: boolean;
     isFinalized: boolean; // From DB
     lastSavedAt: string | null;
-    isOnline: boolean;
-    hasLocalChanges: boolean;
 
     // Data - Clinical
     symptoms: Record<string, SymptomDetail>;
@@ -99,8 +97,6 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
         isSaving: false,
         isFinalized: false,
         lastSavedAt: null,
-        isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
-        hasLocalChanges: false,
         vitals: {},
         symptoms: {},
         diagnoses: {},
@@ -118,23 +114,6 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
         suggestedInstructions: [],
         suggestedProcedures: [],
     });
-
-    const STORAGE_KEY = `prescription_draft_${opdId}`;
-
-    // --- Offline Connectivity ---
-    useEffect(() => {
-        const handleOnline = () => setState(prev => ({ ...prev, isOnline: true }));
-        const handleOffline = () => setState(prev => ({ ...prev, isOnline: false }));
-        window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', handleOffline);
-        return () => {
-            window.removeEventListener('online', handleOnline);
-            window.removeEventListener('offline', handleOffline);
-        };
-    }, []);
-
-    // --- Local Storage Persistence ---
-    // (Disabled to prevent lag as requested)
 
     // --- AI Prediction Engine ---
     useEffect(() => {
@@ -225,77 +204,90 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
     const loadData = async () => {
         setState(prev => ({ ...prev, isLoading: true }));
 
-        // Draft loading disabled to prevent lag
-
         try {
             const { data, error } = await supabase
                 .from('opd_registration')
-                .select('*')
+                .select(`
+                    *,
+                    opd_reg_symptoms(*),
+                    opd_reg_diagnosis(*),
+                    opd_reg_rx(*),
+                    opd_reg_reports(*)
+                `)
                 .eq('id', opdId)
                 .single();
 
             if (error) throw error;
 
             if (data) {
-                // If it's finalized, DB data ALWAYS wins and we clear local draft
-                if (data.is_finalized) {
-                    localStorage.removeItem(STORAGE_KEY);
-                    setState(prev => ({
-                        ...prev,
-                        isFinalized: true,
-                        lastSavedAt: data.finalized_at || null,
-                        symptoms: normalizeListToRecord(data.symptoms_list_json),
-                        diagnoses: normalizeListToRecord(data.diagnosis_list_json),
-                        medicines: data.rx_list_json || [],
-                        instructions: data.instructions_list_json || [],
-                        investigations: data.investigations_list_json || [],
-                        procedures: data.procedures_list_json || [],
-                        clinicalNote: data.clinical_notes || "",
-                        followUpNote: data.follow_up_note || "",
-                        referringDoctor: data.referring_doctor_name || "",
-                        vitals: {
-                            bp: data.bp,
-                            pulse: data.pulse,
-                            weight: data.weight,
-                            spo2: data.spo2,
-                            temp: data.temp,
-                            sugar: data.sugar
-                        },
-                        isLoading: false,
-                        hasLocalChanges: false
-                    }));
-                } else {
-                    // If not finalized, we should decide whether to overwrite local draft.
-                    // For "Industry Grade", usually DB wins but we can be smart.
-                    // If DB has data and local doesn't, DB wins.
-                    // If local has data, maybe keep local? 
-                    // Let's assume DB is the source of truth if it has been updated recently.
-                    setState(prev => ({
-                        ...prev,
-                        isFinalized: false,
-                        // Merging logic: prefer local if we just loaded it, unless DB is more comprehensive?
-                        // Let's keep the local draft if it exists, otherwise use DB.
-                        symptoms: Object.keys(prev.symptoms).length > 0 ? prev.symptoms : normalizeListToRecord(data.symptoms_list_json),
-                        diagnoses: Object.keys(prev.diagnoses).length > 0 ? prev.diagnoses : normalizeListToRecord(data.diagnosis_list_json),
-                        medicines: prev.medicines.length > 0 ? prev.medicines : (data.rx_list_json || []),
-                        instructions: prev.instructions.length > 0 ? prev.instructions : (data.instructions_list_json || []),
-                        investigations: prev.investigations.length > 0 ? prev.investigations : (data.investigations_list_json || []),
-                        procedures: prev.procedures.length > 0 ? prev.procedures : (data.procedures_list_json || []),
-                        clinicalNote: prev.clinicalNote || data.clinical_notes || "",
-                        followUpDuration: prev.followUpDuration || data.follow_up_duration || "",
-                        followUpNote: prev.followUpNote || data.follow_up_note || "",
-                        referringDoctor: prev.referringDoctor || data.referring_doctor_name || "",
-                        vitals: Object.keys(prev.vitals).length > 0 ? prev.vitals : {
-                            bp: data.bp,
-                            pulse: data.pulse,
-                            weight: data.weight,
-                            spo2: data.spo2,
-                            temp: data.temp,
-                            sugar: data.sugar
-                        },
-                        isLoading: false
-                    }));
-                }
+                // Mapping helpers for structured tables
+                const mappedSymptoms: Record<string, SymptomDetail> = normalizeListToRecord((data.opd_reg_symptoms || []).map((s: any) => ({
+                    name: s.name,
+                    note: s.note || "",
+                    duration: s.duration || "",
+                    severity: s.severity || "",
+                    customGroups: s.custom_groups || [],
+                    selectedCustomOptions: s.selected_options || []
+                })));
+
+                const mappedDiagnoses: Record<string, DiagnosisDetail> = normalizeListToRecord((data.opd_reg_diagnosis || []).map((d: any) => ({
+                    name: d.name,
+                    note: d.note || "",
+                    status: "Confirmed", 
+                    customGroups: [],
+                    selectedCustomOptions: []
+                })));
+
+                const mappedMedicines = (data.opd_reg_rx || []).map((m: any) => ({
+                    id: m.id.toString(),
+                    name: m.medicine_name,
+                    type: m.medicine_type || "Tab",
+                    unit: m.unit || "",
+                    dosage: m.dosage || "1",
+                    duration: m.duration || "5d",
+                    note: m.note || "",
+                    timing: m.timing_json || { bb: false, ab: true, bl: false, al: true, bd: false, ad: true }
+                }));
+
+                const instructions = (data.opd_reg_reports || [])
+                    .filter((r: any) => r.report_type === 'instruction')
+                    .map((r: any) => r.item_name);
+                const investigations = (data.opd_reg_reports || [])
+                    .filter((r: any) => r.report_type === 'investigation')
+                    .map((r: any) => r.item_name);
+                const procedures = (data.opd_reg_reports || [])
+                    .filter((r: any) => r.report_type === 'procedure')
+                    .map((r: any) => r.item_name);
+
+                // --- Load Temp from Reports if available ---
+                const tempReport = (data.opd_reg_reports || []).find((r: any) => r.item_name === 'temp' && r.report_type === 'vital');
+                let currentVitals = {
+                    bp: data.bp,
+                    pulse: data.pulse,
+                    weight: data.weight ? String(data.weight) : undefined,
+                    spo2: data.spo2,
+                    sugar: data.sugar,
+                    temp: tempReport ? tempReport.note || "" : undefined
+                };
+
+                // --- Final State Update ---
+                setState(prev => ({
+                    ...prev,
+                    isFinalized: data.is_finalized,
+                    lastSavedAt: data.finalized_at || null,
+                    symptoms: mappedSymptoms,
+                    diagnoses: mappedDiagnoses,
+                    medicines: mappedMedicines,
+                    instructions: instructions,
+                    investigations: investigations,
+                    procedures: procedures,
+                    clinicalNote: data.clinical_notes || "",
+                    followUpDuration: data.follow_up_duration || "",
+                    followUpNote: data.follow_up_note || "",
+                    referringDoctor: data.referring_doctor_name || "",
+                    vitals: currentVitals,
+                    isLoading: false,
+                }));
             }
         } catch (e) {
             console.error("Error loading prescription data:", e);
@@ -393,40 +385,109 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
     const saveAndFinalize = async () => {
         setState(prev => ({ ...prev, isSaving: true }));
         try {
-            const payload = {
-                rx_list_json: state.medicines,
-                symptoms_list_json: Object.values(state.symptoms),
-                diagnosis_list_json: Object.values(state.diagnoses),
-                instructions_list_json: state.instructions,
-                investigations_list_json: state.investigations,
-                procedures_list_json: state.procedures,
+            // 1. Prepare Main Record Update
+            const registrationPayload = {
                 clinical_notes: state.clinicalNote,
                 follow_up_duration: state.followUpDuration,
                 follow_up_note: state.followUpNote,
                 referring_doctor_name: state.referringDoctor,
-
+                weight: state.vitals.weight ? Number(state.vitals.weight) : null,
+                bp: state.vitals.bp || null,
+                pulse: state.vitals.pulse || null,
+                spo2: state.vitals.spo2 || null,
+                sugar: state.vitals.sugar || null,
                 is_finalized: true,
                 finalized_at: new Date().toISOString()
             };
 
-            const { error } = await supabase
+            // Start a logical transaction (since we can't do real transactions easily with client lib, 
+            // we do sequential operations. In production, we might use an RPC)
+            
+            // A. Update Main Table
+            const { error: mainError } = await supabase
                 .from('opd_registration')
-                .update(payload)
+                .update(registrationPayload)
                 .eq('id', opdId);
+            if (mainError) throw mainError;
 
-            if (error) throw error;
+            // B. Sync Structured Tables - Delete Old & Insert New
+            
+            // --- SYMPTOMS ---
+            await supabase.from('opd_reg_symptoms').delete().eq('opd_id', opdId);
+            const symptomEntries = Object.values(state.symptoms);
+            if (symptomEntries.length > 0) {
+                const { error: sError } = await supabase.from('opd_reg_symptoms').insert(
+                    symptomEntries.map(s => ({
+                        opd_id: opdId,
+                        name: s.name,
+                        note: s.note,
+                        duration: s.duration,
+                        severity: s.severity,
+                        custom_groups: s.customGroups,
+                        selected_options: s.selectedCustomOptions
+                    }))
+                );
+                if (sError) throw sError;
+            }
 
-            // --- AI Learning Trigger (V2) ---
+            // --- DIAGNOSIS ---
+            await supabase.from('opd_reg_diagnosis').delete().eq('opd_id', opdId);
+            const diagEntries = Object.values(state.diagnoses);
+            if (diagEntries.length > 0) {
+                const { error: dError } = await supabase.from('opd_reg_diagnosis').insert(
+                    diagEntries.map(d => ({
+                        opd_id: opdId,
+                        name: d.name,
+                        note: d.note
+                    }))
+                );
+                if (dError) throw dError;
+            }
+
+            // --- RX (MEDICINES) ---
+            await supabase.from('opd_reg_rx').delete().eq('opd_id', opdId);
+            if (state.medicines.length > 0) {
+                const { error: rxError } = await supabase.from('opd_reg_rx').insert(
+                    state.medicines.map(m => ({
+                        opd_id: opdId,
+                        medicine_name: m.name,
+                        medicine_type: m.type,
+                        unit: m.unit,
+                        dosage: m.dosage,
+                        duration: m.duration,
+                        timing_json: m.timing,
+                        note: m.note
+                    }))
+                );
+                if (rxError) throw rxError;
+            }
+
+            // --- REPORTS (Instructions, Investigations, Procedures) ---
+            await supabase.from('opd_reg_reports').delete().eq('opd_id', opdId);
+            const reportEntries: any[] = [
+                ...state.instructions.map(item => ({ opd_id: opdId, item_name: item, report_type: 'instruction' })),
+                ...state.investigations.map(item => ({ opd_id: opdId, item_name: item, report_type: 'investigation' })),
+                ...state.procedures.map(item => ({ opd_id: opdId, item_name: item, report_type: 'procedure' }))
+            ];
+            
+            // Add temp if it has a value
+            if (state.vitals.temp) {
+                reportEntries.push({
+                    opd_id: opdId,
+                    item_name: 'temp',
+                    report_type: 'vital',
+                    note: state.vitals.temp
+                });
+            }
+
+            if (reportEntries.length > 0) {
+                const { error: repError } = await supabase.from('opd_reg_reports').insert(reportEntries);
+                if (repError) throw repError;
+            }
+
+            // --- AI Learning Trigger ---
             try {
-                // Fetch patient details for AI context
-                // We could store age/gender in state, but simpler to fetch freshly or pass down.
-                // For now, let's fetch shallowly or assume user is passing props.
-                // Wait, opdId is prop. We can fetch patient meta.
-
-                // Better approach: We have the record already or we can fetch it.
-                // Let's rely on what we can get. 
-                // Wait, we need age/gender. 
-                // Let's do a quick fetch of patient details if not in state.
+                // Fetch patient details for AI context if needed
                 const { data: opdRec } = await supabase.from('opd_registration').select('patient_detail(age_unit, age, gender)').eq('id', opdId).single();
 
                 let p_age_group = 'adult';
@@ -435,64 +496,44 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
                 if (opdRec?.patient_detail) {
                     const pd = opdRec.patient_detail as any;
                     p_gender = pd.gender || 'male';
-
                     const age = Number(pd.age);
                     if (pd.age_unit === 'Y') {
                         if (age < 12) p_age_group = 'child';
                         else if (age > 60) p_age_group = 'senior';
-                    } else {
-                        p_age_group = 'child'; // Months/Days usually implies child
-                    }
+                    } else { p_age_group = 'child'; }
                 }
-
-                // Prepare complex objects
-                const p_symptoms = Object.values(state.symptoms).map(s => ({
-                    name: s.name,
-                    severity: s.severity || '',
-                    duration: s.duration || ''
-                }));
-
-                const p_diagnoses = Object.values(state.diagnoses).map(d => ({
-                    name: d.name,
-                    status: d.status || ''
-                }));
 
                 await supabase.rpc('learn_from_prescription_v2', {
                     p_age_group,
                     p_gender,
-                    p_symptoms,
-                    p_diagnoses,
+                    p_symptoms: Object.values(state.symptoms).map(s => ({ name: s.name, severity: s.severity || '', duration: s.duration || '' })),
+                    p_diagnoses: Object.values(state.diagnoses).map(d => ({ name: d.name, status: d.status || '' })),
                     p_medicines: state.medicines.map(m => m.name),
                     p_investigations: state.investigations,
                     p_instructions: state.instructions,
                     p_procedures: state.procedures
                 });
             } catch (aiError) {
-                console.error("AI Learning V2 failed:", aiError);
+                console.error("AI Learning Trigger failed:", aiError);
             }
 
-            // Clear local storage on successful finalize
-            localStorage.removeItem(STORAGE_KEY);
-            setState(prev => ({ ...prev, isFinalized: true, isSaving: false, hasLocalChanges: false }));
-
-            // Reload to sync backend state (optional but good practice)
+            setState(prev => ({ ...prev, isFinalized: true, isSaving: false }));
             await loadData();
+            toast.success("Prescription finalized and stored successfully!");
 
-        } catch (e) {
+        } catch (e: any) {
             console.error("Save error:", e);
-            alert("Failed to save prescription. Please try again.");
+            toast.error("Failed to finalize: " + (e.message || "Unknown error"));
             setState(prev => ({ ...prev, isSaving: false }));
         }
     };
 
     const clearPrescription = () => {
-        if (!confirm("Are you sure you want to clear ALL prescription data? This cannot be undone.")) return;
+        if (!confirm("Clear clinical data (Symptoms, Diagnosis, Rx, Reports)? Vitals will be preserved.")) return;
         
         setState(prev => ({
             ...prev,
-            hasLocalChanges: false,
             lastSavedAt: null,
-            vitals: {},
             symptoms: {},
             diagnoses: {},
             medicines: [],
@@ -502,9 +543,12 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
             clinicalNote: "",
             followUpDuration: "",
             followUpNote: "",
-            referringDoctor: "",
+            isFinalized: false,
         }));
+
+        toast.info("Clinical data cleared. Vitals and basic info preserved.");
     };
+
 
     return (
         <PrescriptionContext.Provider value={{

@@ -60,22 +60,7 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
     // --- Fetch Master Data ---
     useEffect(() => {
         const fetchMaster = async () => {
-            const cacheKey = 'OPD_MASTER_DATA_CACHE';
-
-            // 1. Try Load from Cache
-            try {
-                const cached = localStorage.getItem(cacheKey);
-                if (cached) {
-                    const parsed = JSON.parse(cached);
-                    setMasterData(prev => ({
-                        instructions: parsed.instructions || [],
-                        investigations: parsed.investigations || [],
-                        procedures: parsed.procedures || []
-                    }));
-                }
-            } catch (e) { console.error("Cache read error", e); }
-
-            // 2. Fetch Fresh from Network
+            // Fetch Fresh from Network
             const { data: masterDataRes } = await supabase
                 .from('opd_datasets')
                 .select('dataname, datajson');
@@ -94,18 +79,6 @@ export default function InstructionsTab({ opdId }: InstructionsTabProps) {
                     else if (row.dataname === 'Procedures') newMasterData.procedures = list as any;
                 });
                 setMasterData(newMasterData);
-
-                // 3. Update Cache
-                try {
-                    const currentCache = localStorage.getItem(cacheKey) ? JSON.parse(localStorage.getItem(cacheKey)!) : {};
-                    const updatedCache = {
-                        ...currentCache,
-                        instructions: newMasterData.instructions,
-                        investigations: newMasterData.investigations,
-                        procedures: newMasterData.procedures
-                    };
-                    localStorage.setItem(cacheKey, JSON.stringify(updatedCache));
-                } catch (e) { console.error("Cache write error", e); }
             }
         };
         fetchMaster();

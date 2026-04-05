@@ -3,9 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from "@/lib/supabase";
 
-const CACHE_KEY = 'opd_medicine_cache';
-const CACHE_TIME_KEY = 'opd_medicine_cache_time';
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
 
 export function useMedicineMaster() {
     const [masterList, setMasterList] = useState<any[]>([]);
@@ -24,8 +22,6 @@ export function useMedicineMaster() {
 
             if (data) {
                 setMasterList(data);
-                localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-                localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
             }
         } catch (err) {
             console.error("Failed to fetch medicine master:", err);
@@ -36,26 +32,7 @@ export function useMedicineMaster() {
     }, []);
 
     useEffect(() => {
-        const cachedData = localStorage.getItem(CACHE_KEY);
-        const cachedTime = localStorage.getItem(CACHE_TIME_KEY);
-        const now = Date.now();
-
-        if (cachedData && cachedTime && (now - parseInt(cachedTime)) < CACHE_DURATION) {
-            try {
-                const parsed = JSON.parse(cachedData);
-                setMasterList(parsed);
-                setIsLoading(false);
-
-                // Still background sync if it's been more than 1 hour
-                if ((now - parseInt(cachedTime)) > 60 * 60 * 1000) {
-                    fetchMaster();
-                }
-            } catch (e) {
-                fetchMaster();
-            }
-        } else {
-            fetchMaster();
-        }
+        fetchMaster();
     }, [fetchMaster]);
 
     const addToMaster = useCallback(async (medicineName: string) => {
@@ -77,12 +54,6 @@ export function useMedicineMaster() {
             if (data) {
                 // Update local state immediately for better UX
                 setMasterList(prev => [...prev, data].sort((a, b) => a.medicine_name.localeCompare(b.medicine_name)));
-                // Also update cache
-                const cachedData = localStorage.getItem(CACHE_KEY);
-                if (cachedData) {
-                    const parsed = JSON.parse(cachedData);
-                    localStorage.setItem(CACHE_KEY, JSON.stringify([...parsed, data]));
-                }
             }
         } catch (err) {
             console.error("Failed to add medicine to master:", err);

@@ -37,7 +37,7 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
     const {
         medicines, addMedicine, removeMedicine,
         updateMedicine, setMedicines, suggestedMedicines,
-        isOnline, hasLocalChanges, lastSavedAt
+        lastSavedAt
     } = usePrescription();
 
     // --- Hooks ---
@@ -76,15 +76,34 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
         try {
             const { data } = await supabase
                 .from('opd_registration')
-                .select('id, created_at, rx_list_json')
+                .select(`
+                    id, 
+                    created_at, 
+                    opd_reg_rx (*)
+                `)
                 .eq('uhid', patientId)
                 .neq('id', opdId)
-                .not('rx_list_json', 'is', null)
                 .order('created_at', { ascending: false })
                 .limit(10);
 
             if (data) {
-                setHistoryList(data.filter(d => Array.isArray(d.rx_list_json) && d.rx_list_json.length > 0));
+                // Map the joined data to what the UI expects (array of visits with medications)
+                const formattedHistory = data.map(visit => ({
+                    id: visit.id,
+                    created_at: visit.created_at,
+                    medications: (visit.opd_reg_rx || []).map((rx: any) => ({
+                        id: rx.id?.toString() || Math.random().toString(),
+                        name: rx.medicine_name,
+                        type: rx.medicine_type,
+                        unit: rx.unit,
+                        dosage: rx.dosage,
+                        duration: rx.duration,
+                        timing: rx.timing_json || { bb: false, ab: false, bl: false, al: false, bd: false, ad: false },
+                        note: rx.note
+                    }))
+                })).filter(v => v.medications.length > 0);
+                
+                setHistoryList(formattedHistory);
             }
         } catch (e) {
             console.error(e);
@@ -95,10 +114,8 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
 
     // --- Actions ---
     const handleAddMedicine = (name: string, type: string = 'TAB') => {
-        // Track if this is a new medicine to persist it to master
-        if (isOnline) {
-            addToMaster(name);
-        }
+        // Persist to master if possible
+        addToMaster(name);
 
         const newMed: PrescriptionEntry = {
             id: Date.now().toString() + Math.random().toString().slice(2),
@@ -141,13 +158,14 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
     }, []);
 
     const copyFromHistory = (items: any[]) => {
-        const newItems = items.map(item => ({
-            ...item,
-            id: Date.now().toString() + Math.random().toString(), // New ID
-        }));
-        // Append or replace? Append is better.
-        // But setMedicines replaces. I need to append.
-        newItems.forEach(item => addMedicine(item));
+        // Items are already formatted in fetchHistory
+        items.forEach(item => {
+            const newMed: PrescriptionEntry = {
+                ...item,
+                id: Date.now().toString() + Math.random().toString(), // New ID for current session
+            };
+            addMedicine(newMed);
+        });
         setActiveTab('current');
     };
 
@@ -178,15 +196,9 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                     {/* Status Bar */}
                     <div className="px-3 py-1 flex items-center justify-between bg-white border-b border-slate-200">
                         <div className="flex items-center gap-2.5">
-                            <div className="flex items-center gap-1.5">
-                                <div className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" : "bg-red-500 animate-pulse")} />
-                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">
-                                    {isOnline ? 'System Online' : 'Offline Mode'}
-                                </span>
-                            </div>
                             {lastSavedAt && (
                                 <span className="text-[9px] text-slate-400 font-medium">
-                                    Saved at {new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    Last finalized at {new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                             )}
                         </div>
@@ -195,15 +207,6 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                 <div className="flex items-center gap-1 bg-blue-50 px-1.5 py-0.5 rounded cursor-default">
                                     <div className="w-2 h-2 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                                     <span className="text-[8px] font-black text-blue-600 uppercase">Indexing Medicines</span>
-                                </div>
-                            )}
-                            {!isOnline && hasLocalChanges && (
-                                <span className="text-[8px] font-black text-amber-600 uppercase px-1.5 py-0.5 bg-amber-50 rounded border border-amber-100">Local Changes Active</span>
-                            )}
-                            {isOnline && !hasLocalChanges && (
-                                <div className="flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded">
-                                    <Check className="w-2 h-2 text-emerald-600" />
-                                    <span className="text-[8px] font-black text-emerald-600 uppercase">Synced</span>
                                 </div>
                             )}
                         </div>
@@ -323,14 +326,14 @@ export default function TreatmentTab({ opdId, patientId }: TreatmentTabProps) {
                                                 </span>
                                             </div>
                                             <button
-                                                onClick={() => copyFromHistory(visit.rx_list_json)}
+                                                onClick={() => copyFromHistory(visit.medications)}
                                                 className="flex items-center gap-1 text-[8px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded hover:bg-blue-100"
                                             >
                                                 <Copy className="w-2.5 h-2.5" /> Copy
                                             </button>
                                         </div>
                                         <div className="p-2 space-y-1">
-                                            {visit.rx_list_json.map((m: any, i: number) => (
+                                            {visit.medications.map((m: any, i: number) => (
                                                 <div key={i} className="text-[10px] text-slate-600 flex items-center gap-1.5">
                                                     <div className="w-1 h-1 rounded-full bg-slate-300"></div>
                                                     <span className="truncate">{m.name}</span>

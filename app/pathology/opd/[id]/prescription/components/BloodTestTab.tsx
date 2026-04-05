@@ -23,7 +23,7 @@ interface InvestigationParam {
 interface RecordData {
     id: number
     created_at: string
-    checkup_data_json: Record<string, string>
+    checkup_data_json: Record<string, string> // Keep name for grid compatibility, but populate from joined table
 }
 
 export default function BloodTestTab({ opdId, patientUhid }: BloodTestTabProps) {
@@ -44,15 +44,8 @@ export default function BloodTestTab({ opdId, patientUhid }: BloodTestTabProps) 
     const [newParamUnit, setNewParamUnit] = useState("")
     const [hideSearchQuery, setHideSearchQuery] = useState("")
 
-    const PARAMS_CACHE_KEY = 'OPD_INVESTIGATION_PARAMS_CACHE'
-    // 1. Fetch Master Parameters (with Cache)
     const fetchParams = useCallback(async () => {
         try {
-            const cached = localStorage.getItem(PARAMS_CACHE_KEY)
-            if (cached) {
-                setParams(JSON.parse(cached))
-            }
-
             const { data, error } = await supabase
                 .from('opd_datasets')
                 .select('datajson')
@@ -64,7 +57,6 @@ export default function BloodTestTab({ opdId, patientUhid }: BloodTestTabProps) 
             if (data?.datajson && Array.isArray(data.datajson)) {
                 const fetchedParams = data.datajson as InvestigationParam[]
                 setParams(fetchedParams)
-                localStorage.setItem(PARAMS_CACHE_KEY, JSON.stringify(fetchedParams))
             }
         } catch (err: any) {
             console.error("Error fetching parameters:", err)
@@ -78,18 +70,32 @@ export default function BloodTestTab({ opdId, patientUhid }: BloodTestTabProps) 
             setLoading(true)
             const { data, error } = await supabase
                 .from('opd_registration')
-                .select('id, created_at, checkup_data_json')
+                .select(`
+                    id, 
+                    created_at, 
+                    opd_reg_reports (*)
+                `)
                 .eq('uhid', patientUhid)
                 .order('created_at', { ascending: false })
                 .limit(10)
 
             if (error) throw error
 
-            // Ensure checkup_data_json is always an object
-            const normalizedData = (data || []).map(r => ({
-                ...r,
-                checkup_data_json: r.checkup_data_json || {}
-            }))
+            // Convert joined reports to the checkup_data_json map format for the grid
+            const normalizedData = (data || []).map(r => {
+                const reportMap: Record<string, string> = {};
+                (r.opd_reg_reports || []).forEach((report: any) => {
+                    if (report.report_type === 'test') {
+                        reportMap[report.item_name] = report.note || "";
+                    }
+                });
+
+                return {
+                    id: r.id,
+                    created_at: r.created_at,
+                    checkup_data_json: reportMap
+                };
+            })
 
             setRecords(normalizedData as RecordData[])
             setDirtyRecordIds(new Set())
@@ -152,16 +158,34 @@ export default function BloodTestTab({ opdId, patientUhid }: BloodTestTabProps) 
                 setSaving(true)
                 const recordsToSave = records.filter(r => dirtyRecordIds.has(r.id))
 
-                const updatePromises = recordsToSave.map(r =>
-                    supabase
-                        .from('opd_registration')
-                        .update({ checkup_data_json: r.checkup_data_json })
-                        .eq('id', r.id)
-                )
+                for (const record of recordsToSave) {
+                    // First, clear existing reports for this OPD record to avoid duplicates on manual sync
+                    // However, for the grid, we can just upsert or delete/insert.
+                    // Given the schema (no uniqueness constraint on name+opd_id), delete/insert is safer.
+                    
+                    const { error: delError } = await supabase
+                        .from('opd_reg_reports')
+                        .delete()
+                        .eq('opd_id', record.id);
+                    
+                    if (delError) throw delError;
 
-                const results = await Promise.all(updatePromises)
-                const firstError = results.find(res => res.error)?.error
-                if (firstError) throw firstError
+                    const insertData = Object.entries(record.checkup_data_json)
+                        .filter(([_, val]) => val.trim() !== "")
+                        .map(([name, value]) => ({
+                            opd_id: record.id,
+                            item_name: name,
+                            report_type: 'test',
+                            note: value
+                        }));
+
+                    if (insertData.length > 0) {
+                        const { error: insError } = await supabase
+                            .from('opd_reg_reports')
+                            .insert(insertData);
+                        if (insError) throw insError;
+                    }
+                }
 
                 setDirtyRecordIds(new Set())
             } catch (err: any) {
@@ -186,8 +210,6 @@ export default function BloodTestTab({ opdId, patientUhid }: BloodTestTabProps) 
                 .from('opd_datasets')
                 .update({ datajson: updatedParams })
                 .eq('dataname', 'investigations')
-
-            localStorage.setItem(PARAMS_CACHE_KEY, JSON.stringify(updatedParams))
         } catch (err) {
             console.error("Failed to update visibility:", err)
         }
@@ -215,8 +237,6 @@ export default function BloodTestTab({ opdId, patientUhid }: BloodTestTabProps) 
                     dataname: 'investigations',
                     datajson: updatedParams
                 }, { onConflict: 'dataname' })
-
-            localStorage.setItem(PARAMS_CACHE_KEY, JSON.stringify(updatedParams))
         } catch (err) {
             console.error("Failed to persist new parameter:", err)
         }

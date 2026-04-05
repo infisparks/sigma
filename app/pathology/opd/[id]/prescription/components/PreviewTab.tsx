@@ -43,7 +43,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
         followUpNote, vitals,
         referringDoctor, setReferringDoctor,
         saveAndFinalize: contextSaveAndFinalize,
-        isLoading, isSaving, isOnline, hasLocalChanges
+        isLoading, isSaving
     } = usePrescription();
 
     // --- State ---
@@ -99,11 +99,6 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
 
     // --- Actions ---
     const handleSaveAndFinalize = async () => {
-        if (!isOnline) {
-            toast.error("You are offline. Prescription is saved locally and will sync when you are back online.");
-            return;
-        }
-
         try {
             // 1. Save Global Settings
             const settingsPayload = {
@@ -198,28 +193,11 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                     <div className="space-y-2">
                         <Button
                             onClick={handleSaveAndFinalize}
-                            disabled={isSaving || (isOnline === false && hasLocalChanges === false)}
-                            className={cn(
-                                "w-full font-black text-[11px] uppercase tracking-widest py-6 shadow-lg transition-all",
-                                isOnline ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-slate-800 text-slate-400 cursor-not-allowed"
-                            )}
+                            disabled={isSaving}
+                            className="w-full font-black text-[11px] uppercase tracking-widest py-6 shadow-lg transition-all bg-blue-600 hover:bg-blue-700 text-white"
                         >
-                            {!isOnline ? (
-                                <div className="flex flex-col items-center">
-                                    <span>Offline Mode</span>
-                                    <span className="text-[8px] opacity-60">Waiting for Network</span>
-                                </div>
-                            ) : isSaving ? (
-                                "Finalizing..."
-                            ) : (
-                                "Save & Finalize"
-                            )}
+                            {isSaving ? "Finalizing..." : "Save & Finalize"}
                         </Button>
-                        {!isOnline && (
-                            <p className="text-[9px] text-amber-600 font-bold text-center bg-amber-50 py-1 rounded border border-amber-100 animate-pulse">
-                                Draft Saved Locally
-                            </p>
-                        )}
                     </div>
 
                     <div className="h-px bg-slate-100" />

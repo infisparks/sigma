@@ -45,27 +45,13 @@ export default function DiagnosisTab({ opdId }: DiagnosisTabProps) {
     // --- Fetch Master Data ---
     useEffect(() => {
         const fetchMasterData = async () => {
-            const cacheKey = 'OPD_MASTER_DIAGNOSIS_CACHE';
-
-            // 1. Try Cache
-            try {
-                const cached = localStorage.getItem(cacheKey);
-                if (cached) {
-                    setRawDiagnoses(JSON.parse(cached));
-                }
-            } catch (e) { console.error("Cache read error", e); }
-
-            // 2. Fetch Network
+            // Fetch Network
             const { data: masterData } = await supabase.from('opd_datasets').select('dataname, datajson');
             if (masterData) {
                 masterData.forEach((row: any) => {
                     const list = Array.isArray(row.datajson) ? row.datajson : [];
                     if (row.dataname === 'Diagnosis') {
                         setRawDiagnoses(list);
-                        // 3. Update Cache
-                        try {
-                            localStorage.setItem(cacheKey, JSON.stringify(list));
-                        } catch (e) { console.error("Cache write error", e); }
                     }
                 });
             }
