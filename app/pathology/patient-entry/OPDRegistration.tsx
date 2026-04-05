@@ -137,7 +137,7 @@ const sendWhatsAppNotification = async (
     const messageText = `Dear *${patientName}*,\n\nThank you for visiting Cigma Clinic.\n\n*OPD Registration Confirmed*\n🆔 Reg ID: *${regId}*\n👨‍⚕️ Service: ${testNames}\n\n*Payment Summary:*\n💰 Total: ₹${financials.total.toFixed(2)}\n✅ Paid: ₹${financials.paid.toFixed(2)}\n⚠️ Balance: ₹${financials.balance.toFixed(2)}\n\nThank you!`;
 
     try {
-        const response = await fetch("https://evo.infispark.in/message/sendText/cigma", {
+        const response = await fetch("https://evo.infispark.in/message/sendText/cigmadiagnostic", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

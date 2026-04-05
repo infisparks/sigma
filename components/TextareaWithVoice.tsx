@@ -407,7 +407,7 @@ export default function OPDPrescriptionPage() {
       };
 
       // 6. Send with new endpoint and headers
-      const response = await fetch("https://evo.infispark.in/message/sendMedia/cigma", { 
+      const response = await fetch("https://evo.infispark.in/message/sendMedia/cigmadiagnostic", { 
         method: "POST", 
         headers: { 
           "Content-Type": "application/json",

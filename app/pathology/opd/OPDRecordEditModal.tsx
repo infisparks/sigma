@@ -77,7 +77,7 @@ const sendPaymentWhatsAppNotification = async (
     const messageText = `Dear *${patientName}*,\n\nWe have received a payment of *₹${financials.paidNow.toFixed(2)}* for your OPD Registration (ID: ${regId}).\n\n*Updated Payment Summary:*\n💰 Total Bill: ₹${financials.total.toFixed(2)}\n✅ Total Paid: ₹${financials.totalPaid.toFixed(2)}\n⚠️ Remaining Balance: ₹${financials.balance.toFixed(2)}\n\nThank you for choosing Cigma Clinic!`
 
     try {
-        await fetch("https://evo.infispark.in/message/sendText/cigma", {
+        await fetch("https://evo.infispark.in/message/sendText/cigmadiagnostic", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

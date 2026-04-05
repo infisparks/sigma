@@ -74,7 +74,7 @@ const sendXrayWhatsAppNotification = async (
     const messageText = `Dear *${patientName}*,\n\nThank you for visiting Cigma Clinic.\n\n*Radiology/X-ray Order Confirmed*\n📅 Date: ${formattedDate}\n🔢 Bill No: *${billNumber || "N/A"}*\n☢️ Exams: ${examNames}\n\n*Payment Summary:*\n💰 Total: ₹${financials.total.toFixed(2)}\n✅ Paid: ₹${financials.paid.toFixed(2)}\n⚠️ Balance: ₹${financials.balance.toFixed(2)}`;
 
     try {
-        const response = await fetch("https://evo.infispark.in/message/sendText/cigma", {
+        const response = await fetch("https://evo.infispark.in/message/sendText/cigmadiagnostic", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
