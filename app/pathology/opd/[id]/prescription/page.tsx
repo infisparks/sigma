@@ -426,44 +426,57 @@ Only return the JSON object and nothing else.`;
                             </div>
                         </div>
 
-                        {/* Upload Area */}
+                        {/* Upload/Camera Area */}
                         <div className="relative">
-                            <input 
-                                type="file" 
-                                id="prescription-upload" 
-                                className="hidden" 
-                                accept=".jpg,.jpeg,.png,image/jpeg,image/png"
-                                onChange={handleFileUpload}
-                                disabled={loading}
-                            />
-                            <label 
-                                htmlFor="prescription-upload"
-                                className={cn(
-                                    "flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-3xl transition-all cursor-pointer group",
-                                    loading 
-                                        ? "bg-slate-50 border-slate-200 cursor-not-allowed opacity-70" 
-                                        : "border-slate-200 hover:border-blue-500 hover:bg-blue-50/30"
-                                )}
-                            >
-                                {loading ? (
-                                    <div className="flex flex-col items-center gap-4">
-                                        <div className="relative">
-                                            <div className="absolute inset-0 bg-blue-400 blur-xl opacity-20 animate-pulse" />
-                                            <Loader2 className="w-12 h-12 text-blue-600 animate-spin relative" />
-                                        </div>
-                                        <p className="text-sm font-bold text-slate-900">Parsing Prescription...</p>
-                                        <p className="text-xs text-slate-500 text-center max-w-[200px]">Extracting text and organizing medical data via {selectedModel}</p>
+                            {loading ? (
+                                <div className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
+                                    <div className="relative">
+                                        <div className="absolute inset-0 bg-blue-400 blur-xl opacity-20 animate-pulse" />
+                                        <Loader2 className="w-12 h-12 text-blue-600 animate-spin relative" />
                                     </div>
-                                ) : (
-                                    <>
-                                        <div className="p-4 bg-slate-100 rounded-full group-hover:bg-blue-100 transition-colors mb-4">
+                                    <p className="text-sm font-bold text-slate-900 mt-4">Parsing Prescription...</p>
+                                    <p className="text-xs text-slate-500 text-center max-w-[200px] mt-1">Extracting text and organizing medical data via {selectedModel}</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <input 
+                                        type="file" 
+                                        id="prescription-camera" 
+                                        className="hidden" 
+                                        accept="image/*"
+                                        capture="environment"
+                                        onChange={handleFileUpload}
+                                    />
+                                    <label 
+                                        htmlFor="prescription-camera"
+                                        className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 rounded-3xl transition-all cursor-pointer hover:border-indigo-500 hover:bg-indigo-50/30 group"
+                                    >
+                                        <div className="p-4 bg-slate-100 rounded-2xl group-hover:bg-indigo-100 transition-colors mb-3">
+                                            <Camera className="w-8 h-8 text-slate-500 group-hover:text-indigo-600" />
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-900 group-hover:text-indigo-700">Take Photo</p>
+                                        <p className="text-[10px] text-slate-500 mt-1">Use Device Camera</p>
+                                    </label>
+
+                                    <input 
+                                        type="file" 
+                                        id="prescription-upload" 
+                                        className="hidden" 
+                                        accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                                        onChange={handleFileUpload}
+                                    />
+                                    <label 
+                                        htmlFor="prescription-upload"
+                                        className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 rounded-3xl transition-all cursor-pointer hover:border-blue-500 hover:bg-blue-50/30 group"
+                                    >
+                                        <div className="p-4 bg-slate-100 rounded-2xl group-hover:bg-blue-100 transition-colors mb-3">
                                             <Upload className="w-8 h-8 text-slate-500 group-hover:text-blue-600" />
                                         </div>
-                                        <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700">Drop image or click to upload</p>
-                                        <p className="text-xs text-slate-500 mt-1">Supports JPG, PNG up to 10MB</p>
-                                    </>
-                                )}
-                            </label>
+                                        <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700">Upload File</p>
+                                        <p className="text-[10px] text-slate-500 mt-1">Gallery or Files</p>
+                                    </label>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-3 p-4 bg-orange-50 rounded-2xl border border-orange-100">
