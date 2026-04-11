@@ -2,17 +2,28 @@
 
 import { useEffect, useState, Suspense } from "react"
 import { useParams } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 import { FileDown, Loader2, Hospital, User, Calendar, CheckCircle, ShieldCheck } from "lucide-react"
 import { generateReportPdf } from "@/app/pathology/download-report/[registrationId]/pdf-generator"
 import type { PatientData, BloodTestData } from "@/app/pathology/download-report/[registrationId]/types/report"
 
-// Helper to slugify test names (reusing logic from pathology page)
+// Helper to slugify test names
 const slugifyTestName = (name: string) =>
   name
     .toLowerCase()
     .replace(/\s+/g, "_")
     .replace(/[.#$[\]()]/g, "")
+
+// Create a clean client specifically for public access to avoid JWS signature issues from old sessions
+const publicSupabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      persistSession: false, // Don't look for or save old login data
+    }
+  }
+)
 
 function PublicReportDownloader() {
   const params = useParams()
@@ -28,15 +39,27 @@ function PublicReportDownloader() {
     const fetchReport = async () => {
       try {
         setLoading(true)
-        // Using the secure RPC function we created
-        const { data, error: rpcError } = await supabase.rpc('get_registration_by_key', { p_key: uid })
+        setError(null)
 
-        if (rpcError) throw rpcError
-        if (!data) throw new Error("Report not found or has been removed.")
+        // Optimized Raw Fetch for production
+        const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/get_registration_by_key`
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({ p_key: uid })
+        })
 
+        if (!response.ok) {
+          throw new Error("Could not verify report access. Please try scanning again.")
+        }
+
+        const data = await response.json()
         setReportData(data)
       } catch (err: any) {
-        console.error("Fetch error:", err)
+        console.error("Public Fetch Exception:", err)
         setError(err.message || "Failed to load report")
       } finally {
         setLoading(false)
@@ -46,24 +69,28 @@ function PublicReportDownloader() {
     fetchReport()
   }, [uid])
 
+  const [downloadFinished, setDownloadFinished] = useState(false)
+
+  // Automatically trigger download once data is ready
+  useEffect(() => {
+    if (reportData && !loading && !error && !isDownloading && !downloadFinished) {
+      handleDownload()
+    }
+  }, [reportData, loading])
+
   const handleDownload = async () => {
-    if (!reportData) return
+    if (!reportData || isDownloading) return
     setIsDownloading(true)
     try {
-      const { registration, patient } = reportData
+      const { registration, patient, master_interpretations } = reportData
 
-      // Parse blood test detail if it's a string
-      let parsedDetail = registration.bloodtest_detail
-      if (typeof parsedDetail === "string") {
-        parsedDetail = JSON.parse(parsedDetail)
-      }
+      const parsedDetail = typeof registration.bloodtest_detail === "string" 
+        ? JSON.parse(registration.bloodtest_detail) 
+        : registration.bloodtest_detail
+      const parsedData = typeof registration.bloodtest_data === "string" 
+        ? JSON.parse(registration.bloodtest_data) 
+        : registration.bloodtest_data
 
-      let parsedData = registration.bloodtest_data
-      if (typeof parsedData === "string") {
-        parsedData = JSON.parse(parsedData)
-      }
-
-      // Map to the format expected by generateReportPdf
       const mappedPatientData: PatientData = {
         id: patient.patient_id,
         name: patient.name,
@@ -84,16 +111,13 @@ function PublicReportDownloader() {
         key: registration.key,
       }
 
-      // Map detail to BloodTestData objects
       const bloodtestMap: Record<string, BloodTestData> = {}
-      const masterInterpretations = reportData.master_interpretations || {}
+      const masterInterps = master_interpretations || {}
 
       if (parsedDetail) {
         Object.entries(parsedDetail).forEach(([key, value]: [string, any]) => {
-          // Look up interpretation by slug or name
           const testName = (parsedData || []).find((t: any) => slugifyTestName(t.testName) === key)?.testName || ""
-          const interpretation = masterInterpretations[testName.toLowerCase()] || masterInterpretations[key.replace(/_/g, " ").toLowerCase()] || ""
-
+          const interpretation = masterInterps[testName.toLowerCase()] || masterInterps[key.replace(/_/g, " ").toLowerCase()] || ""
           bloodtestMap[key] = {
             testId: key,
             parameters: value.parameters || [],
@@ -101,29 +125,13 @@ function PublicReportDownloader() {
             descriptions: value.descriptions || [],
             reportedOn: value.reportedOn || null,
             enteredBy: value.enteredBy,
-            interpretation: interpretation, // Injected interpretation here
+            interpretation,
           }
         })
       }
       mappedPatientData.bloodtest = bloodtestMap
 
-      const selectedTests = Object.keys(bloodtestMap)
-
-      // Generate PDF
-      const blob = await generateReportPdf(
-        mappedPatientData,
-        selectedTests,
-        [], // combinedGroups
-        {}, // historicalTestsData
-        {}, // comparisonSelections
-        "normal",
-        true, // includeLetterhead
-        true, // skipCover
-        undefined, // aiSuggestions
-        false, // includeAiSuggestionsPage
-        {} // testDisplayOptions
-      )
-
+      const blob = await generateReportPdf(mappedPatientData, Object.keys(bloodtestMap), [], {}, {}, "normal", true, true)
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
@@ -132,20 +140,59 @@ function PublicReportDownloader() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      
+      setDownloadFinished(true)
+      
+      // Attempt to close the tab after a short delay
+      setTimeout(() => {
+        window.close()
+      }, 3000)
+
     } catch (err) {
       console.error("Download error:", err)
-      alert("Failed to generate PDF. Please try again.")
     } finally {
       setIsDownloading(false)
     }
   }
 
-  if (loading) {
+  if (loading || (isDownloading && !downloadFinished)) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-slate-600 font-medium">Verifying Report Key...</p>
+          <div className="relative mb-8 inline-block">
+            <div className="w-24 h-24 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <FileDown className="w-8 h-8 text-blue-600 animate-bounce" />
+            </div>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Downloading Report</h1>
+          <p className="text-slate-500 max-w-xs mx-auto">Your secure PDF is being downloaded. This tab will attempt to close automatically.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (downloadFinished) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center border border-white">
+          <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-10 h-10" />
+          </div>
+          <h1 className="text-2xl font-extrabold text-slate-900 mb-2">Download Successful!</h1>
+          <p className="text-slate-600 mb-8">Your medical report has been saved to your device.</p>
+          
+          <div className="bg-slate-50 rounded-2xl p-4 mb-8">
+            <p className="text-sm text-slate-400 font-medium">You can now safely</p>
+            <p className="text-lg font-bold text-slate-900">Close this Browser Tab</p>
+          </div>
+
+          <button 
+            onClick={() => window.location.reload()}
+            className="text-blue-600 font-semibold hover:underline"
+          >
+            Download again?
+          </button>
         </div>
       </div>
     )
