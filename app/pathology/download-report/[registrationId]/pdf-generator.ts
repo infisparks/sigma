@@ -246,7 +246,8 @@ export const generateReportPdf = async (
         loadImageAsCompressedJPEG(stamp2.src, 0.5),
     ])
 
-    const qrCodeDataUrl = await QRCode.toDataURL(data.key || "Cigma-Clinic", { margin: 0, width: 100 })
+    const reportUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/report/${data.key}`
+    const qrCodeDataUrl = await QRCode.toDataURL(reportUrl, { margin: 0, width: 100 })
 
     const addStampsAndPrintedBy = async (doc: jsPDF, enteredBy: string) => {
         if (finalConfig.stamps.stampRight.display && loadedStampRight) {

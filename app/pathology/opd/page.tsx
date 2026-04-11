@@ -12,13 +12,14 @@ import {
     Search, User, Calendar, Filter,
     ArrowLeft, ArrowRight, FilePenLine,
     Activity, CreditCard, AlertCircle, Pill, X,
-    Users, Trash2, CheckCircle
+    Users, Trash2, CheckCircle, History
 } from "lucide-react"
 import { useUserRole } from "@/components/userrole"
 import { useRouter } from "next/navigation"
 import { format, subDays, startOfDay, endOfDay } from "date-fns" // Recommended for date logic, but I'll use native JS if you don't have date-fns
 
 import OPDRecordEditModal from "./OPDRecordEditModal"
+import PatientHistoryModal from "./PatientHistoryModal"
 
 // --- Types & Constants ---
 const TABLE = {
@@ -126,6 +127,9 @@ export default function OPDDashboard() {
     // Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [historyUhid, setHistoryUhid] = useState<string | null>(null);
+    const [historyPatientName, setHistoryPatientName] = useState<string>('');
 
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -723,7 +727,10 @@ export default function OPDDashboard() {
                                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); setSelectedRecordId(r.id); setIsModalOpen(true); }}>
                                                             <FilePenLine className="h-4 w-4" />
                                                         </Button>
-                                                        {role === 'admin' && (
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-amber-600" title="Visit History" onClick={(e) => { e.stopPropagation(); setHistoryUhid(r.uhid); setHistoryPatientName(r.patient_name || ''); setIsHistoryModalOpen(true); }}>
+                                                            <History className="h-4 w-4" />
+                                                        </Button>
+                                                        {(role === 'admin' || role === 'staff') && (
                                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={(e) => { e.stopPropagation(); handleDeleteRecord(r); }}>
                                                                 <Trash2 className="h-4 w-4" />
                                                             </Button>
@@ -772,6 +779,18 @@ export default function OPDDashboard() {
                         setIsModalOpen(false);
                         setSelectedRecordId(null);
                         if (refresh) fetchDashboardData();
+                    }}
+                />
+            )}
+
+            {/* History Modal */}
+            {isHistoryModalOpen && historyUhid && (
+                <PatientHistoryModal
+                    uhid={historyUhid}
+                    patientName={historyPatientName}
+                    onClose={() => {
+                        setIsHistoryModalOpen(false);
+                        setHistoryUhid(null);
                     }}
                 />
             )}
