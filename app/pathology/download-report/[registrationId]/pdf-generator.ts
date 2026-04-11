@@ -247,7 +247,7 @@ export const generateReportPdf = async (
     ])
 
     const reportUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/report/${data.key}`
-    const qrCodeDataUrl = await QRCode.toDataURL(reportUrl, { margin: 0, width: 100 })
+    const qrCodeDataUrl = await QRCode.toDataURL(reportUrl, { margin: 1, width: 300 }) // Higher resolution & clean margin
 
     const addStampsAndPrintedBy = async (doc: jsPDF, enteredBy: string) => {
         if (finalConfig.stamps.stampRight.display && loadedStampRight) {
@@ -283,7 +283,7 @@ export const generateReportPdf = async (
         const gap = 7
         let y = finalConfig.page.marginTop
         if (qrCodeDataUrl) {
-            doc.addImage(qrCodeDataUrl, "PNG", left, y - 22, 15, 15)
+            doc.addImage(qrCodeDataUrl, "PNG", left, y - 25, 20, 20) // Increased from 15x15 to 20x20
         }
         doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(0, 0, 0)
         const sampleDT = data.sampleCollectedAt ? new Date(data.sampleCollectedAt) : new Date(data.createdAt)
