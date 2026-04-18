@@ -46,6 +46,7 @@ const MergePatientsPage = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [primaryId, setPrimaryId] = useState<string | null>(null)
   const [isMerging, setIsMerging] = useState(false)
+  const [password, setPassword] = useState("")
 
   // Search for potential duplicates
   const searchPatients = async () => {
@@ -114,6 +115,11 @@ const MergePatientsPage = () => {
   }
 
   const handleMerge = async () => {
+    if (password !== "Sigma") {
+      toast.error("Incorrect administrative password")
+      return
+    }
+
     if (!primaryId) {
       toast.error("Please select a PRIMARY record to keep")
       return
@@ -157,6 +163,7 @@ const MergePatientsPage = () => {
       toast.success("Merge completed successfully!")
       setSelectedIds([])
       setPrimaryId(null)
+      setPassword("")
       searchPatients() // Refresh
     } catch (err: any) {
       console.error(err)
@@ -324,7 +331,18 @@ const MergePatientsPage = () => {
                     )
                   })}
 
-                  <div className="bg-indigo-800/50 p-6 rounded-3xl border border-indigo-700/50 text-xs text-indigo-100/70 space-y-2">
+                    <div className="space-y-3">
+                      <label className="text-xs font-bold uppercase tracking-widest text-indigo-300">Admin Password</label>
+                      <Input 
+                        type="password"
+                        placeholder="Enter password..."
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-14 rounded-2xl focus:ring-white/30"
+                      />
+                    </div>
+
+                    <div className="bg-indigo-800/50 p-6 rounded-3xl border border-indigo-700/50 text-xs text-indigo-100/70 space-y-2">
                     <p className="flex gap-2">
                       <ArrowRight className="h-3 w-3 mt-0.5 text-indigo-400" />
                       <span>All Clinical & Billing data moves to <strong>{primaryId || "Master ID"}</strong></span>
