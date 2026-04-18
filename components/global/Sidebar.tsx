@@ -21,7 +21,8 @@ import {
   Receipt,
   TestTube2,
   Pill,
-  TrendingUp
+  TrendingUp,
+  GitMerge
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -71,6 +72,12 @@ const pathologyMenuItems = [
     icon: TrendingUp,
     label: 'OPD Admin',
     href: '/pathology/opd-admin',
+    roles: ['admin']
+  },
+  {
+    icon: GitMerge,
+    label: 'Merge UHID',
+    href: '/admin/merge-patients',
     roles: ['admin']
   },
   {
@@ -387,7 +394,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
                       )}
                     </div>
                   ) : (
-                    // Single-level Link (Main Pathology Items)
                     // Single-level Link (Main Pathology Items)
                     item.href === 'logout-action' ? (
                       <button
