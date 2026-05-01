@@ -188,7 +188,7 @@ function PrescriptionControls({ onTabChange }: { onTabChange: (i: number) => voi
 }
 
 function PrescriptionScanner() {
-    const { addSymptom, addDiagnosis, addMedicine, setInvestigations, setClinicalNote, setFollowUp } = usePrescription();
+    const { addMedicine } = usePrescription();
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [selectedModel, setSelectedModel] = useState('gemini-3.1-flash-lite-preview'); // Default model as requested
@@ -200,34 +200,7 @@ function PrescriptionScanner() {
     ];
 
     const importData = (data: any) => {
-        // 1. Symptoms
-        if (Array.isArray(data.symptoms)) {
-            data.symptoms.forEach((s: any) => {
-                addSymptom({
-                    name: s.name || '',
-                    note: s.note || '',
-                    duration: s.duration || '',
-                    severity: s.severity || '',
-                    customGroups: [],
-                    selectedCustomOptions: []
-                });
-            });
-        }
-
-        // 2. Diagnoses
-        if (Array.isArray(data.diagnoses)) {
-            data.diagnoses.forEach((d: any) => {
-                addDiagnosis({
-                    name: d.name || '',
-                    note: d.note || '',
-                    status: d.status || 'Suspected',
-                    customGroups: [],
-                    selectedCustomOptions: []
-                });
-            });
-        }
-
-        // 3. Rx (Medicines)
+        // Only Rx (Medicines)
         if (Array.isArray(data.medicines)) {
             data.medicines.forEach((m: any) => {
                 // Normalize Dosage (AI often returns 0.5 or 'half', UI wants '1/2')
@@ -261,17 +234,6 @@ function PrescriptionScanner() {
                 });
             });
         }
-
-        // 4. Reports (Investigations)
-        if (Array.isArray(data.reports)) {
-            setInvestigations(data.reports);
-        }
-
-        // 5. Global Notes & Follow Up
-        if (data.clinical_note) setClinicalNote(data.clinical_note);
-        if (data.follow_up_duration || data.follow_up_note) {
-            setFollowUp(data.follow_up_duration || '', data.follow_up_note || '');
-        }
     };
 
     const toBase64 = (file: File) => new Promise((resolve, reject) => {
@@ -290,14 +252,8 @@ function PrescriptionScanner() {
             const base64 = await toBase64(file);
             const base64Data = (base64 as string).split(',')[1];
 
-            const prompt = `You are a professional medical prescription analyst. Extract information from the provided prescription image into the following strict JSON format:
+            const prompt = `You are a professional medical prescription analyst. Extract medication/prescription information from the provided prescription image into the following strict JSON format:
 {
-  "symptoms": [
-    { "name": "...", "duration": "...", "severity": "...", "note": "..." }
-  ],
-  "diagnoses": [
-    { "name": "...", "status": "Confirmed/Suspected", "note": "..." }
-  ],
   "medicines": [
     { 
       "name": "...", 
@@ -308,11 +264,7 @@ function PrescriptionScanner() {
       "timing": { "bb": boolean, "ab": boolean, "bl": boolean, "al": boolean, "bd": boolean, "ad": boolean },
       "note": "..."
     }
-  ],
-  "reports": ["Investigation 1", "Investigation 2"],
-  "clinical_note": "...",
-  "follow_up_duration": "...",
-  "follow_up_note": "..."
+  ]
 }
 RULES for Medicine Timings:
 - For Tablets/Capsules: The 'dosage' is the numeric multiplier per dose (e.g., if frequency is '1-0-1', 'dosage' is '1'). The strength (like '40 mg') should be extracted into the 'unit' field.
