@@ -70,7 +70,7 @@ interface PrescriptionActions {
     setReferringDoctor: (name: string) => void;
 
     // Core
-    saveAndFinalize: () => Promise<void>;
+    saveAndFinalize: (options?: { finalize?: boolean }) => Promise<void>;
     refreshData: () => Promise<void>;
     clearPrescription: () => void;
 }
@@ -382,7 +382,8 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
         await loadData();
     };
 
-    const saveAndFinalize = async () => {
+    const saveAndFinalize = async (options: { finalize?: boolean } = { finalize: true }) => {
+        const finalize = options.finalize ?? true;
         setState(prev => ({ ...prev, isSaving: true }));
         try {
             // 1. Prepare Main Record Update
@@ -396,8 +397,8 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
                 pulse: state.vitals.pulse || null,
                 spo2: state.vitals.spo2 || null,
                 sugar: state.vitals.sugar || null,
-                is_finalized: true,
-                finalized_at: new Date().toISOString()
+                is_finalized: finalize,
+                finalized_at: finalize ? new Date().toISOString() : state.lastSavedAt
             };
 
             // Start a logical transaction (since we can't do real transactions easily with client lib, 
@@ -503,27 +504,29 @@ export function PrescriptionProvider({ children, opdId }: PrescriptionProviderPr
                     } else { p_age_group = 'child'; }
                 }
 
-                await supabase.rpc('learn_from_prescription_v2', {
-                    p_age_group,
-                    p_gender,
-                    p_symptoms: Object.values(state.symptoms).map(s => ({ name: s.name, severity: s.severity || '', duration: s.duration || '' })),
-                    p_diagnoses: Object.values(state.diagnoses).map(d => ({ name: d.name, status: d.status || '' })),
-                    p_medicines: state.medicines.map(m => m.name),
-                    p_investigations: state.investigations,
-                    p_instructions: state.instructions,
-                    p_procedures: state.procedures
-                });
+                if (finalize) {
+                    await supabase.rpc('learn_from_prescription_v2', {
+                        p_age_group,
+                        p_gender,
+                        p_symptoms: Object.values(state.symptoms).map(s => ({ name: s.name, severity: s.severity || '', duration: s.duration || '' })),
+                        p_diagnoses: Object.values(state.diagnoses).map(d => ({ name: d.name, status: d.status || '' })),
+                        p_medicines: state.medicines.map(m => m.name),
+                        p_investigations: state.investigations,
+                        p_instructions: state.instructions,
+                        p_procedures: state.procedures
+                    });
+                }
             } catch (aiError) {
                 console.error("AI Learning Trigger failed:", aiError);
             }
 
-            setState(prev => ({ ...prev, isFinalized: true, isSaving: false }));
+            setState(prev => ({ ...prev, isFinalized: finalize, isSaving: false }));
             await loadData();
-            toast.success("Prescription finalized and stored successfully!");
+            toast.success(finalize ? "Prescription finalized and stored successfully!" : "Prescription data stored successfully!");
 
         } catch (e: any) {
             console.error("Save error:", e);
-            toast.error("Failed to finalize: " + (e.message || "Unknown error"));
+            toast.error((finalize ? "Failed to finalize: " : "Failed to store: ") + (e.message || "Unknown error"));
             setState(prev => ({ ...prev, isSaving: false }));
         }
     };

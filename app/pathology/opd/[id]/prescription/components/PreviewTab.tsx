@@ -115,7 +115,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                 .then(({ error }) => { if (error) console.error("Settings save error", error) });
 
             // 2. Finalize Context
-            await contextSaveAndFinalize();
+            await contextSaveAndFinalize({ finalize: true });
 
             toast.success("Prescription Finalized & Saved!");
         } catch (e) {
