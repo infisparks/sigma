@@ -192,7 +192,8 @@ export default function OPDDashboard() {
                 .select(`
                     id, uhid, hospital_name, treating_doctor_id, total_fees, discount_amount, amount_paid, created_at, referring_doctor_name, payment_entries, is_finalized,
                     ${TABLE.PATIENT}!inner (name, number)
-                `);
+                `)
+                .eq('is_Deleted', false);
 
             // Apply Date Filters (Skip if 'all' and NOT searching specific record)
             if (start && end) {
@@ -260,7 +261,8 @@ export default function OPDDashboard() {
                 // Fetch Count as well
                 const { count } = await supabase
                     .from(TABLE.OPD_REGISTRATION)
-                    .select('*', { count: 'exact', head: true });
+                    .select('*', { count: 'exact', head: true })
+                    .eq('is_Deleted', false);
                 if (count !== null) setTotalCount(count);
             } else {
                 // For Today/Yesterday/Custom, we order by date
@@ -391,43 +393,27 @@ export default function OPDDashboard() {
     };
 
     const handleDeleteRecord = async (r: OPDRecord) => {
-        if (!confirm(`Are you sure you want to delete the OPD record for ${r.patient_name}? This will archive the record.`)) return;
+        if (!confirm(`Are you sure you want to delete the OPD record for ${r.patient_name}?`)) return;
 
         try {
-            // 1. Fetch full record details to archive
-            const { data: fullRecord, error: fetchError } = await supabase
-                .from(TABLE.OPD_REGISTRATION)
-                .select('*')
-                .eq('id', r.id)
-                .single();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("Authentication required to delete records");
 
-            if (fetchError) throw fetchError;
-            if (!fullRecord) throw new Error("Record not found for deletion");
-
-            // 2. Archive to dopd_registration
-            const archivedData = {
-                ...fullRecord,
-                deleted: true,
-                deleted_time: new Date().toISOString()
-            };
-
-            const { error: archiveError } = await supabase
-                .from('dopd_registration')
-                .insert(archivedData);
-
-            if (archiveError) throw new Error(`Archive failed: ${archiveError.message}`);
-
-            // 3. Delete from actual table
+            // Update the record instead of moving it to another table
             const { error: deleteError } = await supabase
                 .from(TABLE.OPD_REGISTRATION)
-                .delete()
+                .update({
+                    is_Deleted: true,
+                    deleted_by: user.id,
+                    deleted_at: new Date().toISOString()
+                })
                 .eq('id', r.id);
 
             if (deleteError) throw deleteError;
 
-            // 4. Update UI
+            // Update UI by removing the record from the state
             setRecords(prev => prev.filter(rec => rec.id !== r.id));
-            alert("Record deleted and archived successfully.");
+            alert("Record deleted successfully.");
 
         } catch (err: any) {
             console.error("Delete Error:", err);
