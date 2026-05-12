@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { UserCircle, Phone, FlaskConical, Stethoscope, UserPlus, X, Hospital, Save, User } from "lucide-react"
+import { UserCircle, Phone, FlaskConical, Stethoscope, UserPlus, X, Hospital, Save, User, Search } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useUserRole } from "@/hooks/useUserRole"
 import { cn } from "@/lib/utils"
@@ -180,6 +180,14 @@ export default function UnifiedPatientEntry() {
   const [showSourceSelection, setShowSourceSelection] = useState(false)
   const [canRegisterNew, setCanRegisterNew] = useState(false)
 
+  // --- Global Search State ---
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchType, setSearchType] = useState<"name" | "phone" | "uhid">("name");
+  const [searchResults, setSearchResults] = useState<PatientSuggestion[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchResultsRef = useRef<HTMLDivElement | null>(null);
+
   // --- RHF Setup for Unified Patient Data ---
   const {
     register,
@@ -312,6 +320,45 @@ export default function UnifiedPatientEntry() {
     }
   }, [canRegisterNew, getValues, setValue]);
 
+  const handleGlobalSearch = useCallback(async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      let query = supabase.from(TABLE.PATIENT).select("id:patient_id, name, number, uhid, title, age, age_unit, gender, address");
+      
+      const cleanQuery = searchQuery.trim();
+      if (searchType === "name") {
+        query = query.ilike("name", `%${cleanQuery}%`);
+      } else if (searchType === "phone") {
+        // For bigint 'number' column, use exact match if query is numeric
+        if (/^\d+$/.test(cleanQuery)) {
+          query = query.eq("number", cleanQuery);
+        } else {
+          setSearchResults([]);
+          setShowSearchResults(true);
+          setIsSearching(false);
+          return;
+        }
+      } else if (searchType === "uhid") {
+        query = query.ilike("uhid", `%${cleanQuery}%`);
+      }
+
+      const { data, error } = await query.limit(50);
+      if (error) throw error;
+      setSearchResults(data || []);
+      setShowSearchResults(true);
+    } catch (error) {
+      console.error("Search error:", error);
+      alert("Search failed. Please try again.");
+    } finally {
+      setIsSearching(false);
+    }
+  }, [searchQuery, searchType]);
+
 
   // --- Initial Data Fetching ---
   useEffect(() => {
@@ -383,6 +430,11 @@ export default function UnifiedPatientEntry() {
           setShowSourceSelection(false);
         }
       }
+
+      // 3. Global Search Results
+      if (searchResultsRef.current && !searchResultsRef.current.contains(target)) {
+        setShowSearchResults(false)
+      }
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
@@ -402,7 +454,13 @@ export default function UnifiedPatientEntry() {
       if (watch("name").trim().length >= 2) {
         query = query.ilike("name", `${watch("name").trim()}%`);
       } else if (watch("contact").trim().length >= 2) {
-        query = query.like("number", `${watch("contact").trim()}%`);
+        const contactVal = watch("contact").trim();
+        if (/^\d+$/.test(contactVal)) {
+          query = query.eq("number", contactVal);
+        } else {
+          setPatientHints([]);
+          return;
+        }
       } else {
         setPatientHints([]);
         return;
@@ -559,12 +617,123 @@ export default function UnifiedPatientEntry() {
         <SourceSelectionPopover />
       </div>)}
 
-      <div className="flex-1 overflow-auto p-3">
-        <h1 className="text-2xl font-extrabold text-gray-900 mb-3 flex items-center"><UserPlus className="mr-2 w-6 h-6 text-blue-600" />Unified Patient & Service Entry</h1>
-        <Card className="rounded-xl shadow-lg border border-gray-200">
-          <CardContent className="p-3">
+      <div className="flex-1 overflow-auto p-4 space-y-4">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+            <UserPlus className="mr-2 w-6 h-6 text-indigo-600" />
+            Unified Patient Entry
+          </h1>
+        </div>
+
+        {/* --- Global Search Section --- */}
+        <Card className="border-none shadow-sm bg-white overflow-visible">
+          <CardContent className="p-4">
+            <div className="flex flex-col md:flex-row gap-4 items-end">
+              <div className="w-full md:w-48">
+                <Label className="text-xs font-medium text-gray-500 mb-1.5 block">Search By</Label>
+                <Select value={searchType} onValueChange={(v) => setSearchType(v as any)}>
+                  <SelectTrigger className="h-10 bg-gray-50 border-gray-200">
+                    <SelectValue placeholder="Select Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name">Patient Name</SelectItem>
+                    <SelectItem value="phone">Phone Number</SelectItem>
+                    <SelectItem value="uhid">UHID Number</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 w-full relative" ref={searchResultsRef}>
+                <Label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                  Search Existing Patient
+                </Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleGlobalSearch()}
+                      placeholder={
+                        searchType === "name" ? "Enter patient name..." :
+                        searchType === "phone" ? "Enter 10-digit number..." :
+                        "Enter UHID (e.g., PAT-123)..."
+                      }
+                      className="h-10 pl-10 bg-gray-50 border-gray-200 focus:bg-white transition-all"
+                    />
+                  </div>
+                  <Button 
+                    onClick={handleGlobalSearch} 
+                    disabled={isSearching}
+                    className="h-10 bg-indigo-600 hover:bg-indigo-700 text-white px-6 font-medium shadow-sm transition-all"
+                  >
+                    {isSearching ? "Searching..." : "Search"}
+                  </Button>
+                </div>
+
+                {/* Global Search Results Dropdown */}
+                {showSearchResults && (
+                  <div className="absolute z-[60] w-full bg-white border border-gray-200 mt-2 rounded-xl shadow-2xl overflow-hidden max-h-[400px] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="p-2 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                      <span className="text-xs font-semibold text-gray-500 px-2 uppercase tracking-wider">
+                        {searchResults.length} {searchResults.length === 1 ? 'Result' : 'Results'} Found
+                      </span>
+                      <Button variant="ghost" size="sm" onClick={() => setShowSearchResults(false)} className="h-6 w-6 p-0 hover:bg-gray-200 rounded-full">
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    {searchResults.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <User className="h-12 w-12 text-gray-200 mx-auto mb-3" />
+                        <p className="text-gray-500 font-medium">No patients found matching "{searchQuery}"</p>
+                        <p className="text-xs text-gray-400 mt-1">Try a different search term or register as new</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-50">
+                        {searchResults.map((p) => (
+                          <div
+                            key={p.id}
+                            onClick={() => {
+                              handlePatientSelect(p);
+                              setShowSearchResults(false);
+                              setSearchQuery("");
+                            }}
+                            className="p-3 hover:bg-indigo-50 cursor-pointer transition-colors group flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm">
+                                {p.name.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="font-bold text-gray-900 group-hover:text-indigo-700 transition-colors">
+                                  {p.name}
+                                </div>
+                                <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                                  <span className="font-semibold text-indigo-600">{p.uhid}</span>
+                                  <span className="h-1 w-1 rounded-full bg-gray-300"></span>
+                                  <span>{p.number}</span>
+                                  <span className="h-1 w-1 rounded-full bg-gray-300"></span>
+                                  <span>{p.age} {p.age_unit}s • {p.gender}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 bg-white shadow-sm border border-indigo-100 text-indigo-600 text-xs font-bold px-3">
+                              Select
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-xl shadow-sm border border-gray-200 overflow-hidden bg-white">
+          <CardContent className="p-0">
             {/* 1. Patient Information Card (Common to all services) */}
-            <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="p-6 bg-white">
               <div className="flex justify-between items-center mb-3">
                 <h2 className="text-lg font-bold text-blue-800">Patient Details</h2>
                 <div className="flex items-center gap-2">
