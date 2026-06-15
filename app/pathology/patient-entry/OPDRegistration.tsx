@@ -174,28 +174,36 @@ const OPDRegistration: React.FC<OPDProps> = ({
     }), [commonRegDetails, opdData]);
 
     const {
-        control, watch, setValue, handleSubmit, reset,
+        control, watch, setValue, getValues, handleSubmit, reset,
         formState: { isSubmitting, errors },
     } = useForm<OPDRegFormFields>({ defaultValues: defaultRHFValues });
 
     const watchFields = watch();
     const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({ control, name: "paymentEntries" as "paymentEntries" });
 
-    // Sync form values to parent state
+    // Save form state to parent ONLY when the component unmounts (e.g. tab switch)
+    // This avoids rendering feedback loops on every single keystroke.
+    const getValuesRef = React.useRef(getValues);
+    getValuesRef.current = getValues;
+
     React.useEffect(() => {
-        const { treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, sugar, discountAmount, paymentEntries, ...regDetails } = watchFields;
-        setOpdData({ treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, sugar, discountAmount, paymentEntries });
+        return () => {
+            const currentValues = getValuesRef.current();
+            const { treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, sugar, discountAmount, paymentEntries, ...regDetails } = currentValues;
+            
+            // Sync OPD specific details
+            setOpdData({ treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, sugar, discountAmount, paymentEntries });
 
-        // Sync CommonRegDetails (DoctorName here refers to the treating doctor's name)
-        const doctor = doctorList.find(d => String(d.id) === String(treatingDoctorId));
-        setCommonRegDetails("doctorName", doctor?.doctor_name || "");
+            // Sync DoctorName to parent (doctorName refers to the treating doctor's name in OPD context)
+            const doctor = doctorList.find(d => String(d.id) === String(treatingDoctorId));
+            setCommonRegDetails("doctorName", doctor?.doctor_name || "");
 
-        (Object.keys(regDetails) as Array<keyof CommonRegDetails>).forEach((key) => {
-            // @ts-ignore
-            setCommonRegDetails(key, regDetails[key]);
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [JSON.stringify(watchFields), setOpdData, setCommonRegDetails]);
+            // Sync other common registration details
+            (Object.keys(regDetails) as Array<keyof CommonRegDetails>).forEach((key) => {
+                setCommonRegDetails(key, regDetails[key]);
+            });
+        };
+    }, [setOpdData, setCommonRegDetails, doctorList]);
 
     const watchTreatingDoctorId = watch("treatingDoctorId");
     const watchVisitCategory = watch("visitCategory");

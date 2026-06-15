@@ -125,21 +125,43 @@ const XrayRegistration: React.FC<XrayProps> = ({
     }), [commonRegDetails, xrayData]);
 
     const {
-        control, watch, setValue, handleSubmit, reset, // 🟢 ADDED: reset function
+        control, watch, setValue, getValues, handleSubmit, reset, // 🟢 ADDED: reset function
         formState: { isSubmitting, errors },
     } = useForm<XrayRegFormFields>({ defaultValues: defaultRHFValues });
 
-    const watchFields = watch();
+    // Save form state to parent ONLY when the component unmounts (e.g. tab switch)
+    // This avoids rendering feedback loops on every single keystroke.
+    const getValuesRef = useRef(getValues);
+    getValuesRef.current = getValues;
 
     useEffect(() => {
-        const { billNumber, remark, dateOfAppointment, xrayTests, discount, payments, ...regDetails } = watchFields;
-        setXrayData({ billNumber, remark, dateOfAppointment, xrayTests, discount, payments });
-        (Object.keys(regDetails) as Array<keyof CommonRegDetails>).forEach((key) => {
-            // @ts-ignore
-            setCommonRegDetails(key, regDetails[key]);
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [JSON.stringify(watchFields), setXrayData, setCommonRegDetails]);
+        return () => {
+            const currentValues = getValuesRef.current();
+            const { billNumber, remark, dateOfAppointment, xrayTests, discount, payments, ...regDetails } = currentValues;
+            
+            // Sync Xray specific details
+            setXrayData({ billNumber, remark, dateOfAppointment, xrayTests, discount, payments });
+
+            // Sync common registration details
+            (Object.keys(regDetails) as Array<keyof CommonRegDetails>).forEach((key) => {
+                setCommonRegDetails(key, regDetails[key]);
+            });
+        };
+    }, [setXrayData, setCommonRegDetails]);
+
+    // 🟢 SYNC FROM PARENT: When Popup updates Parent state, sync it back to Local Form
+    useEffect(() => {
+        if (commonRegDetails.sourceOpdId !== watch("sourceOpdId")) {
+            setValue("sourceOpdId", commonRegDetails.sourceOpdId);
+        }
+        if (commonRegDetails.sourceIpdId !== watch("sourceIpdId")) {
+            setValue("sourceIpdId", commonRegDetails.sourceIpdId);
+        }
+        // Sync Doctor Name if changed by source selection
+        if (commonRegDetails.doctorName && commonRegDetails.doctorName !== watch("doctorName")) {
+            setValue("doctorName", commonRegDetails.doctorName);
+        }
+    }, [commonRegDetails.sourceOpdId, commonRegDetails.sourceIpdId, commonRegDetails.doctorName, setValue, watch]);
 
     const { fields: xrayTestFields, append: appendXrayTest, remove: removeXrayTest } = useFieldArray({ control, name: "xrayTests" as "xrayTests" });
     const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({ control, name: "payments" as "payments" });
@@ -148,6 +170,27 @@ const XrayRegistration: React.FC<XrayProps> = ({
     const discount = watch("discount") || 0;
     const payments = watch("payments") || [];
     const watchVisitType = watch("visitType");
+    const watchSourceOpdId = watch("sourceOpdId");
+    const watchSourceIpdId = watch("sourceIpdId");
+
+    // Selective real-time sync for visitType, sourceOpdId, and sourceIpdId to allow immediate parent popover / state sync
+    useEffect(() => {
+        if (watchVisitType !== commonRegDetails.visitType) {
+            setCommonRegDetails("visitType", watchVisitType);
+        }
+    }, [watchVisitType, commonRegDetails.visitType, setCommonRegDetails]);
+
+    useEffect(() => {
+        if (watchSourceOpdId !== commonRegDetails.sourceOpdId) {
+            setCommonRegDetails("sourceOpdId", watchSourceOpdId);
+        }
+    }, [watchSourceOpdId, commonRegDetails.sourceOpdId, setCommonRegDetails]);
+
+    useEffect(() => {
+        if (watchSourceIpdId !== commonRegDetails.sourceIpdId) {
+            setCommonRegDetails("sourceIpdId", watchSourceIpdId);
+        }
+    }, [watchSourceIpdId, commonRegDetails.sourceIpdId, setCommonRegDetails]);
     const isGautamiHospital = watch("hospitalName") === "Cigma clinic";
 
     const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});

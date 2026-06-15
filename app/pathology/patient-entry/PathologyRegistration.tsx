@@ -157,21 +157,29 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
     }), [commonRegDetails, pathologyData]);
 
     const {
-        control, watch, setValue, handleSubmit, reset, // 🟢 ADDED: reset function
+        control, watch, setValue, getValues, handleSubmit, reset, // 🟢 ADDED: reset function
         formState: { isSubmitting, errors },
     } = useForm<PathRegFormFields>({ defaultValues: defaultRHFValues });
 
-    const watchFields = watch();
+    // Save form state to parent ONLY when the component unmounts (e.g. tab switch)
+    // This avoids rendering feedback loops on every single keystroke.
+    const getValuesRef = useRef(getValues);
+    getValuesRef.current = getValues;
 
     useEffect(() => {
-        const { estimatedTime, bloodTests, discountAmount, paymentEntries, ...regDetails } = watchFields;
-        setPathologyData({ estimatedTime, bloodTests, discountAmount, paymentEntries });
-        (Object.keys(regDetails) as Array<keyof CommonRegDetails>).forEach((key) => {
-            // @ts-ignore
-            setCommonRegDetails(key, regDetails[key]);
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [JSON.stringify(watchFields), setPathologyData, setCommonRegDetails]);
+        return () => {
+            const currentValues = getValuesRef.current();
+            const { estimatedTime, bloodTests, discountAmount, paymentEntries, ...regDetails } = currentValues;
+            
+            // Sync Pathology specific details
+            setPathologyData({ estimatedTime, bloodTests, discountAmount, paymentEntries });
+
+            // Sync common registration details
+            (Object.keys(regDetails) as Array<keyof CommonRegDetails>).forEach((key) => {
+                setCommonRegDetails(key, regDetails[key]);
+            });
+        };
+    }, [setPathologyData, setCommonRegDetails]);
 
     const { fields: bloodTestFields, append: appendBloodTest, remove: removeBloodTest } = useFieldArray({ control, name: "bloodTests" as "bloodTests" });
     const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({ control, name: "paymentEntries" as "paymentEntries" });
@@ -181,6 +189,20 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
     const paymentEntries = watch("paymentEntries") || [];
     const watchEstimatedTime = watch("estimatedTime");
     const watchVisitType = watch("visitType");
+    const watchSourceOpdId = watch("sourceOpdId");
+
+    // Selective real-time sync for visitType and sourceOpdId to allow immediate parent popover / state sync
+    useEffect(() => {
+        if (watchVisitType !== commonRegDetails.visitType) {
+            setCommonRegDetails("visitType", watchVisitType);
+        }
+    }, [watchVisitType, commonRegDetails.visitType, setCommonRegDetails]);
+
+    useEffect(() => {
+        if (watchSourceOpdId !== commonRegDetails.sourceOpdId) {
+            setCommonRegDetails("sourceOpdId", watchSourceOpdId);
+        }
+    }, [watchSourceOpdId, commonRegDetails.sourceOpdId, setCommonRegDetails]);
 
     const totalAmount = bloodTests.reduce((s: number, t: any) => s + (t.price || 0), 0);
     const totalPaid = paymentEntries.reduce((s: number, p: any) => s + (p.amount || 0), 0);

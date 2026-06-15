@@ -210,20 +210,29 @@ export default function UnifiedPatientEntry() {
   const patientHintsRef = useRef<HTMLDivElement | null>(null)
   const sourceSelectionRef = useRef<HTMLDivElement | null>(null)
 
-  // Patient Data Object to pass down
-  const watchFields = watch();
+  // Target specific inputs to watch instead of the whole form object to avoid redundant renders
+  const [
+    watchUhid, watchName, watchContact, watchAge, watchDayType, watchTitle, watchAddress, watchGender,
+    watchHospitalName, watchVisitType, watchDoctorName, watchTpa, watchRegistrationDate, watchRegistrationTime,
+    watchSendWhatsApp, watchSourceOpdId, watchSourceIpdId
+  ] = watch([
+    "uhid", "name", "contact", "age", "dayType", "title", "address", "gender",
+    "hospitalName", "visitType", "doctorName", "tpa", "registrationDate", "registrationTime",
+    "sendWhatsApp", "sourceOpdId", "sourceIpdId"
+  ]);
 
+  // Patient Data Object to pass down
   const patientData = useMemo(() => ({
-    uhid: watchFields.uhid, name: watchFields.name, contact: watchFields.contact, age: watchFields.age,
-    dayType: watchFields.dayType, title: watchFields.title, address: watchFields.address, gender: watchFields.gender,
-  }), [watchFields]);
+    uhid: watchUhid, name: watchName, contact: watchContact, age: watchAge,
+    dayType: watchDayType, title: watchTitle, address: watchAddress, gender: watchGender,
+  }), [watchUhid, watchName, watchContact, watchAge, watchDayType, watchTitle, watchAddress, watchGender]);
 
   // Registration Data Object to pass down
   const commonRegDetails = useMemo(() => ({
-    hospitalName: watchFields.hospitalName, visitType: watchFields.visitType, doctorName: watchFields.doctorName, tpa: watchFields.tpa,
-    registrationDate: watchFields.registrationDate, registrationTime: watchFields.registrationTime, sendWhatsApp: watchFields.sendWhatsApp,
-    sourceOpdId: watchFields.sourceOpdId, sourceIpdId: watchFields.sourceIpdId
-  }), [watchFields]);
+    hospitalName: watchHospitalName, visitType: watchVisitType, doctorName: watchDoctorName, tpa: watchTpa,
+    registrationDate: watchRegistrationDate, registrationTime: watchRegistrationTime, sendWhatsApp: watchSendWhatsApp,
+    sourceOpdId: watchSourceOpdId, sourceIpdId: watchSourceIpdId
+  }), [watchHospitalName, watchVisitType, watchDoctorName, watchTpa, watchRegistrationDate, watchRegistrationTime, watchSendWhatsApp, watchSourceOpdId, watchSourceIpdId]);
 
   // Function to update the RHF fields from the child component
   const handleUpdateRHF = useCallback((key: keyof IUnifiedFormInput, value: any) => {
@@ -396,22 +405,22 @@ export default function UnifiedPatientEntry() {
 
   // Auto-set gender based on title
   useEffect(() => {
-    const titleValue = watch("title")
+    const titleValue = watchTitle
     const male = new Set(["MR", "MAST", "BABA"])
     const female = new Set(["MS", "MISS", "MRS", "BABY", "SMT"])
     const none = new Set(["BABY OF", "DR", "", "."])
     if (male.has(titleValue)) setValue("gender", "male")
     else if (female.has(titleValue)) setValue("gender", "female")
     else if (none.has(titleValue)) setValue("gender", "")
-  }, [watch("title"), setValue])
+  }, [watchTitle, setValue])
 
   // --- Persistence for Hospital Name ---
   useEffect(() => {
-    const hospital = watch("hospitalName");
+    const hospital = watchHospitalName;
     if (hospital && typeof window !== "undefined") {
       localStorage.setItem("selectedHospital", hospital);
     }
-  }, [watch("hospitalName")]);
+  }, [watchHospitalName]);
 
   // --- Click Outside Handler for Hints and Popover ---
   useEffect(() => {
@@ -442,7 +451,7 @@ export default function UnifiedPatientEntry() {
 
   // --- Patient Search/Hints logic (Name/Contact) ---
   useEffect(() => {
-    const searchString = (watch("name").trim() || watch("contact").trim())
+    const searchString = ((watchName || "").trim() || (watchContact || "").trim())
     // Prevent search/hints if patient is already selected
     if (isPatientSelectedOrRegistered || !searchString || searchString.length < 2) {
       setPatientHints([]);
@@ -451,10 +460,10 @@ export default function UnifiedPatientEntry() {
 
     const timer = setTimeout(async () => {
       let query = supabase.from(TABLE.PATIENT).select("id:patient_id, name, number, uhid, title, age, age_unit, gender, address").limit(10);
-      if (watch("name").trim().length >= 2) {
-        query = query.ilike("name", `${watch("name").trim()}%`);
-      } else if (watch("contact").trim().length >= 2) {
-        const contactVal = watch("contact").trim();
+      if ((watchName || "").trim().length >= 2) {
+        query = query.ilike("name", `${watchName.trim()}%`);
+      } else if ((watchContact || "").trim().length >= 2) {
+        const contactVal = watchContact.trim();
         if (/^\d+$/.test(contactVal)) {
           query = query.eq("number", contactVal);
         } else {
@@ -472,7 +481,7 @@ export default function UnifiedPatientEntry() {
       setShowPatientHints(true);
     }, 300);
     return () => clearTimeout(timer);
-  }, [watch("name"), watch("contact"), isPatientSelectedOrRegistered]);
+  }, [watchName, watchContact, isPatientSelectedOrRegistered]);
 
 
   // --- Patient Selection/Handling ---
