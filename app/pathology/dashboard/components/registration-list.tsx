@@ -440,14 +440,6 @@ export function RegistrationList({
                                   <PencilIcon className="h-4 w-4 mr-2" />
                                   Edit Details
                                 </Link>
-
-                                <button
-                                  onClick={() => handleDeleteRegistration(r)}
-                                  className="inline-flex items-center px-3.5 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 shadow-sm"
-                                >
-                                  <TrashIcon className="h-4 w-4 mr-2" />
-                                  Delete Registration
-                                </button>
                               </>
                             )}
 
@@ -465,6 +457,15 @@ export function RegistrationList({
                                 ) : null}
                               </>
                             )}
+
+                            {/* --- ANYONE CAN DELETE --- */}
+                            <button
+                              onClick={() => handleDeleteRegistration(r)}
+                              className="inline-flex items-center px-3.5 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 shadow-sm"
+                            >
+                              <TrashIcon className="h-4 w-4 mr-2" />
+                              Delete Registration
+                            </button>
                           </div>
                         </td>
                       </motion.tr>
