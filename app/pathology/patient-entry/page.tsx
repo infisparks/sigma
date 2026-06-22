@@ -53,13 +53,15 @@ function formatDate(isoString: string | null | undefined): string {
 }
 
 // Initial date/time setup for defaults
-const initialDate = new Date()
-const defaultDate = initialDate.toISOString().slice(0, 10)
-const defaultTime = (() => {
-  const h12 = initialDate.getHours() % 12 || 12
-  const mer = initialDate.getHours() >= 12 ? "PM" : "AM"
-  return `${String(h12).padStart(2, "0")}:${String(initialDate.getMinutes()).padStart(2, "0")} ${mer}`
-})()
+// Helper to get exact real-time date and time dynamically
+const getCurrentDateTime = () => {
+  const now = new Date()
+  const date = now.toISOString().slice(0, 10)
+  const h12 = now.getHours() % 12 || 12
+  const mer = now.getHours() >= 12 ? "PM" : "AM"
+  const time = `${String(h12).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")} ${mer}`
+  return { date, time }
+}
 
 // Helper to calculate DOB
 function calculateDOB(age: number, unit: 'year' | 'month' | 'day'): string {
@@ -151,10 +153,13 @@ const getDefaultUnifiedFormValues = (): IUnifiedFormInput => {
     savedHospital = localStorage.getItem("selectedHospital") || "Cigma Clinic";
   }
 
+  // Get the exact time at the moment this function is called
+  const { date, time } = getCurrentDateTime();
+
   return {
     title: "", name: "", contact: "", age: 0, dayType: "year", gender: "", address: "", uhid: "",
     hospitalName: savedHospital, visitType: "direct", doctorName: "", tpa: false,
-    registrationDate: defaultDate, registrationTime: defaultTime, sendWhatsApp: true,
+    registrationDate: date, registrationTime: time, sendWhatsApp: true, // <-- Updated here
     sourceOpdId: null, sourceIpdId: null,
     pathology: { estimatedTime: "1100", bloodTests: [], discountAmount: 0, paymentEntries: [] },
     xray: { billNumber: "", remark: "", dateOfAppointment: new Date(), xrayTests: [{ examination: "", amount: 0 }], discount: 0, payments: [] },
@@ -240,7 +245,28 @@ export default function UnifiedPatientEntry() {
       setValue(key, value);
     }
   }, [setValue]);
+// --- Auto-Refresh Date/Time ---
+  // Keeps the registration time accurate if the browser sits idle
+  // --- Auto-Refresh Date/Time ---
+  // Keeps the registration time accurate and fixes Next.js Server-Side Rendering stale time
+  useEffect(() => {
+    const updateTimeToNow = () => {
+      // Only auto-update the time if the form is empty (no patient selected/typed yet)
+      if (!isPatientSelectedOrRegistered && !watchName && !watchContact) {
+        const { date, time } = getCurrentDateTime();
+        setValue("registrationDate", date);
+        setValue("registrationTime", time);
+      }
+    };
 
+    // 1. Run IMMEDIATELY as soon as the browser loads the component
+    updateTimeToNow();
+
+    // 2. Keep updating every 30 seconds just in case the user leaves the tab open and idle
+    const interval = setInterval(updateTimeToNow, 30000); 
+
+    return () => clearInterval(interval);
+  }, [isPatientSelectedOrRegistered, watchName, watchContact, setValue]);
   // --- Handle Form Reset After Successful Submission (Reset Service Data ONLY) ---
   const handleSuccessfulSubmission = useCallback(() => {
     // Reset service-specific data to default but keep patient/registration data

@@ -190,7 +190,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
         return () => {
             const currentValues = getValuesRef.current();
             const { treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, sugar, discountAmount, paymentEntries, ...regDetails } = currentValues;
-            
+
             // Sync OPD specific details
             setOpdData({ treatingDoctorId, referringDoctorName, visitCategory, bp, pulse, weight, spo2, sugar, discountAmount, paymentEntries });
 
@@ -270,7 +270,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                 discount_amount: data.discountAmount,
                 amount_paid: finalTotalPaid,
                 payment_entries: finalPaymentEntries,
-                created_at: isoTime,
+                // created_at: isoTime,
             };
 
             // 2. 🚨 ACTUAL SUPABASE INSERTION
