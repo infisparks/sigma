@@ -36,19 +36,19 @@ const pathologyMenuItems = [
     icon: UserPlus,
     label: 'Patient Entry',
     href: '/pathology/patient-entry',
-    roles: ['admin', 'staff', 'technician-staff']
+    roles: ['admin', 'staff', 'technician-staff', 'reception', 'receptionist']
   },
   {
     icon: LayoutDashboard,
     label: 'Pathology Dashboard',
     href: '/pathology/dashboard',
-    roles: ['admin', 'technician', 'phlebo', 'staff', 'technician-staff']
+    roles: ['admin', 'technician', 'phlebo', 'staff', 'technician-staff', 'reception', 'receptionist']
   },
   {
     icon: UserPlus,
     label: 'opd Dashboard',
     href: '/pathology/opd',
-    roles: ['admin', 'staff', 'doctor']
+    roles: ['admin', 'staff', 'doctor', 'reception', 'receptionist', 'technician-staff']
   },
   {
     icon: Clock,
@@ -152,17 +152,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
     }
   }, [isCollapsed]);
 
-  // Strict access control for 'staff' role
+  // Strict access control for 'staff', 'reception', and 'receptionist' roles
   useEffect(() => {
-    if (!loading && role === 'staff') {
+    if (!loading && (role === 'staff' || role === 'reception' || role === 'receptionist')) {
       const allowedPaths = [
         '/pathology/patient-entry',
         '/pathology/dashboard',
         '/pathology/opd'
       ];
 
-      // Allow exact matches or sub-routes for edit-patient
-      const isAllowed = allowedPaths.includes(pathname) || pathname.startsWith('/pathology/edit-patient/');
+      // Allow exact matches or sub-routes for edit-patient and opd (prescriptions)
+      const isAllowed = allowedPaths.includes(pathname) || pathname.startsWith('/pathology/edit-patient/') || pathname.startsWith('/pathology/opd/');
 
       if (!isAllowed) {
         router.push('/pathology/patient-entry');

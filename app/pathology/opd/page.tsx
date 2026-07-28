@@ -716,7 +716,7 @@ export default function OPDDashboard() {
                                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-amber-600" title="Visit History" onClick={(e) => { e.stopPropagation(); setHistoryUhid(r.uhid); setHistoryPatientName(r.patient_name || ''); setIsHistoryModalOpen(true); }}>
                                                             <History className="h-4 w-4" />
                                                         </Button>
-                                                        {(role === 'admin' || role === 'staff') && (
+                                                        {(role === 'admin' || role === 'staff' || role === 'reception' || role === 'receptionist') && (
                                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={(e) => { e.stopPropagation(); handleDeleteRecord(r); }}>
                                                                 <Trash2 className="h-4 w-4" />
                                                             </Button>

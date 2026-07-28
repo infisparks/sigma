@@ -220,10 +220,10 @@ const OPDRegistration: React.FC<OPDProps> = ({
             getDoctorFromDB().then((savedId) => {
                 const found = doctorList.find(d => String(d.id) === String(savedId));
                 if (found) {
-                    setValue("treatingDoctorId", found.id);
+                    setValue("treatingDoctorId", Number(found.id));
                 } else if (doctorList.length > 0) {
                     // Default to the first doctor in the list (e.g. Dr. Rameez Akhtar)
-                    setValue("treatingDoctorId", doctorList[0].id);
+                    setValue("treatingDoctorId", Number(doctorList[0].id));
                 }
             });
         }
