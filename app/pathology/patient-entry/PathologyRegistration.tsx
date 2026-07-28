@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form"
 import { supabase } from "@/lib/supabase"
+import { saveHospitalToDB } from "@/lib/hospitalStorage"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -204,6 +205,12 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
         }
     }, [watchSourceOpdId, commonRegDetails.sourceOpdId, setCommonRegDetails]);
 
+    useEffect(() => {
+        if (commonRegDetails.hospitalName && commonRegDetails.hospitalName !== watch("hospitalName")) {
+            setValue("hospitalName", commonRegDetails.hospitalName);
+        }
+    }, [commonRegDetails.hospitalName, setValue, watch]);
+
     const totalAmount = bloodTests.reduce((s: number, t: any) => s + (t.price || 0), 0);
     const totalPaid = paymentEntries.reduce((s: number, p: any) => s + (p.amount || 0), 0);
     const remainingAmount = totalAmount - discountAmount - totalPaid;
@@ -386,13 +393,23 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                     <h2 className="text-lg font-bold text-gray-700 mb-3">Registration & Visit Details</h2>
                     <div className="grid grid-cols-12 gap-2">
                         <div className="col-span-3"><Label className="text-sm">Hospital</Label>
-                            <Select value={watch("hospitalName")} onValueChange={(v) => setValue("hospitalName", v)}><SelectTrigger className={`h-8`}><SelectValue /></SelectTrigger>
+                            <Select
+                                value={watch("hospitalName") || commonRegDetails.hospitalName || "Cigma Clinic"}
+                                onValueChange={(v) => {
+                                    setValue("hospitalName", v);
+                                    setCommonRegDetails("hospitalName", v);
+                                    saveHospitalToDB(v);
+                                }}
+                            >
+                                <SelectTrigger className={`h-8`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
                                     <SelectItem value="Rehmania Hospital">Rehmania Hospital</SelectItem>
                                     <SelectItem value="Jeevdani Hospital">Jeevdani Hospital</SelectItem>
                                     <SelectItem value="Dausup Hospital">Dausup Hospital</SelectItem>
-                                </SelectContent></Select></div>
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <div className="col-span-4 relative"><Label className="text-sm">Doctor Name</Label>
                             <Input {...control.register("doctorName", { required: "Doctor is required" })} className="h-8" placeholder="Referring Doctor" />
                             {errors.doctorName && <p className="text-red-500 text-xs mt-1">{errors.doctorName.message}</p>}</div>

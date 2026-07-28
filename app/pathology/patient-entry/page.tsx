@@ -14,6 +14,7 @@ import { useUserRole } from "@/hooks/useUserRole"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Table } from "@/components/ui/table"
+import { saveHospitalToDB, getHospitalFromDB } from "@/lib/hospitalStorage"
 
 import PathologyRegistration from "./PathologyRegistration"
 import XrayRegistration from "./XrayRegistration"
@@ -243,6 +244,9 @@ export default function UnifiedPatientEntry() {
   const handleUpdateRHF = useCallback((key: keyof IUnifiedFormInput, value: any) => {
     if (key in getDefaultUnifiedFormValues()) {
       setValue(key, value);
+      if (key === "hospitalName" && value) {
+        saveHospitalToDB(value);
+      }
     }
   }, [setValue]);
 // --- Auto-Refresh Date/Time ---
@@ -269,6 +273,7 @@ export default function UnifiedPatientEntry() {
   }, [isPatientSelectedOrRegistered, watchName, watchContact, setValue]);
   // --- Handle Form Reset After Successful Submission (Reset Service Data ONLY) ---
   const handleSuccessfulSubmission = useCallback(() => {
+    const currentHospital = getValues("hospitalName") || (typeof window !== "undefined" ? localStorage.getItem("selectedHospital") : null) || "Cigma Clinic";
     // Reset service-specific data to default but keep patient/registration data
     const defaultValues = getDefaultUnifiedFormValues();
 
@@ -277,9 +282,10 @@ export default function UnifiedPatientEntry() {
     setXrayData(defaultValues.xray);
     setOpdData(defaultValues.opd);
 
-    // 3. Clear service-specific RHF fields (like source IDs, but preserve patient/doctor/visit type)
+    // 3. Clear service-specific RHF fields (like source IDs, but preserve patient/doctor/visit type/hospital)
     setValue("sourceOpdId", null);
     setValue("sourceIpdId", null);
+    setValue("hospitalName", currentHospital);
 
     // 4. Close any popovers
     setShowSourceSelection(false);
@@ -289,7 +295,7 @@ export default function UnifiedPatientEntry() {
     // 5. Alert user they can submit another service for the same patient
     alert(`Service submitted successfully. You can now process the next service for patient UHID: ${currentUhId}`);
 
-  }, [setValue, currentUhId]);
+  }, [setValue, currentUhId, getValues]);
 
 
   // --- New User Button Logic ---
@@ -440,11 +446,24 @@ export default function UnifiedPatientEntry() {
     else if (none.has(titleValue)) setValue("gender", "")
   }, [watchTitle, setValue])
 
-  // --- Persistence for Hospital Name ---
+  // --- Initial Load of Saved Hospital from IndexedDB ---
+  useEffect(() => {
+    let isMounted = true;
+    getHospitalFromDB().then((savedHospital) => {
+      if (isMounted && savedHospital) {
+        setValue("hospitalName", savedHospital);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [setValue]);
+
+  // --- Persistence for Hospital Name in IndexedDB ---
   useEffect(() => {
     const hospital = watchHospitalName;
-    if (hospital && typeof window !== "undefined") {
-      localStorage.setItem("selectedHospital", hospital);
+    if (hospital) {
+      saveHospitalToDB(hospital);
     }
   }, [watchHospitalName]);
 
@@ -535,7 +554,11 @@ export default function UnifiedPatientEntry() {
   }
 
   function handleNewPatient() {
-    reset(getDefaultUnifiedFormValues());
+    const currentHospital = getValues("hospitalName") || (typeof window !== "undefined" ? localStorage.getItem("selectedHospital") : null) || "Cigma Clinic";
+    reset({
+      ...getDefaultUnifiedFormValues(),
+      hospitalName: currentHospital,
+    });
     setPathologyData(getDefaultUnifiedFormValues().pathology);
     setXrayData(getDefaultUnifiedFormValues().xray);
     setOpdData(getDefaultUnifiedFormValues().opd);

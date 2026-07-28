@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 // --- Supabase and Config Imports ---
 // 🚨 IMPORTANT: Ensure this path is correct for your Supabase client setup
 import { supabase } from "@/lib/supabase"
+import { saveDoctorToDB, getDoctorFromDB, saveHospitalToDB } from "@/lib/hospitalStorage"
 
 // Import types from universal-bill-generator
 import { openUniversalBillInNewTabProgrammatically, type UniversalBillData, type BillServiceItem, type DoctorLite } from "./universal-bill-generator"
@@ -210,6 +211,36 @@ const OPDRegistration: React.FC<OPDProps> = ({
     const watchVisitType = watch("visitType");
     const discountAmount = watch("discountAmount") || 0;
     const paymentEntries = watch("paymentEntries") || [];
+
+    // --- Persistence & Default Selection for Treating Doctor ---
+    React.useEffect(() => {
+        if (!doctorList || doctorList.length === 0) return;
+
+        if (!watchTreatingDoctorId) {
+            getDoctorFromDB().then((savedId) => {
+                const found = doctorList.find(d => String(d.id) === String(savedId));
+                if (found) {
+                    setValue("treatingDoctorId", found.id);
+                } else if (doctorList.length > 0) {
+                    // Default to the first doctor in the list (e.g. Dr. Rameez Akhtar)
+                    setValue("treatingDoctorId", doctorList[0].id);
+                }
+            });
+        }
+    }, [doctorList, watchTreatingDoctorId, setValue]);
+
+    React.useEffect(() => {
+        if (watchTreatingDoctorId) {
+            saveDoctorToDB(watchTreatingDoctorId);
+        }
+    }, [watchTreatingDoctorId]);
+
+    // --- Sync Hospital Name from Parent / IndexedDB ---
+    React.useEffect(() => {
+        if (commonRegDetails.hospitalName && commonRegDetails.hospitalName !== watch("hospitalName")) {
+            setValue("hospitalName", commonRegDetails.hospitalName);
+        }
+    }, [commonRegDetails.hospitalName, setValue, watch]);
 
     // --- Pricing Logic ---
     const treatingDoctor = useMemo(() =>
@@ -415,8 +446,12 @@ const OPDRegistration: React.FC<OPDProps> = ({
                         <div className="col-span-4 mt-2">
                             <Label className="text-sm font-bold text-blue-800">Clinic / Hospital Name *</Label>
                             <Select
-                                value={watch("hospitalName")}
-                                onValueChange={(v) => setValue("hospitalName", v)}
+                                value={watch("hospitalName") || commonRegDetails.hospitalName || "Cigma Clinic"}
+                                onValueChange={(v) => {
+                                    setValue("hospitalName", v);
+                                    setCommonRegDetails("hospitalName", v);
+                                    saveHospitalToDB(v);
+                                }}
                             >
                                 <SelectTrigger className="h-8 bg-blue-50 border-blue-200">
                                     <SelectValue placeholder="Select Clinic/Hospital" />

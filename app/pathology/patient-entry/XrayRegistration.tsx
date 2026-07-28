@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useCallback, useState } from "react"
 import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form"
 import { supabase } from "@/lib/supabase"
+import { saveHospitalToDB } from "@/lib/hospitalStorage"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -191,6 +192,12 @@ const XrayRegistration: React.FC<XrayProps> = ({
             setCommonRegDetails("sourceIpdId", watchSourceIpdId);
         }
     }, [watchSourceIpdId, commonRegDetails.sourceIpdId, setCommonRegDetails]);
+
+    useEffect(() => {
+        if (commonRegDetails.hospitalName && commonRegDetails.hospitalName !== watch("hospitalName")) {
+            setValue("hospitalName", commonRegDetails.hospitalName);
+        }
+    }, [commonRegDetails.hospitalName, setValue, watch]);
     const isGautamiHospital = watch("hospitalName") === "Cigma clinic";
 
     const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});
@@ -386,8 +393,24 @@ const XrayRegistration: React.FC<XrayProps> = ({
                     <h2 className="text-lg font-bold text-gray-700 mb-3">Registration & Visit Details</h2>
                     <div className="grid grid-cols-12 gap-2">
                         <div className="col-span-3"><Label className="text-sm">Hospital</Label>
-                            <Select value={watch("hospitalName")} onValueChange={(v) => setValue("hospitalName", v)} disabled={!isExistingPatient}><SelectTrigger className={`h-8`}><SelectValue /></SelectTrigger>
-                                <SelectContent><SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem><SelectItem value="Gautami Medford NX Hospital">Gautami Medford NX Hospital</SelectItem><SelectItem value="Apex Clinic">Apex Clinic</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
+                            <Select
+                                value={watch("hospitalName") || commonRegDetails.hospitalName || "Cigma Clinic"}
+                                onValueChange={(v) => {
+                                    setValue("hospitalName", v);
+                                    setCommonRegDetails("hospitalName", v);
+                                    saveHospitalToDB(v);
+                                }}
+                                disabled={!isExistingPatient}
+                            >
+                                <SelectTrigger className={`h-8`}><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
+                                    <SelectItem value="Gautami Medford NX Hospital">Gautami Medford NX Hospital</SelectItem>
+                                    <SelectItem value="Apex Clinic">Apex Clinic</SelectItem>
+                                    <SelectItem value="Other">Other</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <div className="col-span-4 relative"><Label className="text-sm">Doctor Name</Label>
                             <Input {...control.register("doctorName", { required: "Doctor is required" })} className="h-8" placeholder="Referring Doctor" disabled={!isExistingPatient} />
                             {errors.doctorName && <p className="text-red-500 text-xs mt-1">{errors.doctorName.message}</p>}</div>
