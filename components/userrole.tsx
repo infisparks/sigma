@@ -34,6 +34,12 @@ const PHARMACY_ALLOWED_ROUTES = [
   '/pharmacy/purchases'
 ];
 
+// Define allowed routes for other hospital role (only OPD registration and OPD list/prescriptions)
+const OTHERHOSPITAL_ALLOWED_ROUTES = [
+  '/pathology/patient-entry',
+  '/pathology/opd'
+];
+
 export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,7 +60,7 @@ export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
       // 2. Fetch User Role
       let userRole: string | null = null;
 
-      // Try fetching by ID
+      // Try fetching by ID from 'user' table
       let { data, error } = await supabase
         .from('user')
         .select('role')
@@ -78,7 +84,39 @@ export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
         }
       }
 
+      // Fallback: Try fetching from 'zuser' table if not found in 'user'
+      if (!userRole) {
+        const { data: zuserData } = await supabase
+          .from('zuser')
+          .select('role')
+          .eq('uid', user.id)
+          .single();
+
+        if (zuserData?.role) {
+          userRole = zuserData.role;
+        }
+      }
+
+      // Normalize role for 'other hospital' variations (e.g. "other hospital", "other_hospital", "otherhospital")
+      if (userRole) {
+        const cleanedRole = userRole.trim().toLowerCase().replace(/[\s_-]+/g, '');
+        if (cleanedRole === 'otherhospital') {
+          userRole = 'otherhospital';
+        }
+      }
+
       // 3. Enforce Role-Based Access Control
+      if (userRole === 'otherhospital') {
+        const isAllowed = OTHERHOSPITAL_ALLOWED_ROUTES.some(route =>
+          pathname.startsWith(route)
+        );
+
+        if (!isAllowed) {
+          router.replace('/pathology/patient-entry');
+          return;
+        }
+      }
+
       if (userRole === 'technician') {
         // Check if the current path starts with any allowed route
         const isAllowed = TECHNICIAN_ALLOWED_ROUTES.some(route =>

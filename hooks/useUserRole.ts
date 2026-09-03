@@ -62,16 +62,39 @@ export function useUserRole() {
         return // Prevent redundant DB query
       }
 
-      // Query 'user' table by uid to get the role
+      // Query 'zuser' table by uid to get the role
+      let userRole: string | null = null;
       const { data, error: dbError } = await supabase.from('zuser').select('role').eq('uid', currentUser.id).single()
+      if (data?.role) {
+        userRole = data.role;
+      } else {
+        // Fallback: Query 'user' table by id
+        const { data: udata } = await supabase.from('user').select('role').eq('id', currentUser.id).single();
+        if (udata?.role) {
+          userRole = udata.role;
+        } else if (currentUser.email) {
+          // Fallback: Query 'user' table by email
+          const { data: emailData } = await supabase.from('user').select('role').eq('email', currentUser.email).single();
+          if (emailData?.role) {
+            userRole = emailData.role;
+          }
+        }
+      }
+
+      if (userRole) {
+        const cleanedRole = userRole.trim().toLowerCase().replace(/[\s_-]+/g, '');
+        if (cleanedRole === 'otherhospital') {
+          userRole = 'otherhospital';
+        }
+      }
 
       if (!cancelled) {
-        if (dbError || !data) {
+        if (!userRole) {
           setRole(null)
           setError('Role not found or database error')
           lastUserId.current = currentUser.id // Even on error, we tried for this user
         } else {
-          setRole(data.role)
+          setRole(userRole)
           setError(null)
           lastUserId.current = currentUser.id // Store the ID of the user whose role we just fetched
         }

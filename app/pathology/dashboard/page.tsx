@@ -156,6 +156,10 @@ export default function Dashboard() {
 
   const router = useRouter()
   useEffect(() => {
+    const isOtherHospital = role === "otherhospital" || role === "other hospital" || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'otherhospital');
+    if (!roleLoading && isOtherHospital) {
+      router.replace("/pathology/patient-entry")
+    }
     if (!roleLoading && role === "xray") {
       router.replace("/x-rayDashboard")
     }
@@ -167,7 +171,8 @@ export default function Dashboard() {
     </div>;
   }
 
-  if (role === "xray") {
+  const isOtherHospital = role === "otherhospital" || role === "other hospital" || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'otherhospital');
+  if (role === "xray" || isOtherHospital) {
     return null
   }
 

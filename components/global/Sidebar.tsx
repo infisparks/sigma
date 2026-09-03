@@ -36,7 +36,7 @@ const pathologyMenuItems = [
     icon: UserPlus,
     label: 'Patient Entry',
     href: '/pathology/patient-entry',
-    roles: ['admin', 'staff', 'technician-staff', 'reception', 'receptionist']
+    roles: ['admin', 'staff', 'technician-staff', 'reception', 'receptionist', 'otherhospital', 'other hospital']
   },
   {
     icon: LayoutDashboard,
@@ -48,7 +48,7 @@ const pathologyMenuItems = [
     icon: UserPlus,
     label: 'opd Dashboard',
     href: '/pathology/opd',
-    roles: ['admin', 'staff', 'doctor', 'reception', 'receptionist', 'technician-staff']
+    roles: ['admin', 'staff', 'doctor', 'reception', 'receptionist', 'technician-staff', 'otherhospital', 'other hospital']
   },
   {
     icon: Clock,
@@ -112,7 +112,7 @@ const pathologyMenuItems = [
     icon: LogOut,
     label: 'Logout',
     href: 'logout-action',
-    roles: ['admin', 'technician', 'phlebo', "pharmacy", 'staff', 'doctor', 'technician-staff']
+    roles: ['admin', 'technician', 'phlebo', "pharmacy", 'staff', 'doctor', 'technician-staff', 'otherhospital', 'other hospital']
   },
 ];
 
@@ -151,6 +151,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
       setActiveFlyout(null);
     }
   }, [isCollapsed]);
+
+  // Strict access control for 'otherhospital' role
+  useEffect(() => {
+    const isOtherHospital = role === 'otherhospital' || role === 'other hospital' || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'otherhospital');
+    if (!loading && isOtherHospital) {
+      const isAllowed = pathname.startsWith('/pathology/patient-entry') || pathname.startsWith('/pathology/opd');
+      if (!isAllowed) {
+        router.replace('/pathology/patient-entry');
+      }
+    }
+  }, [role, loading, pathname, router]);
 
   // Strict access control for 'staff', 'reception', and 'receptionist' roles
   useEffect(() => {
@@ -235,14 +246,27 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
 
   // Filter menu items based on the current user role
   // We map them to be top-level items (submenu: []) since we only have one category now.
+  const normalizedCurrentRole = role ? role.trim().toLowerCase().replace(/[\s_-]+/g, '') : '';
   const menuItems: MenuItem[] = pathologyMenuItems
-    .filter(item => item.roles.includes(role as any))
-    .map(item => ({
-      title: item.label,
-      icon: item.icon,
-      href: item.href,
-      submenu: (item as any).submenu || [] // Preserve submenu if exists
-    }));
+    .filter(item => {
+      return item.roles.some(r => {
+        const normR = r.trim().toLowerCase().replace(/[\s_-]+/g, '');
+        return normR === normalizedCurrentRole || r === role;
+      });
+    })
+    .map(item => {
+      let label = item.label;
+      if (normalizedCurrentRole === 'otherhospital') {
+        if (item.href === '/pathology/patient-entry') label = 'OPD Registration';
+        if (item.href === '/pathology/opd') label = 'OPD Manage / List';
+      }
+      return {
+        title: label,
+        icon: item.icon,
+        href: item.href,
+        submenu: (item as any).submenu || [] // Preserve submenu if exists
+      };
+    });
 
   // Create refs for menu buttons (kept for compatibility if you add submenus later)
   const menuRefs = useRef<{ [key: string]: React.RefObject<HTMLButtonElement> }>({});

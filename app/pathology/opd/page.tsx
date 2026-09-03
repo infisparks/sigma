@@ -17,6 +17,7 @@ import {
 import { useUserRole } from "@/components/userrole"
 import { useRouter } from "next/navigation"
 import { format, subDays, startOfDay, endOfDay } from "date-fns" // Recommended for date logic, but I'll use native JS if you don't have date-fns
+import { cn } from "@/lib/utils"
 
 import OPDRecordEditModal from "./OPDRecordEditModal"
 import PatientHistoryModal from "./PatientHistoryModal"
@@ -118,6 +119,7 @@ export default function OPDDashboard() {
     const [searchField, setSearchField] = useState<'uhid' | 'name' | 'number' | 'doctor'>('name');
     const [selectedDoctorId, setSelectedDoctorId] = useState<string>('0');
     const [selectedHospital, setSelectedHospital] = useState<string>('All');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'finalized' | 'draft'>('all');
 
     // Pagination
     const [page, setPage] = useState(0);
@@ -319,38 +321,41 @@ export default function OPDDashboard() {
     // specific effect for search trigger in All mode is handled by the button
     // specific effect for doctor change triggers fetch via dependency above
 
-    // --- Client-Side Filtering (For Today/Yesterday) ---
+    // --- Client-Side Filtering (For Today/Yesterday & Status Filter) ---
     const displayedRecords = useMemo(() => {
-        // Logic: 
-        // 1. If 'All' mode: The records in state ARE the search results (Server filtered).
-        // 2. If 'Today'/'Yesterday': Records are ALL records for that day. We filter Client-side.
+        let list = records;
 
-        if (filterType === 'all') {
-            return records; // Server side handled
+        if (filterType !== 'all' && searchInput) {
+            const lower = searchInput.toLowerCase();
+            list = list.filter(r =>
+                r.uhid.toLowerCase().includes(lower) ||
+                r.patient_name?.toLowerCase().includes(lower) ||
+                r.doctor_name?.toLowerCase().includes(lower)
+            );
         }
 
-        // Client Side Filter for Today/Yesterday
-        if (!searchInput) return records;
+        if (statusFilter === 'finalized') {
+            list = list.filter(r => Boolean(r.is_finalized));
+        } else if (statusFilter === 'draft') {
+            list = list.filter(r => !r.is_finalized);
+        }
 
-        const lower = searchInput.toLowerCase();
-        return records.filter(r =>
-            r.uhid.toLowerCase().includes(lower) ||
-            r.patient_name?.toLowerCase().includes(lower) ||
-            r.doctor_name?.toLowerCase().includes(lower)
-        );
-    }, [records, searchInput, filterType]);
+        return list;
+    }, [records, searchInput, filterType, statusFilter]);
 
-    // Stats Calculation
+    // Stats Calculation (computed from records for the selected range)
     const stats = useMemo(() => {
-        const totalPatients = displayedRecords.length;
-        const totalRevenue = displayedRecords.reduce((acc, curr) => acc + curr.amount_paid, 0);
-        const totalDue = displayedRecords.reduce((acc, curr) => acc + (curr.total_fees - (curr.discount_amount || 0) - curr.amount_paid), 0);
+        const totalPatients = records.length;
+        const totalFinalized = records.filter(r => Boolean(r.is_finalized)).length;
+        const totalRemaining = totalPatients - totalFinalized;
+        const totalRevenue = records.reduce((acc, curr) => acc + curr.amount_paid, 0);
+        const totalDue = records.reduce((acc, curr) => acc + (curr.total_fees - (curr.discount_amount || 0) - curr.amount_paid), 0);
 
         // Revenue Breakdown
         let cashRevenue = 0;
         let onlineRevenue = 0;
 
-        displayedRecords.forEach(r => {
+        records.forEach(r => {
             if (r.payment_entries && r.payment_entries.length > 0) {
                 r.payment_entries.forEach(p => {
                     const mode = (p.paymentMode || "").toLowerCase();
@@ -363,8 +368,8 @@ export default function OPDDashboard() {
             }
         });
 
-        return { totalPatients, totalRevenue, totalDue, cashRevenue, onlineRevenue };
-    }, [displayedRecords]);
+        return { totalPatients, totalRevenue, totalDue, cashRevenue, onlineRevenue, totalFinalized, totalRemaining };
+    }, [records]);
 
     // --- Handlers ---
 
@@ -431,9 +436,11 @@ export default function OPDDashboard() {
                     <p className="text-slate-500 text-sm mt-1">Manage patient registrations and financials.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" className="bg-white border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => router.push('/pathology/pharmacy')}>
-                        <Pill className="w-4 h-4 mr-2" /> Pharmacy
-                    </Button>
+                    {role !== 'otherhospital' && role !== 'other hospital' && (
+                        <Button variant="outline" className="bg-white border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => router.push('/pathology/pharmacy')}>
+                            <Pill className="w-4 h-4 mr-2" /> Pharmacy
+                        </Button>
+                    )}
                     <Button variant="outline" className="bg-white" onClick={() => fetchDashboardData()}>
                         <Activity className="w-4 h-4 mr-2 text-slate-500" /> Refresh
                     </Button>
@@ -441,8 +448,14 @@ export default function OPDDashboard() {
             </div>
 
             {/* --- Quick Stats --- */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="border-none shadow-sm bg-white ring-1 ring-slate-200/60">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <Card 
+                    onClick={() => setStatusFilter('all')}
+                    className={cn(
+                        "border-none shadow-sm bg-white ring-1 transition-all cursor-pointer hover:shadow-md",
+                        statusFilter === 'all' ? "ring-2 ring-blue-500 bg-blue-50/20" : "ring-slate-200/60"
+                    )}
+                >
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-slate-600">
                             {filterType === 'all' ? 'Filtered Patients' : 'Total Patients'}
@@ -451,8 +464,44 @@ export default function OPDDashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-slate-900">{stats.totalPatients}</div>
+                        <p className="text-[11px] text-slate-400 mt-1">All OPD Registrations</p>
                     </CardContent>
                 </Card>
+
+                <Card 
+                    onClick={() => setStatusFilter(prev => prev === 'finalized' ? 'all' : 'finalized')}
+                    className={cn(
+                        "border-none shadow-sm bg-white ring-1 transition-all cursor-pointer hover:shadow-md",
+                        statusFilter === 'finalized' ? "ring-2 ring-emerald-500 bg-emerald-50/20" : "ring-slate-200/60"
+                    )}
+                >
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium text-slate-600">Total Finalize</CardTitle>
+                        <CheckCircle className="h-4 w-4 text-emerald-600" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-emerald-600">{stats.totalFinalized}</div>
+                        <p className="text-[11px] text-emerald-700/80 font-medium mt-1">Completed</p>
+                    </CardContent>
+                </Card>
+
+                <Card 
+                    onClick={() => setStatusFilter(prev => prev === 'draft' ? 'all' : 'draft')}
+                    className={cn(
+                        "border-none shadow-sm bg-white ring-1 transition-all cursor-pointer hover:shadow-md",
+                        statusFilter === 'draft' ? "ring-2 ring-amber-500 bg-amber-50/20" : "ring-slate-200/60"
+                    )}
+                >
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium text-slate-600">Remaining</CardTitle>
+                        <AlertCircle className="h-4 w-4 text-amber-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-amber-600">{stats.totalRemaining}</div>
+                        <p className="text-[11px] text-amber-700/80 font-medium mt-1">Pending / Draft</p>
+                    </CardContent>
+                </Card>
+
                 <Card className="border-none shadow-sm bg-white ring-1 ring-slate-200/60">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-slate-600">Revenue</CardTitle>
@@ -472,13 +521,15 @@ export default function OPDDashboard() {
                         </div>
                     </CardContent>
                 </Card>
+
                 <Card className="border-none shadow-sm bg-white ring-1 ring-slate-200/60">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-slate-600">Pending Dues</CardTitle>
-                        <AlertCircle className="h-4 w-4 text-amber-500" />
+                        <AlertCircle className="h-4 w-4 text-rose-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-slate-900">{formatCurrency(stats.totalDue)}</div>
+                        <div className="text-2xl font-bold text-rose-600">{formatCurrency(stats.totalDue)}</div>
+                        <p className="text-[11px] text-slate-400 mt-1">Unpaid Balance</p>
                     </CardContent>
                 </Card>
             </div>
@@ -552,6 +603,23 @@ export default function OPDDashboard() {
                                 <SelectItem value="Rehmania Hospital">Rehmania Hospital</SelectItem>
                                 <SelectItem value="Jeevdani Hospital">Jeevdani Hospital</SelectItem>
                                 <SelectItem value="Dausup Hospital">Dausup Hospital</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        {/* Status Filter */}
+                        <Select value={statusFilter} onValueChange={(val: any) => { setStatusFilter(val); setPage(0); }}>
+                            <SelectTrigger className={cn(
+                                "w-[160px] h-9 transition-colors",
+                                statusFilter === 'finalized' ? "bg-emerald-50 border-emerald-300 text-emerald-700" :
+                                statusFilter === 'draft' ? "bg-amber-50 border-amber-300 text-amber-700" :
+                                "bg-slate-50 border-slate-200"
+                            )}>
+                                <SelectValue placeholder="All Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Status ({stats.totalPatients})</SelectItem>
+                                <SelectItem value="finalized">Finalized ({stats.totalFinalized})</SelectItem>
+                                <SelectItem value="draft">Remaining ({stats.totalRemaining})</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

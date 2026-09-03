@@ -5,7 +5,34 @@ import { format } from "date-fns"
 import { toWords } from "number-to-words"
 import { Download, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { IFormInput } from "../app/pathology/opd/types" // Import AgeUnit
+
+export interface IFormInput {
+  name?: string
+  phone?: string
+  gender?: string
+  age?: number | string
+  ageUnit?: string
+  date?: any
+  time?: string
+  modalities?: Array<{
+    service?: string
+    modalityName?: string
+    doctorId?: string
+    subSpeciality?: string
+    fees?: number
+    amount?: number
+    description?: string
+    discount?: number
+  }>
+  discount?: number | string
+  cashAmount?: number | string
+  onlineAmount?: number | string
+  appointmentType?: string
+  paymentMethod?: string
+  cashThrough?: string
+  onlineThrough?: string
+  [key: string]: any
+}
 
 interface DoctorLite {
   id: string
@@ -147,7 +174,7 @@ export function BillGenerator({
 
     doc.setFont("helvetica", "normal")
     let totalCharges = 0
-    appointmentData.modalities?.forEach((m, i) => {
+    appointmentData.modalities?.forEach((m: any, i: number) => {
       if (yPos > pageHeight - 50) {
         doc.addPage()
         try {

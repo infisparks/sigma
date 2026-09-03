@@ -21,6 +21,21 @@ const LoginPage = () => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        // Check role for otherhospital direct redirection
+        let userRole: string | null = null;
+        const { data: udata } = await supabase.from('user').select('role').eq('id', user.id).single();
+        if (udata?.role) userRole = udata.role;
+        if (!userRole) {
+          const { data: zdata } = await supabase.from('zuser').select('role').eq('uid', user.id).single();
+          if (zdata?.role) userRole = zdata.role;
+        }
+
+        const isOtherHospital = userRole && userRole.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'otherhospital';
+        if (isOtherHospital) {
+          router.replace('/pathology/patient-entry');
+          return;
+        }
+
         router.replace('/pathology/dashboard');
       }
     };
@@ -41,7 +56,24 @@ const LoginPage = () => {
         toast.error('Login failed: ' + error.message)
       } else {
         toast.success('Login successful!')
-        router.push('/dashboard')
+
+        // Check if role is otherhospital to redirect directly
+        let userRole: string | null = null;
+        if (data.user) {
+          const { data: udata } = await supabase.from('user').select('role').eq('id', data.user.id).single();
+          if (udata?.role) userRole = udata.role;
+          if (!userRole) {
+            const { data: zdata } = await supabase.from('zuser').select('role').eq('uid', data.user.id).single();
+            if (zdata?.role) userRole = zdata.role;
+          }
+        }
+
+        const isOtherHospital = userRole && userRole.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'otherhospital';
+        if (isOtherHospital) {
+          router.push('/pathology/patient-entry');
+        } else {
+          router.push('/dashboard');
+        }
       }
     } catch (error) {
       toast.error('An unexpected error occurred')

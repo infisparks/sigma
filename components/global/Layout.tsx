@@ -57,6 +57,15 @@ function RestrictedLayout({
 
   useEffect(() => {
     if (loading) return;
+    const isOtherHospital = role === 'otherhospital' || role === 'other hospital' || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'otherhospital');
+    if (isOtherHospital) {
+      const isAllowed = pathname.startsWith('/pathology/patient-entry') || pathname.startsWith('/pathology/opd');
+      if (!isAllowed) {
+        router.replace('/pathology/patient-entry');
+      }
+      return;
+    }
+
     if (role === 'opd-ipd') {
       // Restrict /dashboard and /admin/*
       if (
