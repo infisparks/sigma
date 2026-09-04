@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     Printer, Save, Settings, ChevronDown, ChevronUp,
-    CheckCircle, UserPlus, FileText, X, Search
+    CheckCircle, UserPlus, FileText, X, Search, Loader2
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -66,6 +66,31 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
     const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
     const [referSearch, setReferSearch] = useState("");
     const [isDoctorDialogOpen, setIsDoctorDialogOpen] = useState(false);
+    const [isMobileSettingsOpen, setIsMobileSettingsOpen] = useState(false);
+    const [previewScale, setPreviewScale] = useState(0.7);
+
+    // Track screen width to scale A4 document responsively
+    useEffect(() => {
+        const updateScale = () => {
+            const screenW = window.innerWidth;
+            if (screenW < 380) {
+                setPreviewScale(0.40);
+            } else if (screenW < 440) {
+                setPreviewScale(0.44);
+            } else if (screenW < 640) {
+                setPreviewScale(0.52);
+            } else if (screenW < 768) {
+                setPreviewScale(0.60);
+            } else if (screenW < 1200) {
+                setPreviewScale(0.70);
+            } else {
+                setPreviewScale(0.75);
+            }
+        };
+        updateScale();
+        window.addEventListener('resize', updateScale);
+        return () => window.removeEventListener('resize', updateScale);
+    }, []);
 
     // --- Load Supplementary Data (Settings & Doctors) ---
     useEffect(() => {
@@ -98,7 +123,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
     }, []);
 
     // --- Actions ---
-    const handleSaveAndFinalize = async () => {
+    const handleSaveData = async () => {
         try {
             // 1. Save Global Settings
             const settingsPayload = {
@@ -114,13 +139,13 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                 .eq('dataname', 'report_settings')
                 .then(({ error }) => { if (error) console.error("Settings save error", error) });
 
-            // 2. Finalize Context
-            await contextSaveAndFinalize({ finalize: true });
+            // 2. Save Context without finalizing
+            await contextSaveAndFinalize({ finalize: false });
 
-            toast.success("Prescription Finalized & Saved!");
+            toast.success("Prescription Data Saved!");
         } catch (e) {
             console.error("Save failed", e);
-            toast.error("Failed to finalize. Please check your connection.");
+            toast.error("Failed to save. Please check your connection.");
         }
     };
 
@@ -179,120 +204,158 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
 
     if (isLoading) return <div className="flex items-center justify-center h-full">Generating Preview...</div>;
 
+    const renderSettingsControls = () => (
+        <div className="space-y-4">
+            {/* Margins */}
+            <div>
+                <div
+                    className="flex items-center justify-between cursor-pointer mb-1.5"
+                    onClick={() => setShowMargins(!showMargins)}
+                >
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Page Margins</span>
+                    {showMargins ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                </div>
+
+                {showMargins && (
+                    <div className="space-y-3 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                            <div className="flex justify-between text-[10px] font-bold mb-1"><span>Top</span><span>{margins.top}px</span></div>
+                            <Slider value={[margins.top]} max={200} step={5} onValueChange={(v) => setMargins(prev => ({ ...prev, top: v[0] }))} />
+                        </div>
+                        <div>
+                            <div className="flex justify-between text-[10px] font-bold mb-1"><span>Bottom</span><span>{margins.bottom}px</span></div>
+                            <Slider value={[margins.bottom]} max={200} step={5} onValueChange={(v) => setMargins(prev => ({ ...prev, bottom: v[0] }))} />
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className="h-px bg-slate-100" />
+
+            {/* Follow Up */}
+            <div>
+                <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Follow Up</span>
+                    {followUpDuration && <button onClick={() => setFollowUp("", "")} className="text-[9px] text-red-500 font-black uppercase">Reset</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                    {["3d", "5d", "1w", "2w", "1m", "3m"].map(d => {
+                        const label = d.replace('d', ' Days').replace('w', ' Weeks').replace('m', ' Months');
+                        return (
+                            <button
+                                key={d}
+                                onClick={() => setFollowUp(d, followUpNote)}
+                                className={cn(
+                                    "px-2 h-7 rounded text-[9px] font-black border transition-all whitespace-nowrap",
+                                    followUpDuration === d ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-200"
+                                )}
+                            >
+                                {label}
+                            </button>
+                        );
+                    })}
+                </div>
+                {followUpDuration && (
+                    <input
+                        type="text"
+                        value={followUpNote}
+                        onChange={(e) => setFollowUp(followUpDuration, e.target.value)}
+                        placeholder="Note..."
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-medium"
+                    />
+                )}
+            </div>
+
+            <div className="h-px bg-slate-100" />
+
+            {/* Clinical Note */}
+            <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Clinical Note</span>
+                <textarea
+                    value={clinicalNote}
+                    onChange={(e) => setClinicalNote(e.target.value)}
+                    placeholder="Internal remarks..."
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-medium h-20 resize-none focus:outline-none focus:border-blue-300"
+                />
+            </div>
+
+            <div className="h-px bg-slate-100" />
+
+            {/* Refer Patient */}
+            <div>
+                <button
+                    onClick={() => setIsDoctorDialogOpen(true)}
+                    className="w-full flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+                >
+                    <div className="flex items-center gap-2.5">
+                        <UserPlus className="w-3.5 h-3.5 text-slate-400" />
+                        <div className="text-left">
+                            <div className="text-[10px] font-black text-slate-900 uppercase tracking-wider">Refer Patient</div>
+                            {referringDoctor && <div className="text-[9px] text-blue-600 font-bold">Dr. {referringDoctor}</div>}
+                        </div>
+                    </div>
+                    {referringDoctor ? <X className="w-3.5 h-3.5 text-red-400" onClick={(e) => { e.stopPropagation(); setReferringDoctor(""); }} /> : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />}
+                </button>
+            </div>
+        </div>
+    );
+
     return (
-        <div className="flex h-full bg-slate-200">
-            {/* --- LEFT SIDEBAR (Controls) --- */}
-            <div className="w-[260px] flex flex-col bg-white border-r border-slate-200 no-print">
+        <div className="flex flex-col md:flex-row h-full bg-slate-200 overflow-hidden">
+            {/* --- MOBILE TOP ACTION BAR (md:hidden) --- */}
+            <div className="md:hidden w-full bg-white border-b border-slate-200 px-3 py-2 flex items-center justify-between gap-2 no-print shrink-0 shadow-sm z-30">
+                <button
+                    onClick={() => window.print()}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-lg font-bold text-xs shadow-sm transition-all"
+                >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print PDF</span>
+                </button>
+
+                <button
+                    onClick={handleSaveData}
+                    disabled={isSaving}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 border border-blue-200 rounded-lg font-bold text-xs transition-all"
+                >
+                    {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    <span>{isSaving ? "Saving..." : "Save Data"}</span>
+                </button>
+
+                <button
+                    onClick={() => setIsMobileSettingsOpen(true)}
+                    className="p-2 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-lg border border-slate-200 transition-all flex items-center gap-1 shrink-0"
+                    title="Report Settings"
+                >
+                    <Settings className="w-4 h-4" />
+                </button>
+            </div>
+
+            {/* --- DESKTOP LEFT SIDEBAR (Controls) --- */}
+            <div className="hidden md:flex w-[260px] flex-col bg-white border-r border-slate-200 no-print shrink-0">
                 <div className="p-3 border-b border-slate-100 flex items-center gap-2.5">
                     <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600"><Settings className="w-3.5 h-3.5" /></div>
                     <span className="font-black text-[11px] uppercase tracking-wider text-slate-900">Report Settings</span>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-5">
-                    {/* Main Action */}
+                    {/* Main Action - Save Data Only (No finalize) */}
                     <div className="space-y-2">
                         <Button
-                            onClick={handleSaveAndFinalize}
+                            onClick={handleSaveData}
                             disabled={isSaving}
-                            className="w-full font-black text-[11px] uppercase tracking-widest py-6 shadow-lg transition-all bg-blue-600 hover:bg-blue-700 text-white"
+                            className="w-full font-black text-[11px] uppercase tracking-widest py-4 shadow-md transition-all bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
                         >
-                            {isSaving ? "Finalizing..." : "Save & Finalize"}
+                            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                            <span>{isSaving ? "Saving..." : "Save Data"}</span>
                         </Button>
                     </div>
 
                     <div className="h-px bg-slate-100" />
 
-                    {/* Margins */}
-                    <div>
-                        <div
-                            className="flex items-center justify-between cursor-pointer mb-1.5"
-                            onClick={() => setShowMargins(!showMargins)}
-                        >
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Page Margins</span>
-                            {showMargins ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
-                        </div>
-
-                        {showMargins && (
-                            <div className="space-y-3 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
-                                <div>
-                                    <div className="flex justify-between text-[10px] font-bold mb-1"><span>Top</span><span>{margins.top}px</span></div>
-                                    <Slider value={[margins.top]} max={200} step={5} onValueChange={(v) => setMargins(prev => ({ ...prev, top: v[0] }))} />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between text-[10px] font-bold mb-1"><span>Bottom</span><span>{margins.bottom}px</span></div>
-                                    <Slider value={[margins.bottom]} max={200} step={5} onValueChange={(v) => setMargins(prev => ({ ...prev, bottom: v[0] }))} />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="h-px bg-slate-100" />
-
-                    {/* Follow Up */}
-                    <div>
-                        <div className="flex justify-between items-center mb-1.5">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Follow Up</span>
-                            {followUpDuration && <button onClick={() => setFollowUp("", "")} className="text-[9px] text-red-500 font-black uppercase">Reset</button>}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 mb-2.5">
-                            {["3d", "5d", "1w", "2w", "1m", "3m"].map(d => {
-                                const label = d.replace('d', ' Days').replace('w', ' Weeks').replace('m', ' Months');
-                                return (
-                                    <button
-                                        key={d}
-                                        onClick={() => setFollowUp(d, followUpNote)}
-                                        className={cn(
-                                            "px-2 h-7 rounded text-[9px] font-black border transition-all whitespace-nowrap",
-                                            followUpDuration === d ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-200"
-                                        )}
-                                    >
-                                        {label}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        {followUpDuration && (
-                            <input
-                                type="text"
-                                value={followUpNote}
-                                onChange={(e) => setFollowUp(followUpDuration, e.target.value)}
-                                placeholder="Note..."
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-medium"
-                            />
-                        )}
-                    </div>
-
-                    <div className="h-px bg-slate-100" />
-
-                    {/* Clinical Note */}
-                    <div>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Clinical Note</span>
-                        <textarea
-                            value={clinicalNote}
-                            onChange={(e) => setClinicalNote(e.target.value)}
-                            placeholder="Internal remarks..."
-                            className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-medium h-20 resize-none focus:outline-none focus:border-blue-300"
-                        />
-                    </div>
-
-                    <div className="h-px bg-slate-100" />
+                    {renderSettingsControls()}
 
                     {/* Actions */}
-                    <div className="space-y-1.5">
-                        <button
-                            onClick={() => setIsDoctorDialogOpen(true)}
-                            className="w-full flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
-                        >
-                            <div className="flex items-center gap-2.5">
-                                <UserPlus className="w-3.5 h-3.5 text-slate-400" />
-                                <div className="text-left">
-                                    <div className="text-[10px] font-black text-slate-900 uppercase tracking-wider">Refer Patient</div>
-                                    {referringDoctor && <div className="text-[9px] text-blue-600 font-bold">Dr. {referringDoctor}</div>}
-                                </div>
-                            </div>
-                            {referringDoctor ? <X className="w-3.5 h-3.5 text-red-400" onClick={(e) => { e.stopPropagation(); setReferringDoctor(""); }} /> : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />}
-                        </button>
-
+                    <div className="space-y-1.5 pt-1">
                         <button
                             onClick={() => window.print()}
                             className="w-full flex items-center justify-between p-2.5 bg-blue-600 border border-blue-700 rounded-lg hover:bg-blue-700 text-white shadow-sm mb-1.5"
@@ -318,21 +381,29 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
             </div>
 
             {/* --- RIGHT PANEL (Preview) --- */}
-            <div className="flex-1 overflow-auto p-4 flex justify-center">
-                <div
-                    id="print-area"
-                    className="bg-white shadow-2xl transition-all origin-top"
+            <div className="flex-1 overflow-auto p-2 sm:p-4 flex flex-col items-center">
+                <div 
+                    className="transition-all flex justify-center shrink-0 my-auto py-2"
                     style={{
-                        width: '794px', // A4 Width
-                        height: '1122px', // A4 Height (safely within limit)
-                        paddingTop: `${margins.top}px`,
-                        paddingBottom: `${margins.bottom}px`,
-                        paddingLeft: '45px',
-                        paddingRight: '45px',
-                        transform: 'scale(0.7)',
-                        fontFamily: 'var(--font-poppins), sans-serif',
+                        width: `${Math.round(794 * previewScale)}px`,
+                        height: `${Math.round(1122 * previewScale + 20)}px`,
                     }}
                 >
+                    <div
+                        id="print-area"
+                        className="bg-white shadow-xl transition-all origin-top shrink-0"
+                        style={{
+                            width: '794px',
+                            minHeight: '1122px',
+                            paddingTop: `${margins.top}px`,
+                            paddingBottom: `${margins.bottom}px`,
+                            paddingLeft: '45px',
+                            paddingRight: '45px',
+                            transform: `scale(${previewScale})`,
+                            transformOrigin: 'top center',
+                            fontFamily: 'var(--font-poppins), sans-serif',
+                        }}
+                    >
                     {/* Header */}
                     <div className="flex justify-between items-start mb-6 pb-4 border-b border-slate-200">
                         <div>
@@ -476,6 +547,7 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                     )}
                 </div>
             </div>
+        </div>
 
             {/* --- Dialogs --- */}
             <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
@@ -555,6 +627,46 @@ export default function PreviewTab({ opdId, patient }: PreviewTabProps) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* --- Mobile Settings Dialog --- */}
+            <Dialog open={isMobileSettingsOpen} onOpenChange={setIsMobileSettingsOpen}>
+                <DialogContent className="w-[94vw] max-w-md max-h-[85vh] bg-white rounded-2xl p-0 overflow-hidden flex flex-col">
+                    <DialogHeader className="p-4 border-b border-slate-100 flex flex-row items-center justify-between">
+                        <DialogTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                            <Settings className="w-4 h-4 text-blue-600" />
+                            Report Settings
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="p-4 overflow-y-auto space-y-4 flex-1">
+                        {renderSettingsControls()}
+                        
+                        <div className="pt-2 border-t border-slate-100">
+                            <button
+                                onClick={() => {
+                                    setIsMobileSettingsOpen(false);
+                                    setIsPrintDialogOpen(true);
+                                }}
+                                className="w-full flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+                            >
+                                <div className="flex items-center gap-2.5">
+                                    <FileText className="w-3.5 h-3.5 text-slate-500" />
+                                    <span className="text-xs font-bold text-slate-800">Print Sections Toggle</span>
+                                </div>
+                                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                            </button>
+                        </div>
+                    </div>
+                    <DialogFooter className="p-3 border-t border-slate-100 bg-slate-50">
+                        <Button 
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold" 
+                            onClick={() => setIsMobileSettingsOpen(false)}
+                        >
+                            Done
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* --- Print Styles --- */}
             <style jsx global>{`
                 @media print {

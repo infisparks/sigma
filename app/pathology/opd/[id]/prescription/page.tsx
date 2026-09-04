@@ -99,17 +99,26 @@ export default function PrescriptionPage() {
             <div className={`fixed inset-0 z-[100] flex flex-col overflow-hidden overscroll-none select-none touch-pan-x touch-pan-y ${ModernTheme.background}`}>
 
                 {/* --- APP BAR --- */}
-                <header className={cn(ModernTheme.surface, "border-b border-slate-200 px-3 py-1.5 flex items-center justify-between sticky top-0 z-50 shrink-0 select-none no-print")}>
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => router.back()} className="p-1.5 hover:bg-slate-100 rounded-full">
+                <header className={cn(ModernTheme.surface, "border-b border-slate-200 px-2 sm:px-3 py-1.5 flex items-center justify-between sticky top-0 z-50 shrink-0 select-none no-print")}>
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <button onClick={() => router.back()} className="p-1.5 hover:bg-slate-100 rounded-full shrink-0">
                             <ArrowLeft className="w-4 h-4 text-slate-900" />
                         </button>
-                        <div className="bg-blue-50 px-2 py-1 rounded-md">
+                        <div className="hidden sm:block bg-blue-50 px-2 py-1 rounded-md shrink-0">
                             <span className="text-blue-600 font-bold text-[11px]">Trivandrum OPD</span>
+                        </div>
+                        {/* Mobile Patient Header Details */}
+                        <div className="flex flex-col min-w-0 md:hidden">
+                            <span className="text-xs font-bold text-slate-900 truncate max-w-[120px] xs:max-w-[160px]">
+                                {record.patient_detail.name}
+                            </span>
+                            <span className="text-[10px] text-slate-500 truncate">
+                                {record.patient_detail.age} {record.patient_detail.age_unit} • {record.patient_detail.gender === 'male' ? 'M' : 'F'}
+                            </span>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                         <PrescriptionControls onTabChange={setCurrentTabIndex} />
                     </div>
                 </header>
@@ -120,15 +129,15 @@ export default function PrescriptionPage() {
                 </main>
 
                 {/* --- BOTTOM DOCK --- */}
-                <div className="px-3 py-2 bg-slate-100 z-50 select-none no-print">
-                    <div className="bg-white rounded-xl shadow-md border border-slate-100 h-[55px] flex items-center overflow-hidden">
+                <div className="px-1.5 sm:px-3 py-1.5 sm:py-2 bg-slate-100 z-50 select-none no-print border-t border-slate-200">
+                    <div className="bg-white rounded-xl shadow-md border border-slate-100 h-[52px] sm:h-[55px] flex items-center overflow-hidden">
                         {/* Exit Button */}
-                        <button onClick={() => router.back()} className="w-[50px] h-full bg-red-50 hover:bg-red-100 flex items-center justify-center border-r border-slate-100">
-                            <Power className="w-5 h-5 text-red-500" />
+                        <button onClick={() => router.back()} className="w-[40px] sm:w-[50px] h-full bg-red-50 hover:bg-red-100 flex items-center justify-center border-r border-slate-100 shrink-0" title="Exit">
+                            <Power className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
                         </button>
 
-                        {/* Patient Context */}
-                        <div className="w-[140px] px-3 border-r border-slate-100 flex flex-col justify-center h-full">
+                        {/* Patient Context (Desktop Only, shown in Header on Mobile) */}
+                        <div className="hidden md:flex w-[140px] px-3 border-r border-slate-100 flex-col justify-center h-full shrink-0">
                             <p className="font-bold text-[11px] text-slate-900 truncate leading-tight">{record.patient_detail.name}</p>
                             <div className="flex items-center gap-1 text-slate-500 text-[9px] mt-0.5">
                                 <User className="w-2.5 h-2.5" />
@@ -136,14 +145,14 @@ export default function PrescriptionPage() {
                             </div>
                         </div>
 
-                        {/* Navigation Items */}
-                        <div className="flex-1 flex items-center justify-around px-1">
+                        {/* Navigation Items (Fluid and responsive on all devices) */}
+                        <div className="flex-1 flex items-center justify-around px-0.5 sm:px-1">
                             <DockItem icon={Activity} label="Vitals" isActive={currentTabIndex === 9} onClick={() => setCurrentTabIndex(9)} />
                             <DockItem icon={Heart} label="Symptoms" isActive={currentTabIndex === 3} onClick={() => setCurrentTabIndex(3)} />
                             <DockItem icon={Stethoscope} label="Diagnosis" isActive={currentTabIndex === 7} onClick={() => setCurrentTabIndex(7)} isHighlighted />
                             <DockItem icon={FileOutput} label="Rx" isActive={currentTabIndex === 4} onClick={() => setCurrentTabIndex(4)} />
                             <DockItem icon={FileText} label="Reports" isActive={currentTabIndex === 2} onClick={() => setCurrentTabIndex(2)} />
-                            <DockItem icon={Printer} label="Print" isActive={currentTabIndex === 5} onClick={() => setCurrentTabIndex(5)} />
+                            <DockItem icon={Printer} label="Print" isActive={currentTabIndex === 5} onClick={() => setCurrentTabIndex(5)} isPrimary />
                         </div>
                     </div>
                 </div>
@@ -158,36 +167,41 @@ function PrescriptionControls({ onTabChange }: { onTabChange: (i: number) => voi
     const { clearPrescription, saveAndFinalize, isSaving } = usePrescription();
 
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
             <button 
                 onClick={clearPrescription}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all border border-red-100 shadow-sm font-bold text-[10px] uppercase"
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all border border-red-100 shadow-sm font-bold text-[10px] uppercase shrink-0"
+                title="Clear Prescription"
             >
                 <Trash2 className="w-3.5 h-3.5" />
-                Clear
+                <span className="hidden sm:inline">Clear</span>
             </button>
             <button 
                 onClick={() => saveAndFinalize({ finalize: false })}
                 disabled={isSaving}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-sm font-bold text-[10px] uppercase ml-1"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all shadow-sm font-bold text-[10px] uppercase shrink-0"
             >
                 {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                {isSaving ? "Saving..." : "Store Data"}
+                <span>{isSaving ? "Saving..." : "Store Data"}</span>
             </button>
-            <div className="h-4 w-px bg-slate-200 mx-1"></div>
-            <PrescriptionScanner />
-            <div className="h-4 w-px bg-slate-200 mx-1"></div>
-            <HeaderAction icon={FileText} label="Reports" onClick={() => onTabChange(2)} />
-            <HeaderAction icon={History} label="Previous" onClick={() => onTabChange(6)} />
-            <HeaderAction icon={FlaskConical} label="Blood Test" onClick={() => onTabChange(8)} />
-            <div className="h-4 w-px bg-slate-200 mx-1"></div>
-            <StatusPill label="Normal" color="text-green-600" bgColor="bg-green-50" borderColor="border-green-200" />
-            <StatusPill label="Bill Pending" color="text-orange-600" bgColor="bg-orange-50" borderColor="border-orange-200" />
+            <div className="h-4 w-px bg-slate-200 mx-0.5 sm:mx-1"></div>
+            <PrescriptionScanner onScanComplete={() => onTabChange(5)} />
+            
+            {/* Desktop Actions - Hidden on mobile to prevent overflow */}
+            <div className="hidden md:flex items-center gap-2">
+                <div className="h-4 w-px bg-slate-200 mx-1"></div>
+                <HeaderAction icon={FileText} label="Reports" onClick={() => onTabChange(2)} />
+                <HeaderAction icon={History} label="Previous" onClick={() => onTabChange(6)} />
+                <HeaderAction icon={FlaskConical} label="Blood Test" onClick={() => onTabChange(8)} />
+                <div className="h-4 w-px bg-slate-200 mx-1"></div>
+                <StatusPill label="Normal" color="text-green-600" bgColor="bg-green-50" borderColor="border-green-200" />
+                <StatusPill label="Bill Pending" color="text-orange-600" bgColor="bg-orange-50" borderColor="border-orange-200" />
+            </div>
         </div>
     );
 }
 
-function PrescriptionScanner() {
+function PrescriptionScanner({ onScanComplete }: { onScanComplete?: () => void }) {
     const { addMedicine } = usePrescription();
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -306,6 +320,7 @@ Only return the JSON object and nothing else.`;
             importData(data);
             toast.success("Prescription scanned and filled!");
             setOpen(false);
+            onScanComplete?.();
         } catch (err: any) {
             console.error("Scanning Error:", err);
             toast.error(err.message || "Failed to scan prescription. Check API Key or Image.");
@@ -318,32 +333,34 @@ Only return the JSON object and nothing else.`;
 
     return (
         <>
-            <HeaderAction 
-                icon={Sparkles} 
-                label="AI Scan" 
-                onClick={() => setOpen(true)} 
-            />
+            <button 
+                onClick={() => setOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 active:scale-95 transition-all shadow-sm font-bold text-[10px] uppercase shrink-0"
+            >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>AI Scan</span>
+            </button>
 
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="max-w-md bg-white border-0 shadow-2xl overflow-hidden rounded-3xl p-0">
-                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 px-6 py-8 text-white relative">
+                <DialogContent className="w-[94vw] max-w-md max-h-[90vh] flex flex-col bg-white border-0 shadow-2xl overflow-hidden rounded-2xl sm:rounded-3xl p-0">
+                    <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-700 px-5 py-6 sm:px-6 sm:py-8 text-white relative shrink-0">
                         <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
                             <Sparkles className="w-32 h-32 rotate-12" />
                         </div>
                         <DialogHeader>
-                            <DialogTitle className="text-2xl font-bold flex items-center gap-3">
+                            <DialogTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2.5 sm:gap-3">
                                 <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
-                                    <Camera className="w-6 h-6 text-white" />
+                                    <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                                 </div>
                                 AI Prescription Scanner
                             </DialogTitle>
                         </DialogHeader>
-                        <p className="text-blue-100 text-sm mt-2 opacity-90">
+                        <p className="text-purple-100 text-xs sm:text-sm mt-2 opacity-90">
                             Upload a photo of the prescription and Gemini will automatically fill the form for you.
                         </p>
                     </div>
 
-                    <div className="p-6 space-y-6">
+                    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
                         {/* Model Selector */}
                         <div className="space-y-2">
                             <div className="flex justify-between items-center px-1">
@@ -476,21 +493,21 @@ function SegmentTab({ title, index, selectedIndex, onSelect }: { title: string, 
     );
 }
 
-function DockItem({ icon: Icon, label, isActive, onClick, isHighlighted }: { icon: any, label: string, isActive: boolean, onClick: () => void, isHighlighted?: boolean }) {
-    const activeColor = isHighlighted ? "text-orange-600" : "text-blue-700";
+function DockItem({ icon: Icon, label, isActive, onClick, isHighlighted, isPrimary }: { icon: any, label: string, isActive: boolean, onClick: () => void, isHighlighted?: boolean, isPrimary?: boolean }) {
+    const activeColor = isHighlighted ? "text-orange-600" : isPrimary ? "text-indigo-600" : "text-blue-700";
     const inactiveColor = "text-slate-500";
 
     return (
-        <button onClick={onClick} className="flex flex-col items-center justify-center gap-1 p-1 transition-all w-16">
+        <button onClick={onClick} className="flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 p-1 transition-all">
             <div className={cn(
-                "p-1.5 rounded-lg transition-all",
-                isActive ? (isHighlighted ? "bg-orange-100" : "bg-blue-100") : "bg-transparent"
+                "p-1 sm:p-1.5 rounded-lg transition-all",
+                isActive ? (isHighlighted ? "bg-orange-100" : isPrimary ? "bg-indigo-100" : "bg-blue-100") : "bg-transparent"
             )}>
-                <Icon className={cn("w-5 h-5", isActive ? activeColor : inactiveColor)} />
+                <Icon className={cn("w-4 h-4 sm:w-5 sm:h-5", isActive ? activeColor : inactiveColor)} />
             </div>
-            {/* Show label always, but bigger and clearer */}
+            {/* Show label always, responsive and truncated if necessary */}
             <span className={cn(
-                "text-[10px] sm:text-[11px] font-bold tracking-tight", // Slightly bigger text
+                "text-[9px] sm:text-[10px] md:text-[11px] font-bold tracking-tight truncate max-w-full",
                 isActive ? activeColor : inactiveColor
             )}>
                 {label}
