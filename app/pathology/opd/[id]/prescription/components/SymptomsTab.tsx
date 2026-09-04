@@ -15,6 +15,7 @@ import { usePrescription } from "../context/PrescriptionContext";
 import { SymptomDetail, CustomOptionGroup } from "../types";
 
 // --- Theme ---
+
 const AppColors = {
     primaryBlue: "text-blue-600",
     primaryBg: "bg-blue-600",
