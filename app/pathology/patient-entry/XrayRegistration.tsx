@@ -381,18 +381,18 @@ const XrayRegistration: React.FC<XrayProps> = ({
 
     return (
         <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="flex items-center justify-between p-3 bg-white rounded-t-lg border-b border-gray-200">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center"><Stethoscope className="mr-2 h-6 w-6 text-green-600" />X-ray Services</h3>
-                <Button type="submit" disabled={isSubmitting || !isExistingPatient} className="bg-green-600 hover:bg-green-700">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white rounded-t-lg border-b border-gray-200">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center"><Stethoscope className="mr-2 h-5 w-5 sm:h-6 sm:w-6 text-green-600 shrink-0" />X-ray Services</h3>
+                <Button type="submit" disabled={isSubmitting || !isExistingPatient} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 h-10 sm:h-9 font-medium shadow-sm">
                     {isSubmitting ? "Submitting..." : "Submit X-ray Order"}
                 </Button>
             </div>
 
-            <div className="p-3 space-y-3">
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <h2 className="text-lg font-bold text-gray-700 mb-3">Registration & Visit Details</h2>
-                    <div className="grid grid-cols-12 gap-2">
-                        <div className="col-span-3"><Label className="text-sm">Hospital</Label>
+            <div className="p-2 sm:p-3 space-y-3">
+                <div className="mb-3 sm:mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <h2 className="text-base sm:text-lg font-bold text-gray-700 mb-3">Registration & Visit Details</h2>
+                    <div className="grid grid-cols-12 gap-2 sm:gap-3">
+                        <div className="col-span-12 sm:col-span-6 md:col-span-3"><Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Hospital</Label>
                             <Select
                                 value={watch("hospitalName") || commonRegDetails.hospitalName || "Cigma Clinic"}
                                 onValueChange={(v) => {
@@ -402,7 +402,7 @@ const XrayRegistration: React.FC<XrayProps> = ({
                                 }}
                                 disabled={!isExistingPatient}
                             >
-                                <SelectTrigger className={`h-8`}><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-9 sm:h-8 text-sm"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
                                     <SelectItem value="Gautami Medford NX Hospital">Gautami Medford NX Hospital</SelectItem>
@@ -411,42 +411,42 @@ const XrayRegistration: React.FC<XrayProps> = ({
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="col-span-4 relative"><Label className="text-sm">Doctor Name</Label>
-                            <Input {...control.register("doctorName", { required: "Doctor is required" })} className="h-8" placeholder="Referring Doctor" disabled={!isExistingPatient} />
+                        <div className="col-span-12 sm:col-span-6 md:col-span-4 relative"><Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Doctor Name *</Label>
+                            <Input {...control.register("doctorName", { required: "Doctor is required" })} className="h-9 sm:h-8 text-sm" placeholder="Referring Doctor" disabled={!isExistingPatient} />
                             {errors.doctorName && <p className="text-red-500 text-xs mt-1">{errors.doctorName.message}</p>}</div>
-                        <div className="col-span-2"><Label className="text-sm">Appt Date</Label>
-                            <Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal h-8 py-0 px-2 text-sm", !watch("dateOfAppointment") && "text-muted-foreground")} disabled={!isExistingPatient}><CalendarDays className="mr-1 h-4 w-4" />{watch("dateOfAppointment") && typeof watch("dateOfAppointment") === 'object' ? (<span className="truncate">{format(watch("dateOfAppointment"), "PPP")}</span>) : (<span>Pick date</span>)}</Button></PopoverTrigger>
+                        <div className="col-span-6 sm:col-span-3 md:col-span-2"><Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Appt Date</Label>
+                            <Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal h-9 sm:h-8 py-0 px-2 text-sm", !watch("dateOfAppointment") && "text-muted-foreground")} disabled={!isExistingPatient}><CalendarDays className="mr-1 h-4 w-4" />{watch("dateOfAppointment") && typeof watch("dateOfAppointment") === 'object' ? (<span className="truncate">{format(watch("dateOfAppointment"), "PPP")}</span>) : (<span>Pick date</span>)}</Button></PopoverTrigger>
                                 <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={watch("dateOfAppointment")} onSelect={(date) => setValue("dateOfAppointment", date || new Date())} initialFocus /></PopoverContent></Popover></div>
-                        <div className="col-span-2"><Label className="text-sm">Bill No.</Label><Input type="text" placeholder="Bill number" {...control.register("billNumber")} className="h-8" disabled={!isExistingPatient} /></div>
-                        <div className="col-span-1"><Label className="text-sm">Visit</Label>
-                            <Select value={watch("visitType")} onValueChange={(v) => setValue("visitType", v as any)} disabled={!isExistingPatient} ><SelectTrigger className={`h-8 ${!isExistingPatient ? "bg-gray-100" : ""}`}><SelectValue /></SelectTrigger>
+                        <div className="col-span-6 sm:col-span-3 md:col-span-2"><Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Bill No.</Label><Input type="text" placeholder="Bill number" {...control.register("billNumber")} className="h-9 sm:h-8 text-sm" disabled={!isExistingPatient} /></div>
+                        <div className="col-span-6 sm:col-span-3 md:col-span-1"><Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Visit</Label>
+                            <Select value={watch("visitType")} onValueChange={(v) => setValue("visitType", v as any)} disabled={!isExistingPatient} ><SelectTrigger className={`h-9 sm:h-8 text-sm ${!isExistingPatient ? "bg-gray-100" : ""}`}><SelectValue /></SelectTrigger>
                                 <SelectContent><SelectItem value="direct">Direct</SelectItem><SelectItem value="opd" disabled={!isExistingPatient}>OPD</SelectItem><SelectItem value="ipd" disabled={!isExistingPatient}>IPD</SelectItem></SelectContent></Select>
                             {(watch("sourceOpdId") !== null || watch("sourceIpdId") !== null) && (<p className="text-xs text-green-600 mt-1 font-medium">ID: {watch("sourceOpdId") ?? watch("sourceIpdId")}</p>)}</div>
-                        <div className="col-span-1"><Label className="text-sm">Type</Label>
+                        <div className="col-span-6 sm:col-span-3 md:col-span-1"><Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Type</Label>
                             <Select value={watch("tpa") === true ? "Yes" : "No"} onValueChange={(v) => setValue("tpa", v === "Yes")} disabled={!isExistingPatient}>
-                                <SelectTrigger className="h-8"><SelectValue placeholder="Normal/TPA" /></SelectTrigger>
+                                <SelectTrigger className="h-9 sm:h-8 text-sm"><SelectValue placeholder="Normal/TPA" /></SelectTrigger>
                                 <SelectContent><SelectItem value="No">Normal</SelectItem><SelectItem value="Yes">TPA</SelectItem></SelectContent></Select></div>
-                        <div className="col-span-12 mt-2"><Label className="text-sm">Remark</Label><Input type="text" placeholder="Enter any additional remarks" {...control.register("remark")} className="h-8" disabled={!isExistingPatient} /></div>
-                        <div className="col-span-12 mt-2 flex items-center h-8"><Checkbox checked={watch("sendWhatsApp")} onCheckedChange={(v) => setValue("sendWhatsApp", !!v)} id="xray-whatsapp-checkbox" disabled={!isExistingPatient} />
-                            <Label htmlFor="xray-whatsapp-checkbox" className="text-sm cursor-pointer ml-2 flex items-center gap-1"><span className="text-green-600">📱</span>Send WhatsApp SMS</Label></div>
+                        <div className="col-span-12 mt-1 sm:mt-2"><Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Remark</Label><Input type="text" placeholder="Enter any additional remarks" {...control.register("remark")} className="h-9 sm:h-8 text-sm" disabled={!isExistingPatient} /></div>
+                        <div className="col-span-12 mt-1 sm:mt-2 flex items-center h-9 sm:h-8"><Checkbox checked={watch("sendWhatsApp")} onCheckedChange={(v) => setValue("sendWhatsApp", !!v)} id="xray-whatsapp-checkbox" disabled={!isExistingPatient} />
+                            <Label htmlFor="xray-whatsapp-checkbox" className="text-xs sm:text-sm cursor-pointer ml-2 flex items-center gap-1 font-medium"><span className="text-green-600">📱</span>Send WhatsApp SMS</Label></div>
                     </div>
                 </div>
 
-                <div className="bg-white p-1 rounded-lg border border-gray-200">
-                    <div className="flex justify-between items-center px-2 pt-2">
-                        <h3 className="text-lg font-semibold text-gray-700">Tests Selection</h3>
-                        <Button type="button" onClick={handleAddTest} className="bg-green-600 hover:bg-green-700 text-white rounded-md px-2 py-1 text-xs font-semibold shadow-sm transition-colors duration-200 h-7" disabled={!isExistingPatient}><Plus className="mr-1 h-3 w-3" /> Add Test</Button>
+                <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-gray-200">
+                    <div className="flex justify-between items-center px-1 mb-2">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-700">Tests Selection</h3>
+                        <Button type="button" onClick={handleAddTest} className="bg-green-600 hover:bg-green-700 text-white rounded-md px-2.5 py-1 text-xs font-semibold shadow-sm transition-colors duration-200 h-8" disabled={!isExistingPatient}><Plus className="mr-1 h-3 w-3" /> Add Test</Button>
                     </div>
-                    <div className="p-2 space-y-2">
+                    <div className="space-y-2">
                         {xrayTestFields.map((field, index) => {
                             const filteredExams = getFilteredExaminations(index);
                             return (
-                                <div key={field.id} className="relative grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md shadow-sm border border-gray-200">
-                                    {xrayTestFields.length > 1 && (<Button type="button" onClick={() => handleRemoveTest(index)} className="absolute top-1 right-1 p-1 h-5 w-5 text-red-500 hover:bg-red-100" variant="ghost" title="Remove Test" disabled={!isExistingPatient}><X className="w-2 h-2" /></Button>)}
+                                <div key={field.id} className="relative grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-gray-50 rounded-lg shadow-sm border border-gray-200">
+                                    {xrayTestFields.length > 1 && (<Button type="button" onClick={() => handleRemoveTest(index)} className="absolute top-2 right-2 p-1 h-6 w-6 text-red-500 hover:bg-red-100 rounded" variant="ghost" title="Remove Test" disabled={!isExistingPatient}><X className="w-3.5 h-3.5" /></Button>)}
                                     <div className="flex flex-col">
                                         <Label className="text-xs font-semibold text-gray-700 mb-1"> Examination </Label>
                                         <Select value={watch(`xrayTests.${index}.examination`)} onValueChange={(value) => handleTestSelectChange(index, value)} disabled={!isExistingPatient}>
-                                            <SelectTrigger className="p-2 h-8 border border-gray-300"> <SelectValue placeholder="Select Examination" /> </SelectTrigger>
+                                            <SelectTrigger className="p-2 h-9 sm:h-8 border border-gray-300 text-sm"> <SelectValue placeholder="Select Examination" /> </SelectTrigger>
                                             <SelectContent className="max-h-[300px] overflow-y-auto">
                                                 <div className="sticky top-0 bg-white border-b border-gray-200 p-1 z-20"><Input ref={(el) => { searchInputRefs.current[index] = el }} type="text" placeholder="Search examinations..." value={searchTerms[index] || ""} onChange={(e) => handleSearchChange(index, e.target.value)} className="h-8 text-sm" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} autoComplete="off" disabled={!isExistingPatient} /></div>
                                                 {filteredExams.regular.length > 0 && (<div className="px-2 py-1"><div className="text-xs font-semibold text-gray-500">Regular</div>
@@ -458,7 +458,7 @@ const XrayRegistration: React.FC<XrayProps> = ({
                                     </div>
                                     <div className="flex flex-col">
                                         <Label className="text-xs font-semibold text-gray-700 mb-1"> Amount (₹) </Label>
-                                        <Input type="number" value={watch(`xrayTests.${index}.amount`)} readOnly className="h-8 bg-gray-100 cursor-not-allowed" disabled={!isExistingPatient} />
+                                        <Input type="number" value={watch(`xrayTests.${index}.amount`)} readOnly className="h-9 sm:h-8 text-sm bg-gray-100 cursor-not-allowed" disabled={!isExistingPatient} />
                                     </div>
                                 </div>
                             )
@@ -466,34 +466,36 @@ const XrayRegistration: React.FC<XrayProps> = ({
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white p-3 rounded-lg border">
-                        <div className="flex items-center justify-between mb-3"><h3 className="text-lg font-semibold text-gray-700">Payment Details</h3><Button type="button" variant="outline" size="sm" onClick={() => appendPayment({ amount: 0, paymentMode: "Cash", time: new Date().toISOString() })} disabled={!isExistingPatient}><Plus className="h-4 w-4 mr-1" /> Add Payment</Button></div>
-                        <div className="mb-3"><Label className="text-sm">Discount (₹)</Label><Input type="number" step="0.01" {...control.register("discount", { valueAsNumber: true })} placeholder="0" className="h-8" disabled={!isExistingPatient} /></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="bg-white p-3 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between mb-3"><h3 className="text-base sm:text-lg font-semibold text-gray-700">Payment Details</h3><Button type="button" variant="outline" size="sm" onClick={() => appendPayment({ amount: 0, paymentMode: "Cash", time: new Date().toISOString() })} disabled={!isExistingPatient} className="h-8 text-xs font-medium"><Plus className="h-3.5 w-3.5 mr-1" /> Add Payment</Button></div>
+                        <div className="mb-3"><Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Discount (₹)</Label><Input type="number" step="0.01" {...control.register("discount", { valueAsNumber: true })} placeholder="0" className="h-9 sm:h-8 text-sm" disabled={!isExistingPatient} /></div>
                         <div className="space-y-2">
                             {paymentFields.length === 0 ? (<div className="text-center py-4 text-gray-500 text-sm">No payments added yet</div>) : (
-                                paymentFields.map((field, idx) => (<div key={field.id} className="border rounded-lg p-2 bg-gray-50">
-                                    <div className="flex items-center justify-between mb-2"><span className="text-sm font-medium">Payment {idx + 1}</span><Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removePayment(idx)} disabled={!isExistingPatient}> <Trash2 className="h-3 w-3 text-red-500" /> </Button></div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div> <Label className="text-xs">Amount (₹)</Label> <Input type="number" step="0.01" {...control.register(`payments.${idx}.amount` as `payments.${number}.amount`, { valueAsNumber: true })} className="h-8" placeholder="0" disabled={!isExistingPatient} /> </div>
-                                        <div> <Label className="xs">Mode</Label>
+                                paymentFields.map((field, idx) => (<div key={field.id} className="border rounded-lg p-2.5 bg-gray-50">
+                                    <div className="flex items-center justify-between mb-2"><span className="text-xs sm:text-sm font-semibold text-gray-700">Payment #{idx + 1}</span><Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50" onClick={() => removePayment(idx)} disabled={!isExistingPatient}> <Trash2 className="h-3.5 w-3.5" /> </Button></div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div> <Label className="text-xs text-gray-500 mb-1 block">Amount (₹)</Label> <Input type="number" step="0.01" {...control.register(`payments.${idx}.amount` as `payments.${number}.amount`, { valueAsNumber: true })} className="h-9 sm:h-8 text-sm" placeholder="0" disabled={!isExistingPatient} /> </div>
+                                        <div> <Label className="text-xs text-gray-500 mb-1 block">Mode</Label>
                                             <Select value={watch(`payments.${idx}.paymentMode`)} onValueChange={(v) => setValue(`payments.${idx}.paymentMode` as `payments.${number}.paymentMode`, v as any)} disabled={!isExistingPatient}>
-                                                <SelectTrigger className="h-8"> <SelectValue /> </SelectTrigger>
+                                                <SelectTrigger className="h-9 sm:h-8 text-sm"> <SelectValue /> </SelectTrigger>
                                                 <SelectContent><SelectItem value="Online">Online</SelectItem> <SelectItem value="Cash">Cash</SelectItem></SelectContent></Select></div></div></div>))
                             )}
                         </div>
                     </div>
-                    <div className="bg-white p-3 rounded-lg border">
-                        <h3 className="text-lg font-semibold text-gray-700">Payment Summary</h3>
-                        <div className="space-y-2 mb-3">
-                            <div className="flex justify-between"><span>Total Amount:</span><span className="font-medium">₹{totalAmount.toFixed(2)}</span></div>
-                            <div className="flex justify-between"><span>Discount:</span><span className="font-medium">₹{discount.toFixed(2)}</span></div>
-                            <div className="flex justify-between"><span>Total Paid:</span><span className="font-medium">₹{totalPaid.toFixed(2)}</span></div>
-                            <div className="flex justify-between border-t pt-2">
-                                <span className="font-semibold">Remaining Amount:</span>
-                                <span className={`font-semibold ${remainingAmount < 0 ? "text-red-600" : remainingAmount > 0 ? "text-orange-600" : "text-green-600"}`}>
-                                    ₹{remainingAmount.toFixed(2)}
-                                </span>
+                    <div className="bg-white p-3 rounded-lg border border-gray-200 flex flex-col justify-between">
+                        <div>
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-700 mb-3">Payment Summary</h3>
+                            <div className="space-y-2.5 mb-3 text-sm">
+                                <div className="flex justify-between text-gray-600"><span>Total Amount:</span><span className="font-semibold text-gray-900">₹{totalAmount.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-gray-600"><span>Discount:</span><span className="font-semibold text-indigo-600">₹{discount.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-gray-600"><span>Total Paid:</span><span className="font-semibold text-green-600">₹{totalPaid.toFixed(2)}</span></div>
+                                <div className="flex justify-between border-t border-gray-200 pt-2 text-base">
+                                    <span className="font-bold text-gray-800">Remaining Amount:</span>
+                                    <span className={`font-bold ${remainingAmount < 0 ? "text-red-600" : remainingAmount > 0 ? "text-orange-600" : "text-green-600"}`}>
+                                        ₹{remainingAmount.toFixed(2)}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>

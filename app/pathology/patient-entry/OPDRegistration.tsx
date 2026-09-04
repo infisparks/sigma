@@ -378,26 +378,26 @@ const OPDRegistration: React.FC<OPDProps> = ({
 
     return (
         <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="flex items-center justify-between p-3 bg-white rounded-t-lg border-b border-gray-200">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center"><User className="mr-2 h-6 w-6 text-blue-600" />OPD Consultation</h3>
-                <Button type="submit" disabled={isSubmitting || !isExistingPatient} className="bg-blue-600 hover:bg-blue-700">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white rounded-t-lg border-b border-gray-200">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center"><User className="mr-2 h-5 w-5 sm:h-6 sm:w-6 text-blue-600 shrink-0" />OPD Consultation</h3>
+                <Button type="submit" disabled={isSubmitting || !isExistingPatient} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 h-10 sm:h-9 font-medium shadow-sm">
                     {isSubmitting ? "Submitting..." : "Submit OPD Registration"}
                 </Button>
             </div>
 
-            <div className="p-3 space-y-3">
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <h2 className="text-lg font-bold text-gray-700 mb-3">Consultation & Doctor Details</h2>
-                    <div className="grid grid-cols-12 gap-2">
+            <div className="p-2 sm:p-3 space-y-3">
+                <div className="mb-3 sm:mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <h2 className="text-base sm:text-lg font-bold text-gray-700 mb-3">Consultation & Doctor Details</h2>
+                    <div className="grid grid-cols-12 gap-2 sm:gap-3">
                         {/* 1. Treating Doctor (for fees) */}
-                        <div className="col-span-4">
-                            <Label className="text-sm">Treating Doctor *</Label>
+                        <div className="col-span-12 sm:col-span-6 md:col-span-4">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Treating Doctor *</Label>
                             <Select
                                 value={String(watchTreatingDoctorId || '')}
                                 onValueChange={(v) => setValue("treatingDoctorId", Number(v) || null)}
                                 disabled={!isExistingPatient}
                             >
-                                <SelectTrigger className="h-8"><SelectValue placeholder="Select Treating Doctor" /></SelectTrigger>
+                                <SelectTrigger className="h-9 sm:h-8 text-sm"><SelectValue placeholder="Select Treating Doctor" /></SelectTrigger>
                                 <SelectContent className="max-h-60 overflow-y-auto">
                                     {doctorList.map((d) => (
                                         <SelectItem key={d.id} value={String(d.id)}>
@@ -410,14 +410,14 @@ const OPDRegistration: React.FC<OPDProps> = ({
                         </div>
 
                         {/* 2. Visit Category (for fees) */}
-                        <div className="col-span-3">
-                            <Label className="text-sm">Visit Type *</Label>
+                        <div className="col-span-6 sm:col-span-3 md:col-span-3">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Visit Type *</Label>
                             <Select
                                 value={watchVisitCategory}
                                 onValueChange={(v) => setValue("visitCategory", v as 'First Visit' | 'Follow Up')}
                                 disabled={!isExistingPatient}
                             >
-                                <SelectTrigger className="h-8"><SelectValue placeholder="Select Visit Type" /></SelectTrigger>
+                                <SelectTrigger className="h-9 sm:h-8 text-sm"><SelectValue placeholder="Select Visit Type" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="First Visit">First Visit</SelectItem>
                                     <SelectItem value="Follow Up">Follow Up</SelectItem>
@@ -426,25 +426,25 @@ const OPDRegistration: React.FC<OPDProps> = ({
                         </div>
 
                         {/* 3. Fee Display */}
-                        <div className="col-span-2">
-                            <Label className="text-sm">Fee (Total)</Label>
-                            <Input type="text" value={`₹${totalFees.toFixed(2)}`} readOnly className="h-8 font-bold bg-blue-100 cursor-not-allowed" />
+                        <div className="col-span-6 sm:col-span-3 md:col-span-2">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Fee (Total)</Label>
+                            <Input type="text" value={`₹${totalFees.toFixed(2)}`} readOnly className="h-9 sm:h-8 text-sm font-bold bg-blue-100 cursor-not-allowed" />
                         </div>
 
                         {/* 4. Referring Doctor (Text input) */}
-                        <div className="col-span-3">
-                            <Label className="text-sm">Referring Doctor (Suggested by)</Label>
+                        <div className="col-span-12 sm:col-span-6 md:col-span-3">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Referring Doctor</Label>
                             <Input
                                 {...control.register("referringDoctorName")}
-                                className="h-8"
+                                className="h-9 sm:h-8 text-sm"
                                 placeholder="External/Internal Referral"
                                 disabled={!isExistingPatient}
                             />
                         </div>
 
                         {/* 5. Hospital Selection */}
-                        <div className="col-span-4 mt-2">
-                            <Label className="text-sm font-bold text-blue-800">Clinic / Hospital Name *</Label>
+                        <div className="col-span-12 sm:col-span-6 md:col-span-4 mt-0 sm:mt-1">
+                            <Label className="text-xs sm:text-sm font-bold text-blue-800 mb-1 block">Clinic / Hospital Name *</Label>
                             <Select
                                 value={watch("hospitalName") || commonRegDetails.hospitalName || "Cigma Clinic"}
                                 onValueChange={(v) => {
@@ -453,7 +453,7 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                     saveHospitalToDB(v);
                                 }}
                             >
-                                <SelectTrigger className="h-8 bg-blue-50 border-blue-200">
+                                <SelectTrigger className="h-9 sm:h-8 text-sm bg-blue-50 border-blue-200">
                                     <SelectValue placeholder="Select Clinic/Hospital" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -469,75 +469,75 @@ const OPDRegistration: React.FC<OPDProps> = ({
 
                 {/* --- Vitals Section --- */}
                 <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <h2 className="text-lg font-bold text-gray-700 mb-3">Vitals</h2>
-                    <div className="grid grid-cols-12 gap-2">
-                        <div className="col-span-3">
-                            <Label className="text-sm flex items-center"><Heart className="h-3 w-3 mr-1" /> BP (Systolic/Diastolic)</Label>
-                            <Input {...control.register("bp")} className="h-8" placeholder="e.g., 120/80" disabled={!isExistingPatient} />
+                    <h2 className="text-base sm:text-lg font-bold text-gray-700 mb-3">Vitals</h2>
+                    <div className="grid grid-cols-12 gap-2 sm:gap-3">
+                        <div className="col-span-6 sm:col-span-4 md:col-span-3">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 flex items-center mb-1"><Heart className="h-3.5 w-3.5 mr-1 text-red-500" /> BP (Systolic/Diastolic)</Label>
+                            <Input {...control.register("bp")} className="h-9 sm:h-8 text-sm bg-white" placeholder="e.g., 120/80" disabled={!isExistingPatient} />
                         </div>
-                        <div className="col-span-2">
-                            <Label className="text-sm flex items-center"><Stethoscope className="h-3 w-3 mr-1" /> Pulse (BPM)</Label>
+                        <div className="col-span-6 sm:col-span-4 md:col-span-2">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 flex items-center mb-1"><Stethoscope className="h-3.5 w-3.5 mr-1 text-blue-500" /> Pulse (BPM)</Label>
                             <Input
                                 type="number"
                                 inputMode="numeric"
                                 {...control.register("pulse", { valueAsNumber: true })}
-                                className="h-8"
+                                className="h-9 sm:h-8 text-sm bg-white"
                                 placeholder="e.g., 72"
                                 disabled={!isExistingPatient}
-                                onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
+                                onWheel={(e) => e.currentTarget.blur()}
                             />
                         </div>
-                        <div className="col-span-2">
-                            <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> SpO2 (%)</Label>
+                        <div className="col-span-6 sm:col-span-4 md:col-span-2">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 flex items-center mb-1"><Activity className="h-3.5 w-3.5 mr-1 text-green-500" /> SpO2 (%)</Label>
                             <Input
                                 type="text"
                                 inputMode="numeric"
                                 {...control.register("spo2")}
-                                className="h-8"
+                                className="h-9 sm:h-8 text-sm bg-white"
                                 placeholder="e.g., 98"
                                 disabled={!isExistingPatient}
                             />
                         </div>
-                        <div className="col-span-2">
-                            <Label className="text-sm flex items-center"><Scale className="h-3 w-3 mr-1" /> Weight (Kg)</Label>
+                        <div className="col-span-6 sm:col-span-4 md:col-span-2">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 flex items-center mb-1"><Scale className="h-3.5 w-3.5 mr-1 text-indigo-500" /> Weight (Kg)</Label>
                             <Input
                                 type="number"
                                 step="0.1"
                                 inputMode="decimal"
                                 {...control.register("weight", { valueAsNumber: true })}
-                                className="h-8"
+                                className="h-9 sm:h-8 text-sm bg-white"
                                 placeholder="e.g., 65.5"
                                 disabled={!isExistingPatient}
-                                onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
+                                onWheel={(e) => e.currentTarget.blur()}
                             />
                         </div>
-                        <div className="col-span-2">
-                            <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> Sugar (mg/dL)</Label>
+                        <div className="col-span-6 sm:col-span-4 md:col-span-2">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 flex items-center mb-1"><Activity className="h-3.5 w-3.5 mr-1 text-orange-500" /> Sugar (mg/dL)</Label>
                             <Input
                                 type="text"
                                 inputMode="numeric"
                                 {...control.register("sugar")}
-                                className="h-8"
+                                className="h-9 sm:h-8 text-sm bg-white"
                                 placeholder="e.g., 110"
                                 disabled={!isExistingPatient}
                             />
                         </div>
-                        <div className="col-span-3">
-                            <Label className="text-sm">Source Visit Type</Label>
+                        <div className="col-span-6 sm:col-span-4 md:col-span-3">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Source Visit Type</Label>
                             <Input
                                 type="text"
                                 value={watchVisitType?.toUpperCase() ?? ""}
                                 readOnly
-                                className="h-8 bg-gray-100 cursor-not-allowed"
+                                className="h-9 sm:h-8 text-sm bg-gray-100 cursor-not-allowed"
                             />
                         </div>
-                        <div className="col-span-3 flex items-center h-8 mt-5">
+                        <div className="col-span-12 sm:col-span-4 md:col-span-3 flex items-center h-9 sm:h-8 sm:mt-5">
                             <Checkbox
                                 checked={watch("sendWhatsApp")}
                                 onCheckedChange={(v) => setValue("sendWhatsApp", !!v)}
                                 id="opd-whatsapp-checkbox"
                             />
-                            <Label htmlFor="opd-whatsapp-checkbox" className="text-sm cursor-pointer ml-2 flex items-center gap-1">
+                            <Label htmlFor="opd-whatsapp-checkbox" className="text-xs sm:text-sm cursor-pointer ml-2 flex items-center gap-1 font-medium">
                                 <span className="text-green-600">📱</span>Send WhatsApp SMS
                             </Label>
                         </div>
@@ -545,22 +545,22 @@ const OPDRegistration: React.FC<OPDProps> = ({
                 </div>
 
                 {/* --- Payment Section --- */}
-                <div className="grid grid-cols-2 gap-4 mt-3">
-                    <div className="bg-white p-3 rounded-lg border">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mt-3">
+                    <div className="bg-white p-3 rounded-lg border border-gray-200">
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-lg font-semibold text-gray-700">Payment Details</h3>
-                            <Button type="button" variant="outline" size="sm" onClick={addPaymentEntry} disabled={!isExistingPatient}><Plus className="h-4 w-4 mr-1" /> Add Payment</Button>
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-700">Payment Details</h3>
+                            <Button type="button" variant="outline" size="sm" onClick={addPaymentEntry} disabled={!isExistingPatient} className="h-8 text-xs font-medium"><Plus className="h-3.5 w-3.5 mr-1" /> Add Payment</Button>
                         </div>
                         <div className="mb-3">
-                            <Label className="text-sm">Discount (₹)</Label>
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Discount (₹)</Label>
                             <Input
                                 type="number"
                                 step="0.01"
                                 {...control.register("discountAmount", { valueAsNumber: true })}
                                 placeholder="0"
-                                className="h-8"
+                                className="h-9 sm:h-8 text-sm"
                                 disabled={!isExistingPatient}
-                                onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
+                                onWheel={(e) => e.currentTarget.blur()}
                             />
                         </div>
                         <div className="space-y-2">
@@ -568,38 +568,38 @@ const OPDRegistration: React.FC<OPDProps> = ({
                                 <div className="text-center py-4 text-gray-500 text-sm">No payments added yet</div>
                             ) : (
                                 paymentFields.map((field, idx) => (
-                                    <div key={field.id} className="border rounded-lg p-2 bg-gray-50">
+                                    <div key={field.id} className="border rounded-lg p-2.5 bg-gray-50">
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium">Payment {idx + 1}</span>
-                                            <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removePayment(idx)} disabled={!isExistingPatient}>
-                                                <X className="h-3 w-3 text-red-500" />
+                                            <span className="text-xs sm:text-sm font-semibold text-gray-700">Payment #{idx + 1}</span>
+                                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50" onClick={() => removePayment(idx)} disabled={!isExistingPatient}>
+                                                <X className="h-3.5 w-3.5" />
                                             </Button>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                             <div>
-                                                <Label className="text-xs">Amount (₹)</Label>
+                                                <Label className="text-xs text-gray-500 mb-1 block">Amount (₹)</Label>
                                                 <Input
                                                     type="number"
                                                     step="0.01"
                                                     {...control.register(`paymentEntries.${idx}.amount` as `paymentEntries.${number}.amount`, {
                                                         valueAsNumber: true,
-                                                        required: false // Not strictly required for RHF validation if we filter amounts later
+                                                        required: false
                                                     })}
-                                                    className="h-8"
+                                                    className="h-9 sm:h-8 text-sm"
                                                     placeholder="Enter amount"
                                                     disabled={!isExistingPatient}
-                                                    onWheel={(e) => e.currentTarget.blur()} // Disable scroll wheel
-                                                    value={watch(`paymentEntries.${idx}.amount`) === 0 ? "" : watch(`paymentEntries.${idx}.amount`)} // Display empty string if value is 0
+                                                    onWheel={(e) => e.currentTarget.blur()}
+                                                    value={watch(`paymentEntries.${idx}.amount`) === 0 ? "" : watch(`paymentEntries.${idx}.amount`)}
                                                 />
                                             </div>
                                             <div>
-                                                <Label className="xs">Mode</Label>
+                                                <Label className="text-xs text-gray-500 mb-1 block">Mode</Label>
                                                 <Select
                                                     value={watch(`paymentEntries.${idx}.paymentMode`)}
                                                     onValueChange={(v) => setValue(`paymentEntries.${idx}.paymentMode` as `paymentEntries.${number}.paymentMode`, v as any)}
                                                     disabled={!isExistingPatient}
                                                 >
-                                                    <SelectTrigger className="h-8"> <SelectValue /> </SelectTrigger>
+                                                    <SelectTrigger className="h-9 sm:h-8 text-sm"> <SelectValue /> </SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="online">Online</SelectItem>
                                                         <SelectItem value="cash">Cash</SelectItem>
@@ -613,17 +613,19 @@ const OPDRegistration: React.FC<OPDProps> = ({
                         </div>
                     </div>
 
-                    <div className="bg-white p-3 rounded-lg border">
-                        <h3 className="text-lg font-semibold text-gray-700">Payment Summary</h3>
-                        <div className="space-y-2 mb-3">
-                            <div className="flex justify-between"><span>Consultation Fee:</span><span className="font-medium">₹{totalFees.toFixed(2)}</span></div>
-                            <div className="flex justify-between"><span>Discount:</span><span className="font-medium">₹{discountAmount.toFixed(2)}</span></div>
-                            <div className="flex justify-between"><span>Total Paid:</span><span className="font-medium">₹{totalPaid.toFixed(2)}</span></div>
-                            <div className="flex justify-between border-t pt-2">
-                                <span className="font-semibold">Remaining Amount:</span>
-                                <span className={`font-semibold ${remainingAmount < 0 ? "text-red-600" : remainingAmount > 0 ? "text-orange-600" : "text-green-600"}`}>
-                                    ₹{remainingAmount.toFixed(2)}
-                                </span>
+                    <div className="bg-white p-3 rounded-lg border border-gray-200 flex flex-col justify-between">
+                        <div>
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-700 mb-3">Payment Summary</h3>
+                            <div className="space-y-2.5 mb-3 text-sm">
+                                <div className="flex justify-between text-gray-600"><span>Consultation Fee:</span><span className="font-semibold text-gray-900">₹{totalFees.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-gray-600"><span>Discount:</span><span className="font-semibold text-indigo-600">₹{discountAmount.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-gray-600"><span>Total Paid:</span><span className="font-semibold text-green-600">₹{totalPaid.toFixed(2)}</span></div>
+                                <div className="flex justify-between border-t border-gray-200 pt-2 text-base">
+                                    <span className="font-bold text-gray-800">Remaining Amount:</span>
+                                    <span className={`font-bold ${remainingAmount < 0 ? "text-red-600" : remainingAmount > 0 ? "text-orange-600" : "text-green-600"}`}>
+                                        ₹{remainingAmount.toFixed(2)}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>

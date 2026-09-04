@@ -602,18 +602,18 @@ export default function UnifiedPatientEntry() {
     return (
       <div
         ref={sourceSelectionRef}
-        className="absolute z-50 w-[95%] max-w-2xl bg-white border border-blue-400 rounded-lg shadow-xl top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-4"
+        className="fixed sm:absolute z-50 w-[95%] max-w-2xl bg-white border border-blue-400 rounded-xl shadow-2xl top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-3 sm:p-5 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex justify-between items-center mb-3 border-b pb-2">
-          <h4 className="text-xl font-bold text-blue-600 flex items-center"><Hospital className="h-5 w-5 mr-2" /> Select Source {isOpd ? "OPD" : "IPD"} Registration</h4>
-          <Button type="button" variant="ghost" size="sm" onClick={clearSelection} className="h-8 w-8 p-0"><X className="h-5 w-5 text-gray-500" /></Button>
+          <h4 className="text-base sm:text-lg font-bold text-blue-600 flex items-center"><Hospital className="h-5 w-5 mr-2 shrink-0" /> Select Source {isOpd ? "OPD" : "IPD"} Registration</h4>
+          <Button type="button" variant="ghost" size="sm" onClick={clearSelection} className="h-8 w-8 p-0 rounded-full hover:bg-gray-100"><X className="h-5 w-5 text-gray-500" /></Button>
         </div>
-        <p className="text-sm text-gray-600 mb-3">Patient: <span className="font-semibold">{patientData.name}</span> (UHID: <span className="font-semibold">{patientData.uhid}</span>)</p>
+        <p className="text-xs sm:text-sm text-gray-600 mb-3">Patient: <span className="font-semibold text-gray-900">{patientData.name}</span> (UHID: <span className="font-semibold text-blue-600">{patientData.uhid}</span>)</p>
 
-        <div className="max-h-60 overflow-y-auto border rounded">
-          <Table className="min-w-full">
+        <div className="max-h-60 overflow-y-auto overflow-x-auto border rounded-lg">
+          <Table className="min-w-[500px]">
             <thead>
-              <tr><th>ID</th><th>{isOpd ? "Date/Time" : "Admission Date"}</th><th>{isOpd ? "Referred By" : "Doctor / Room Info"}</th>{!isOpd && <th>Status</th>}<th>Select</th></tr>
+              <tr className="bg-gray-50 text-xs"><th>ID</th><th>{isOpd ? "Date/Time" : "Admission Date"}</th><th>{isOpd ? "Referred By" : "Doctor / Room Info"}</th>{!isOpd && <th>Status</th>}<th>Select</th></tr>
             </thead>
             <tbody>
               {isOpd
@@ -623,7 +623,7 @@ export default function UnifiedPatientEntry() {
                     className={`cursor-pointer transition-colors hover:bg-blue-100 ${r.opd_id === selectedId ? 'bg-blue-50' : ''}`}
                     onClick={() => handleSelect(r.opd_id, r.refer_by)}
                   >
-                    <td>{r.opd_id}</td><td>{formatDate(r.date)}</td><td>{r.refer_by}</td>
+                    <td className="text-xs sm:text-sm">{r.opd_id}</td><td className="text-xs sm:text-sm">{formatDate(r.date)}</td><td className="text-xs sm:text-sm">{r.refer_by}</td>
                     <td><Checkbox checked={r.opd_id === selectedId} onCheckedChange={() => handleSelect(r.opd_id, r.refer_by)} /></td></tr>
                 ))
                 : (records as IpdRegistration[]).map((r) => {
@@ -633,13 +633,16 @@ export default function UnifiedPatientEntry() {
                     className={`cursor-pointer transition-colors hover:bg-blue-100 ${r.ipd_id === selectedId ? 'bg-blue-50' : ''}`}
                     onClick={() => handleSelect(r.ipd_id, r.under_care_of_doctor)}
                   >
-                    <td>{r.ipd_id}</td><td>{formatDate(r.admission_date)}</td><td>{r.under_care_of_doctor}</td>
-                    <td>{status}</td><td><Checkbox checked={r.ipd_id === selectedId} onCheckedChange={() => handleSelect(r.ipd_id, r.under_care_of_doctor)} /></td></tr>);
+                    <td className="text-xs sm:text-sm">{r.ipd_id}</td><td className="text-xs sm:text-sm">{formatDate(r.admission_date)}</td><td className="text-xs sm:text-sm">{r.under_care_of_doctor}</td>
+                    <td className="text-xs sm:text-sm">{status}</td><td><Checkbox checked={r.ipd_id === selectedId} onCheckedChange={() => handleSelect(r.ipd_id, r.under_care_of_doctor)} /></td></tr>);
                 })}
             </tbody>
           </Table>
         </div>
-        <div className="mt-4 text-right"><Button type="button" onClick={() => setShowSourceSelection(false)} disabled={!selectedId} className="bg-blue-600 hover:bg-blue-700">Confirm Selection</Button></div>
+        <div className="mt-4 flex flex-col sm:flex-row justify-end gap-2">
+          <Button type="button" variant="outline" onClick={clearSelection} className="h-9 text-xs sm:text-sm">Cancel</Button>
+          <Button type="button" onClick={() => setShowSourceSelection(false)} disabled={!selectedId} className="h-9 bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm font-medium">Confirm Selection</Button>
+        </div>
       </div>
     );
   };
@@ -676,30 +679,30 @@ export default function UnifiedPatientEntry() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 relative">
+    <div className="flex min-h-screen bg-gray-50 relative">
       {/* 🛑 CRITICAL FIX: The overlay must be the first element, using a high Z-index (z-40) */}
       {showSourceSelection && (<div
-        className="absolute inset-0 bg-black bg-opacity-30 z-40 flex items-center justify-center"
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 flex items-center justify-center p-2"
       >
         <SourceSelectionPopover />
       </div>)}
 
-      <div className="flex-1 overflow-auto p-4 space-y-4">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <UserPlus className="mr-2 w-6 h-6 text-indigo-600" />
+      <div className="flex-1 overflow-x-hidden p-2.5 sm:p-4 md:p-6 space-y-3 sm:space-y-4 max-w-7xl mx-auto w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+            <UserPlus className="mr-2 w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
             Unified Patient Entry
           </h1>
         </div>
 
         {/* --- Global Search Section --- */}
         <Card className="border-none shadow-sm bg-white overflow-visible">
-          <CardContent className="p-4">
-            <div className="flex flex-col md:flex-row gap-4 items-end">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex flex-col md:flex-row gap-3 sm:gap-4 items-stretch md:items-end">
               <div className="w-full md:w-48">
                 <Label className="text-xs font-medium text-gray-500 mb-1.5 block">Search By</Label>
                 <Select value={searchType} onValueChange={(v) => setSearchType(v as any)}>
-                  <SelectTrigger className="h-10 bg-gray-50 border-gray-200">
+                  <SelectTrigger className="h-10 bg-gray-50 border-gray-200 text-sm">
                     <SelectValue placeholder="Select Type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -725,13 +728,13 @@ export default function UnifiedPatientEntry() {
                         searchType === "phone" ? "Enter 10-digit number..." :
                         "Enter UHID (e.g., PAT-123)..."
                       }
-                      className="h-10 pl-10 bg-gray-50 border-gray-200 focus:bg-white transition-all"
+                      className="h-10 pl-10 bg-gray-50 border-gray-200 focus:bg-white transition-all text-sm"
                     />
                   </div>
                   <Button 
                     onClick={handleGlobalSearch} 
                     disabled={isSearching}
-                    className="h-10 bg-indigo-600 hover:bg-indigo-700 text-white px-6 font-medium shadow-sm transition-all"
+                    className="h-10 bg-indigo-600 hover:bg-indigo-700 text-white px-4 sm:px-6 font-medium shadow-sm transition-all text-sm shrink-0"
                   >
                     {isSearching ? "Searching..." : "Search"}
                   </Button>
@@ -766,15 +769,15 @@ export default function UnifiedPatientEntry() {
                             }}
                             className="p-3 hover:bg-indigo-50 cursor-pointer transition-colors group flex items-center justify-between"
                           >
-                            <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm shrink-0">
                                 {p.name.charAt(0)}
                               </div>
-                              <div>
-                                <div className="font-bold text-gray-900 group-hover:text-indigo-700 transition-colors">
+                              <div className="min-w-0">
+                                <div className="font-bold text-gray-900 group-hover:text-indigo-700 transition-colors truncate">
                                   {p.name}
                                 </div>
-                                <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                                <div className="text-xs text-gray-500 flex flex-wrap items-center gap-1.5 mt-0.5">
                                   <span className="font-semibold text-indigo-600">{p.uhid}</span>
                                   <span className="h-1 w-1 rounded-full bg-gray-300"></span>
                                   <span>{p.number}</span>
@@ -783,7 +786,7 @@ export default function UnifiedPatientEntry() {
                                 </div>
                               </div>
                             </div>
-                            <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 bg-white shadow-sm border border-indigo-100 text-indigo-600 text-xs font-bold px-3">
+                            <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 bg-white shadow-sm border border-indigo-100 text-indigo-600 text-xs font-bold px-3 shrink-0 ml-2">
                               Select
                             </Button>
                           </div>
@@ -800,61 +803,92 @@ export default function UnifiedPatientEntry() {
         <Card className="rounded-xl shadow-sm border border-gray-200 overflow-hidden bg-white">
           <CardContent className="p-0">
             {/* 1. Patient Information Card (Common to all services) */}
-            <div className="p-6 bg-white">
-              <div className="flex justify-between items-center mb-3">
-                <h2 className="text-lg font-bold text-blue-800">Patient Details</h2>
-                <div className="flex items-center gap-2">
+            <div className="p-3 sm:p-5 md:p-6 bg-white border-b border-gray-100">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
+                <h2 className="text-base sm:text-lg font-bold text-blue-800">Patient Details</h2>
+                <div className="flex flex-wrap items-center gap-2">
                   {isPatientDataLocked && (
-                    <span className={cn("text-sm font-medium text-blue-600")}>
+                    <span className={cn("text-xs sm:text-sm font-medium text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200")}>
                       Selected Patient (UHID: {watch("uhid")})
                     </span>
                   )}
                   {canRegisterNew && (
-                    <Button type="button" variant="secondary" size="sm" onClick={handleRegisterNewUser} className="h-7 px-2 py-0 text-xs bg-purple-500 hover:bg-purple-600 text-white">
-                      <Save className="h-3 w-3 mr-1" /> Register & Select New Patient
+                    <Button type="button" variant="secondary" size="sm" onClick={handleRegisterNewUser} className="h-8 px-3 py-0 text-xs bg-purple-600 hover:bg-purple-700 text-white font-medium shadow-sm">
+                      <Save className="h-3.5 w-3.5 mr-1" /> Register & Select New
                     </Button>
                   )}
                   {isPatientDataLocked && (
-                    <Button type="button" variant="outline" size="sm" onClick={handleNewPatient} className="h-7 px-2 py-0 text-xs">Clear & Add New</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={handleNewPatient} className="h-8 px-3 py-0 text-xs font-medium">Clear & Add New</Button>
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-12 gap-2 mb-3">
-                <div className="col-span-1"> <Label className="text-sm">Title</Label>
-                  <Select value={watch("title")} onValueChange={(v) => setValue("title", v)} disabled={isPatientDataLocked} ><SelectTrigger className="h-8"><SelectValue placeholder="Select" /></SelectTrigger>
-                    <SelectContent>{[".", "MR", "MRS", "MAST", "BABA", "MISS", "MS", "BABY", "SMT", "BABY OF", "DR"].map((t) => (<SelectItem key={t} value={t}>{t === "." ? "NoTitle" : t}</SelectItem>))}</SelectContent></Select></div>
-                <div className="col-span-4 relative" ref={patientHintsRef}> <Label className="text-sm">Full Name</Label>
-                  <div className="relative"><Input {...register("name", { required: "Name is required", onChange: (e) => { if (!isPatientDataLocked) { setShowPatientHints(true); setValue("name", e.target.value.toUpperCase()); setValue("uhid", ""); } }, })} className={`h-8 pl-10 ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`} placeholder="Type at least 2 letters..." onFocus={() => setShowPatientHints(true)} readOnly={isPatientDataLocked} /><UserCircle className="h-4 w-4 absolute left-3 top-2.5 text-gray-400" /></div>
+              <div className="grid grid-cols-12 gap-2 sm:gap-3">
+                <div className="col-span-4 sm:col-span-2 md:col-span-1">
+                  <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Title</Label>
+                  <Select value={watch("title")} onValueChange={(v) => setValue("title", v)} disabled={isPatientDataLocked}>
+                    <SelectTrigger className="h-9 sm:h-8 text-sm"><SelectValue placeholder="Title" /></SelectTrigger>
+                    <SelectContent>{[".", "MR", "MRS", "MAST", "BABA", "MISS", "MS", "BABY", "SMT", "BABY OF", "DR"].map((t) => (<SelectItem key={t} value={t}>{t === "." ? "NoTitle" : t}</SelectItem>))}</SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-8 sm:col-span-10 md:col-span-4 relative" ref={patientHintsRef}>
+                  <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Full Name *</Label>
+                  <div className="relative">
+                    <Input {...register("name", { required: "Name is required", onChange: (e) => { if (!isPatientDataLocked) { setShowPatientHints(true); setValue("name", e.target.value.toUpperCase()); setValue("uhid", ""); } }, })} className={`h-9 sm:h-8 pl-9 text-sm ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`} placeholder="Type min. 2 letters..." onFocus={() => setShowPatientHints(true)} readOnly={isPatientDataLocked} />
+                    <UserCircle className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  </div>
                   {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
-                  {showPatientHints && patientHints.length > 0 && (<ul className="absolute z-10 w-full bg-white border border-gray-300 mt-1 rounded-md max-h-40 overflow-y-auto text-sm shadow-lg">
-                    {patientHints.map((p) => (<li key={p.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" onClick={() => handlePatientSelect(p)} >
-                      <div className="font-medium text-gray-900"><span className="text-blue-600 font-bold mr-2">UHID: {p.uhid}</span> {p.name}</div>
-                      <div className="text-xs text-gray-500">{p.number} • {p.age}{p.age_unit.charAt(0).toUpperCase()} • {p.gender}</div></li>))}
-                  </ul>)}</div>
-                <div className="col-span-3"> <Label className="text-sm">Contact Number</Label>
-                  <div className="relative"><Input {...register("contact", { required: "Phone number is required", pattern: { value: /^[0-9]{10}$/, message: "Phone number must be 10 digits" }, onChange: () => setShowPatientHints(true) })} className={`h-8 pl-10 ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`} placeholder="Enter 10-digit mobile number" onFocus={() => setShowPatientHints(true)} readOnly={isPatientDataLocked} /><Phone className="h-4 w-4 absolute left-3 top-2.5 text-gray-400" /></div>
-                  {errors.contact && <p className="text-red-500 text-xs mt-1">{errors.contact.message}</p>}</div>
-                <div className="col-span-1"> <Label className="text-sm">Age</Label>
-                  <Input type="number" {...register("age", { required: "Age is required", min: { value: 0, message: "Age must be positive" }, valueAsNumber: true })} className={`h-8 ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`} readOnly={isPatientDataLocked} />
-                  {errors.age && <p className="text-red-500 text-xs mt-1">{errors.age.message}</p>}</div>
-                <div className="col-span-1"> <Label className="text-sm">Unit</Label>
-                  <Select value={watch("dayType")} onValueChange={(v) => setValue("dayType", v as any)} disabled={isPatientDataLocked} ><SelectTrigger className={`h-8 ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`}><SelectValue /></SelectTrigger>
-                    <SelectContent> <SelectItem value="year">Year</SelectItem> <SelectItem value="month">Month</SelectItem> <SelectItem value="day">Day</SelectItem> </SelectContent></Select></div>
-                <div className="col-span-2"> <Label className="text-sm">Gender</Label>
-                  <Select value={watch("gender")} onValueChange={(v) => setValue("gender", v)} disabled={isPatientDataLocked} ><SelectTrigger className={`h-8 ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`}><SelectValue placeholder="Select gender" /></SelectTrigger>
-                    <SelectContent><SelectItem value="male">Male</SelectItem><SelectItem value="female">Female</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
-                <div className="col-span-12"> <Label className="text-sm">Address</Label>
-                  <Input {...register("address")} className={`h-8 ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`} placeholder="123 Main St, City" readOnly={isPatientDataLocked} /></div>
+                  {showPatientHints && patientHints.length > 0 && (
+                    <ul className="absolute z-50 w-full bg-white border border-gray-300 mt-1 rounded-lg max-h-48 overflow-y-auto text-sm shadow-xl">
+                      {patientHints.map((p) => (
+                        <li key={p.id} className="px-3 py-2.5 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" onClick={() => handlePatientSelect(p)} >
+                          <div className="font-medium text-gray-900"><span className="text-blue-600 font-bold mr-2">UHID: {p.uhid}</span> {p.name}</div>
+                          <div className="text-xs text-gray-500">{p.number} • {p.age}{p.age_unit.charAt(0).toUpperCase()} • {p.gender}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="col-span-12 sm:col-span-6 md:col-span-3">
+                  <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Contact Number *</Label>
+                  <div className="relative">
+                    <Input {...register("contact", { required: "Phone number is required", pattern: { value: /^[0-9]{10}$/, message: "Phone number must be 10 digits" }, onChange: () => setShowPatientHints(true) })} className={`h-9 sm:h-8 pl-9 text-sm ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`} placeholder="Enter 10-digit mobile number" onFocus={() => setShowPatientHints(true)} readOnly={isPatientDataLocked} />
+                    <Phone className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  </div>
+                  {errors.contact && <p className="text-red-500 text-xs mt-1">{errors.contact.message}</p>}
+                </div>
+                <div className="col-span-4 sm:col-span-2 md:col-span-1">
+                  <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Age *</Label>
+                  <Input type="number" {...register("age", { required: "Age is required", min: { value: 0, message: "Age must be positive" }, valueAsNumber: true })} className={`h-9 sm:h-8 text-sm ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`} readOnly={isPatientDataLocked} placeholder="Age" />
+                  {errors.age && <p className="text-red-500 text-xs mt-1">{errors.age.message}</p>}
+                </div>
+                <div className="col-span-4 sm:col-span-2 md:col-span-1">
+                  <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Unit</Label>
+                  <Select value={watch("dayType")} onValueChange={(v) => setValue("dayType", v as any)} disabled={isPatientDataLocked}>
+                    <SelectTrigger className={`h-9 sm:h-8 text-sm ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`}><SelectValue /></SelectTrigger>
+                    <SelectContent> <SelectItem value="year">Year</SelectItem> <SelectItem value="month">Month</SelectItem> <SelectItem value="day">Day</SelectItem> </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-4 sm:col-span-2 md:col-span-2">
+                  <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Gender</Label>
+                  <Select value={watch("gender")} onValueChange={(v) => setValue("gender", v)} disabled={isPatientDataLocked}>
+                    <SelectTrigger className={`h-9 sm:h-8 text-sm ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`}><SelectValue placeholder="Gender" /></SelectTrigger>
+                    <SelectContent><SelectItem value="male">Male</SelectItem><SelectItem value="female">Female</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-12">
+                  <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Address</Label>
+                  <Input {...register("address")} className={`h-9 sm:h-8 text-sm ${isPatientDataLocked ? "bg-blue-100 border-blue-300" : ""}`} placeholder="123 Main St, City" readOnly={isPatientDataLocked} />
+                </div>
               </div>
             </div>
 
             {/* 2. Service Tabs */}
-            <div className="flex space-x-2 mb-4 border-b border-gray-300">
-              <Button type="button" onClick={() => setActiveTab('OPD')} className={cn("py-2 px-6 rounded-t-lg font-semibold transition-colors duration-200", activeTab === 'OPD' ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><User className="mr-2 h-5 w-5" /> OPD Consultation</Button>
+            <div className="flex space-x-2 border-b border-gray-300 px-3 sm:px-6 pt-3 overflow-x-auto">
+              <Button type="button" onClick={() => setActiveTab('OPD')} className={cn("py-2 px-4 sm:px-6 rounded-t-lg font-semibold transition-colors duration-200 text-xs sm:text-sm whitespace-nowrap shrink-0", activeTab === 'OPD' ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><User className="mr-1.5 h-4 w-4" /> OPD Consultation</Button>
               {!isOtherHospital && (
-                <Button type="button" onClick={() => setActiveTab('Pathology')} className={cn("py-2 px-6 rounded-t-lg font-semibold transition-colors duration-200", activeTab === 'Pathology' ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><FlaskConical className="mr-2 h-5 w-5" /> Pathology/Lab</Button>
+                <Button type="button" onClick={() => setActiveTab('Pathology')} className={cn("py-2 px-4 sm:px-6 rounded-t-lg font-semibold transition-colors duration-200 text-xs sm:text-sm whitespace-nowrap shrink-0", activeTab === 'Pathology' ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><FlaskConical className="mr-1.5 h-4 w-4" /> Pathology/Lab</Button>
               )}
-              {/* <Button type="button" onClick={() => setActiveTab('Xray')} className={cn("py-2 px-6 rounded-t-lg font-semibold transition-colors duration-200", activeTab === 'Xray' ? "bg-green-600 hover:bg-green-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><Stethoscope className="mr-2 h-5 w-5" /> X-ray</Button> */}
+              {/* <Button type="button" onClick={() => setActiveTab('Xray')} className={cn("py-2 px-4 sm:px-6 rounded-t-lg font-semibold transition-colors duration-200", activeTab === 'Xray' ? "bg-green-600 hover:bg-green-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><Stethoscope className="mr-2 h-5 w-5" /> X-ray</Button> */}
             </div>
 
             {/* 3. Active Service Form */}

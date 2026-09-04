@@ -381,18 +381,19 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
 
     return (
         <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="flex items-center justify-between p-3 bg-white rounded-t-lg border-b border-gray-200">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center"><FlaskConical className="mr-2 h-6 w-6 text-indigo-600" />Pathology/Lab Services</h3>
-                <Button type="submit" disabled={isSubmitting} className="bg-indigo-600 hover:bg-indigo-700">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white rounded-t-lg border-b border-gray-200">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center"><FlaskConical className="mr-2 h-5 w-5 sm:h-6 sm:w-6 text-indigo-600 shrink-0" />Pathology/Lab Services</h3>
+                <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 h-10 sm:h-9 font-medium shadow-sm">
                     {isSubmitting ? "Submitting..." : "Submit Pathology Order"}
                 </Button>
             </div>
 
-            <div className="p-3 space-y-3">
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <h2 className="text-lg font-bold text-gray-700 mb-3">Registration & Visit Details</h2>
-                    <div className="grid grid-cols-12 gap-2">
-                        <div className="col-span-3"><Label className="text-sm">Hospital</Label>
+            <div className="p-2 sm:p-3 space-y-3">
+                <div className="mb-3 sm:mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <h2 className="text-base sm:text-lg font-bold text-gray-700 mb-3">Registration & Visit Details</h2>
+                    <div className="grid grid-cols-12 gap-2 sm:gap-3">
+                        <div className="col-span-12 sm:col-span-6 md:col-span-3">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Hospital</Label>
                             <Select
                                 value={watch("hospitalName") || commonRegDetails.hospitalName || "Cigma Clinic"}
                                 onValueChange={(v) => {
@@ -401,7 +402,7 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                                     saveHospitalToDB(v);
                                 }}
                             >
-                                <SelectTrigger className={`h-8`}><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-9 sm:h-8 text-sm"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
                                     <SelectItem value="Rehmania Hospital">Rehmania Hospital</SelectItem>
@@ -410,20 +411,30 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="col-span-4 relative"><Label className="text-sm">Doctor Name</Label>
-                            <Input {...control.register("doctorName", { required: "Doctor is required" })} className="h-8" placeholder="Referring Doctor" />
-                            {errors.doctorName && <p className="text-red-500 text-xs mt-1">{errors.doctorName.message}</p>}</div>
-                        <div className="col-span-2"><Label className="text-sm">Date</Label>
-                            <div className="flex items-center text-sm"><Calendar className="h-4 w-4 text-gray-500 absolute left-1" />
-                                <input type="date" {...control.register("registrationDate")} className="p-1 border rounded text-sm w-full h-8 pl-7" /></div></div>
-                        <div className="col-span-2"><Label className="text-sm">Time</Label>
-                            <div className="flex items-center text-sm"><Clock className="h-4 w-4 text-gray-500 absolute left-1" />
-                                <input type="text" {...control.register("registrationTime")} className="p-1 border rounded text-sm w-full h-8 pl-7" placeholder="12:00 PM" /></div></div>
-                        <div className={`col-span-${watch("visitType") === 'opd' ? '3' : '1'} transition-all duration-300`}>
-                            <Label className="text-sm">Visit Type</Label>
+                        <div className="col-span-12 sm:col-span-6 md:col-span-4 relative">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Doctor Name *</Label>
+                            <Input {...control.register("doctorName", { required: "Doctor is required" })} className="h-9 sm:h-8 text-sm" placeholder="Referring Doctor" />
+                            {errors.doctorName && <p className="text-red-500 text-xs mt-1">{errors.doctorName.message}</p>}
+                        </div>
+                        <div className="col-span-6 sm:col-span-3 md:col-span-2">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Date</Label>
+                            <div className="relative flex items-center text-sm">
+                                <Calendar className="h-4 w-4 text-gray-500 absolute left-2 pointer-events-none" />
+                                <input type="date" {...control.register("registrationDate")} className="p-1 border border-input rounded text-sm w-full h-9 sm:h-8 pl-8 bg-background" />
+                            </div>
+                        </div>
+                        <div className="col-span-6 sm:col-span-3 md:col-span-2">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Time</Label>
+                            <div className="relative flex items-center text-sm">
+                                <Clock className="h-4 w-4 text-gray-500 absolute left-2 pointer-events-none" />
+                                <input type="text" {...control.register("registrationTime")} className="p-1 border border-input rounded text-sm w-full h-9 sm:h-8 pl-8 bg-background" placeholder="12:00 PM" />
+                            </div>
+                        </div>
+                        <div className={`col-span-8 sm:col-span-6 md:col-span-${watch("visitType") === 'opd' ? '3' : '1'} transition-all duration-300`}>
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Visit Type</Label>
                             <div className="flex gap-2">
                                 <Select value={watch("visitType")} onValueChange={(v) => setValue("visitType", v as any)} disabled={!isExistingPatient} >
-                                    <SelectTrigger className={`h-8 w-24 ${isExistingPatient ? "" : "bg-gray-100"}`}><SelectValue /></SelectTrigger>
+                                    <SelectTrigger className={`h-9 sm:h-8 w-24 text-sm ${isExistingPatient ? "" : "bg-gray-100"}`}><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="direct">Direct</SelectItem>
                                         <SelectItem value="opd" disabled={!isExistingPatient}>OPD</SelectItem>
@@ -442,8 +453,8 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                                                 }
                                             }}
                                         >
-                                            <SelectTrigger className="h-8 w-full bg-blue-50 border-blue-200 text-xs">
-                                                <SelectValue placeholder="Select Source Visit..." />
+                                            <SelectTrigger className="h-9 sm:h-8 w-full bg-blue-50 border-blue-200 text-xs">
+                                                <SelectValue placeholder="Select Source..." />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {opdRecords.map((r: any) => (
@@ -457,77 +468,103 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                                 )}
                             </div>
                         </div>
-                        <div className="col-span-1"><Label className="text-sm">Type</Label>
+                        <div className="col-span-4 sm:col-span-6 md:col-span-1">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Type</Label>
                             <Select value={watch("tpa") === true ? "Yes" : "No"} onValueChange={(v) => setValue("tpa", v === "Yes")}>
-                                <SelectTrigger className="h-8"><SelectValue placeholder="Normal/TPA" /></SelectTrigger>
-                                <SelectContent><SelectItem value="No">Normal</SelectItem><SelectItem value="Yes">TPA</SelectItem></SelectContent></Select></div>
-                        <div className="col-span-6 mt-2"><Label className="text-sm">Report Est. Time (Pathology)</Label>
-                            <div className="relative flex items-center h-8">
-                                <Input type="number" {...control.register("estimatedTime", { required: "Time is required", min: { value: 0, message: "Positive" }, valueAsNumber: true, })} className="h-8 w-20 pl-7" />
-                                <Timer className="h-4 w-4 absolute left-1 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <span className="ml-2 text-sm text-gray-600 font-medium truncate">Minutes: <span className="text-blue-600 font-bold">{formatMinutesToDuration(parseInt(watchEstimatedTime, 10) || 0)}</span></span>
-                            </div>{errors.estimatedTime && <p className="text-red-500 text-xs mt-1">{errors.estimatedTime.message}</p>}</div>
-                        <div className="col-span-6 mt-2 flex items-center h-8"><Checkbox checked={watch("sendWhatsApp")} onCheckedChange={(v) => setValue("sendWhatsApp", !!v)} id="patho-whatsapp-checkbox" />
-                            <Label htmlFor="patho-whatsapp-checkbox" className="text-sm cursor-pointer ml-2 flex items-center gap-1"><span className="text-green-600">📱</span>Send WhatsApp SMS</Label></div>
+                                <SelectTrigger className="h-9 sm:h-8 text-sm"><SelectValue placeholder="Normal/TPA" /></SelectTrigger>
+                                <SelectContent><SelectItem value="No">Normal</SelectItem><SelectItem value="Yes">TPA</SelectItem></SelectContent>
+                            </Select>
+                        </div>
+                        <div className="col-span-12 sm:col-span-6 mt-1 sm:mt-2">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Report Est. Time (Pathology)</Label>
+                            <div className="relative flex items-center h-9 sm:h-8">
+                                <Input type="number" {...control.register("estimatedTime", { required: "Time is required", min: { value: 0, message: "Positive" }, valueAsNumber: true, })} className="h-9 sm:h-8 w-24 pl-8 text-sm" />
+                                <Timer className="h-4 w-4 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <span className="ml-2 text-xs sm:text-sm text-gray-600 font-medium truncate">Minutes: <span className="text-blue-600 font-bold">{formatMinutesToDuration(parseInt(watchEstimatedTime, 10) || 0)}</span></span>
+                            </div>
+                            {errors.estimatedTime && <p className="text-red-500 text-xs mt-1">{errors.estimatedTime.message}</p>}
+                        </div>
+                        <div className="col-span-12 sm:col-span-6 mt-1 sm:mt-2 flex items-center h-9 sm:h-8">
+                            <Checkbox checked={watch("sendWhatsApp")} onCheckedChange={(v) => setValue("sendWhatsApp", !!v)} id="patho-whatsapp-checkbox" />
+                            <Label htmlFor="patho-whatsapp-checkbox" className="text-xs sm:text-sm cursor-pointer ml-2 flex items-center gap-1 font-medium"><span className="text-green-600">📱</span>Send WhatsApp SMS</Label>
+                        </div>
                     </div>
                 </div>
 
-                <div className="bg-white p-1 rounded-lg border">
-                    <div className="flex items-center justify-between mb-1">
-                        <h3 className="text-lg font-semibold text-gray-700">Tests Selection</h3>
-                        <div className="flex items-center space-x-1">
-                            <div className="flex items-center mr-2"><Label className="text-xs mr-1">Package</Label>
+                <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-gray-200">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 mb-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-700">Tests Selection</h3>
+                            <div className="flex items-center space-x-1 md:hidden">
+                                <Button type="button" variant="outline" size="sm" onClick={addAllTests} className="h-8 text-xs px-2.5"> Add All </Button>
+                                <Button type="button" variant="outline" size="sm" onClick={removeAllTests} className="h-8 text-xs px-2.5"> Clear </Button>
+                            </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                            <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                                <Label className="text-xs text-gray-500 shrink-0">Package:</Label>
                                 <Select value={"none"} onValueChange={(pkgId) => {
                                     if (!pkgId || pkgId === "none") return; const pkg = packageRows.find((p: any) => String(p.id) === String(pkgId)); if (pkg) { removeAllTests(); pkg.tests.forEach((t: any) => { addTestById(t.testId); }); setValue("discountAmount", pkg.discountamount || 0); }
-                                }}><SelectTrigger className="h-7 w-48"><SelectValue placeholder="Select package" /></SelectTrigger>
-                                    <SelectContent><SelectItem value="none">No Package</SelectItem>{packageRows.map((pkg: any) => (<SelectItem key={pkg.id} value={String(pkg.id)}>{pkg.package_name} (₹{pkg.discountamount} OFF)</SelectItem>))}</SelectContent></Select></div>
-                            <Button type="button" variant="outline" size="sm" onClick={addAllTests}> Add All </Button>
-                            <Button type="button" variant="outline" size="sm" onClick={removeAllTests}> Remove All </Button>
-                            <div className="relative" ref={testSearchRef}>
-                                <Input type="text" placeholder="Search tests..." className="h-7 w-40" value={searchText} onChange={(e) => { setSearchText(e.target.value) }} />
-                                <Search className="h-4 w-4 absolute right-3 top-2.5 text-gray-400" />
-                                {searchText.trim() && (<ul className="absolute z-10 w-full bg-white border border-gray-300 mt-1 rounded-md max-h-32 overflow-y-auto text-sm shadow-lg">
-                                    {unselectedTests.filter((t: any) => t.test_name.toLowerCase().includes(searchText.toLowerCase())).map((t: any) => (
-                                        <li key={t.id} className="px-2 py-1 hover:bg-gray-100 cursor-pointer" onClick={() => addTestById(t.id)}>
-                                            <span className="font-semibold text-xs bg-gray-200 px-1 rounded mr-2">{t.type?.replace(/_/g, " ") || "Blood Test"}</span>
-                                            {t.test_name} - ₹{t.price}
-                                        </li>))}
-                                </ul>)}
+                                }}>
+                                    <SelectTrigger className="h-9 sm:h-8 w-full sm:w-48 text-xs"><SelectValue placeholder="Select package" /></SelectTrigger>
+                                    <SelectContent><SelectItem value="none">No Package</SelectItem>{packageRows.map((pkg: any) => (<SelectItem key={pkg.id} value={String(pkg.id)}>{pkg.package_name} (₹{pkg.discountamount} OFF)</SelectItem>))}</SelectContent>
+                                </Select>
+                            </div>
+                            <div className="hidden md:flex items-center space-x-1">
+                                <Button type="button" variant="outline" size="sm" onClick={addAllTests} className="h-8 text-xs"> Add All </Button>
+                                <Button type="button" variant="outline" size="sm" onClick={removeAllTests} className="h-8 text-xs"> Remove All </Button>
+                            </div>
+                            <div className="relative w-full sm:w-56" ref={testSearchRef}>
+                                <Input type="text" placeholder="Search tests..." className="h-9 sm:h-8 text-xs pr-8 w-full" value={searchText} onChange={(e) => { setSearchText(e.target.value) }} />
+                                <Search className="h-4 w-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                {searchText.trim() && (
+                                    <ul className="absolute z-50 w-full bg-white border border-gray-300 mt-1 rounded-lg max-h-48 overflow-y-auto text-sm shadow-xl">
+                                        {unselectedTests.filter((t: any) => t.test_name.toLowerCase().includes(searchText.toLowerCase())).map((t: any) => (
+                                            <li key={t.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" onClick={() => addTestById(t.id)}>
+                                                <span className="font-semibold text-xs bg-gray-200 px-1.5 py-0.5 rounded mr-1.5">{t.type?.replace(/_/g, " ") || "Blood Test"}</span>
+                                                <span className="font-medium text-gray-800">{t.test_name}</span> - <span className="text-indigo-600 font-bold">₹{t.price}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
                             </div>
                         </div>
                     </div>
-                    <div className="border rounded-md overflow-hidden">
-                        <Table>
+
+                    <div className="border rounded-lg overflow-x-auto">
+                        <Table className="min-w-[500px]">
                             <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-[40%] py-1 px-2">Test Name</TableHead>
-                                    <TableHead className="w-[15%] py-1 px-2">Price (₹)</TableHead>
-                                    <TableHead className="w-[15%] py-1 px-2">Service Type</TableHead>
-                                    <TableHead className="w-[20%] py-1 px-2">Source</TableHead>
-                                    <TableHead className="w-[10%] py-1 px-2" />
+                                <TableRow className="bg-gray-50">
+                                    <TableHead className="w-[35%] py-2 px-2.5 text-xs font-semibold">Test Name</TableHead>
+                                    <TableHead className="w-[20%] py-2 px-2.5 text-xs font-semibold">Price (₹)</TableHead>
+                                    <TableHead className="w-[20%] py-2 px-2.5 text-xs font-semibold">Service Type</TableHead>
+                                    <TableHead className="w-[15%] py-2 px-2.5 text-xs font-semibold">Source</TableHead>
+                                    <TableHead className="w-[10%] py-2 px-2.5 text-right text-xs font-semibold" />
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {bloodTestFields.length === 0 ? (<TableRow><TableCell colSpan={5} className="text-center py-2 text-gray-500">No tests selected</TableCell></TableRow>) : (
+                                {bloodTestFields.length === 0 ? (
+                                    <TableRow><TableCell colSpan={5} className="text-center py-6 text-gray-400 text-sm">No tests selected. Search or choose a package above.</TableCell></TableRow>
+                                ) : (
                                     bloodTestFields.map((field, idx) => (
-                                        <TableRow key={field.id}>
-                                            <TableCell className="py-1 px-2">{watch(`bloodTests.${idx}.testName`)}</TableCell>
-                                            <TableCell className="py-1 px-2">
-                                                <Input type="number" {...control.register(`bloodTests.${idx}.price` as `bloodTests.${number}.price`, { valueAsNumber: true })} className="h-7 w-20" disabled={(watch(`bloodTests.${idx}.testName`) || "").trim().toLowerCase() !== "histopathology"} />
+                                        <TableRow key={field.id} className="hover:bg-gray-50">
+                                            <TableCell className="py-2 px-2.5 font-medium text-xs sm:text-sm">{watch(`bloodTests.${idx}.testName`)}</TableCell>
+                                            <TableCell className="py-2 px-2.5">
+                                                <Input type="number" {...control.register(`bloodTests.${idx}.price` as `bloodTests.${number}.price`, { valueAsNumber: true })} className="h-8 w-24 text-xs font-semibold" disabled={(watch(`bloodTests.${idx}.testName`) || "").trim().toLowerCase() !== "histopathology"} />
                                             </TableCell>
-                                            <TableCell className="py-1 px-2">
-                                                <span className="text-xs font-semibold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
+                                            <TableCell className="py-2 px-2.5">
+                                                <span className="text-[11px] font-semibold px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full whitespace-nowrap">
                                                     {(watch(`bloodTests.${idx}.serviceType` as any) || "blood_test").replace(/_/g, " ")}
                                                 </span>
                                             </TableCell>
-                                            <TableCell className="py-1 px-2">
+                                            <TableCell className="py-2 px-2.5">
                                                 <Select value={watch(`bloodTests.${idx}.testType`)} onValueChange={(v) => setValue(`bloodTests.${idx}.testType` as `bloodTests.${number}.testType`, v as any)}>
-                                                    <SelectTrigger className="h-7"> <SelectValue /> </SelectTrigger>
+                                                    <SelectTrigger className="h-8 text-xs"> <SelectValue /> </SelectTrigger>
                                                     <SelectContent><SelectItem value="inhospital">InHouse</SelectItem><SelectItem value="outsource">Outsource</SelectItem></SelectContent>
                                                 </Select>
                                             </TableCell>
-                                            <TableCell className="py-1 px-2">
-                                                <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => removeBloodTest(idx)} ><X className="h-4 w-4 text-red-500" /></Button>
+                                            <TableCell className="py-2 px-2.5 text-right">
+                                                <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeBloodTest(idx)} ><Trash2 className="h-4 w-4" /></Button>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -537,35 +574,57 @@ const PathologyRegistration: React.FC<PathologyProps> = ({
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white p-3 rounded-lg border">
-                        <div className="flex items-center justify-between mb-3"><h3 className="text-lg font-semibold text-gray-700">Payment Details</h3><Button type="button" variant="outline" size="sm" onClick={addPaymentEntry}><Plus className="h-4 w-4 mr-1" /> Add Payment</Button></div>
-                        <div className="mb-3"><Label className="text-sm">Discount (₹)</Label>
-                            <Input type="number" step="0.01" {...control.register("discountAmount", { valueAsNumber: true })} placeholder="0" className="h-8" /></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="bg-white p-3 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-700">Payment Details</h3>
+                            <Button type="button" variant="outline" size="sm" onClick={addPaymentEntry} className="h-8 text-xs font-medium"><Plus className="h-3.5 w-3.5 mr-1" /> Add Payment</Button>
+                        </div>
+                        <div className="mb-3">
+                            <Label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">Discount (₹)</Label>
+                            <Input type="number" step="0.01" {...control.register("discountAmount", { valueAsNumber: true })} placeholder="0" className="h-9 sm:h-8 text-sm" />
+                        </div>
                         <div className="space-y-2">
                             {paymentFields.length === 0 ? (<div className="text-center py-4 text-gray-500 text-sm">No payments added yet</div>) : (
-                                paymentFields.map((field, idx) => (<div key={field.id} className="border rounded-lg p-2 bg-gray-50">
-                                    <div className="flex items-center justify-between mb-2"><span className="text-sm font-medium">Payment {idx + 1}</span><Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removePayment(idx)} ><Trash2 className="h-3 w-3 text-red-500" /></Button></div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div><Label className="text-xs">Amount (₹)</Label><Input type="number" step="0.01" {...control.register(`paymentEntries.${idx}.amount` as `paymentEntries.${number}.amount`, { valueAsNumber: true })} className="h-8" placeholder="0" /></div>
-                                        <div><Label className="xs">Mode</Label>
-                                            <Select value={watch(`paymentEntries.${idx}.paymentMode`)} onValueChange={(v) => setValue(`paymentEntries.${idx}.paymentMode` as `paymentEntries.${number}.paymentMode`, v as any)} >
-                                                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                                <SelectContent><SelectItem value="online">Online</SelectItem><SelectItem value="cash">Cash</SelectItem></SelectContent></Select></div></div></div>))
+                                paymentFields.map((field, idx) => (
+                                    <div key={field.id} className="border rounded-lg p-2.5 bg-gray-50">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs sm:text-sm font-semibold text-gray-700">Payment #{idx + 1}</span>
+                                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50" onClick={() => removePayment(idx)} >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <div>
+                                                <Label className="text-xs text-gray-500 mb-1 block">Amount (₹)</Label>
+                                                <Input type="number" step="0.01" {...control.register(`paymentEntries.${idx}.amount` as `paymentEntries.${number}.amount`, { valueAsNumber: true })} className="h-9 sm:h-8 text-sm" placeholder="0" />
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs text-gray-500 mb-1 block">Mode</Label>
+                                                <Select value={watch(`paymentEntries.${idx}.paymentMode`)} onValueChange={(v) => setValue(`paymentEntries.${idx}.paymentMode` as `paymentEntries.${number}.paymentMode`, v as any)} >
+                                                    <SelectTrigger className="h-9 sm:h-8 text-sm"><SelectValue /></SelectTrigger>
+                                                    <SelectContent><SelectItem value="online">Online</SelectItem><SelectItem value="cash">Cash</SelectItem></SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
                             )}
                         </div>
                     </div>
-                    <div className="bg-white p-3 rounded-lg border">
-                        <h3 className="text-lg font-semibold text-gray-700">Payment Summary</h3>
-                        <div className="space-y-2 mb-3">
-                            <div className="flex justify-between"><span>Total Amount:</span><span className="font-medium">₹{totalAmount.toFixed(2)}</span></div>
-                            <div className="flex justify-between"><span>Discount:</span><span className="font-medium">₹{discountAmount.toFixed(2)}</span></div>
-                            <div className="flex justify-between"><span>Total Paid:</span><span className="font-medium">₹{totalPaid.toFixed(2)}</span></div>
-                            <div className="flex justify-between border-t pt-2">
-                                <span className="font-semibold">Remaining Amount:</span>
-                                <span className={`font-semibold ${remainingAmount < 0 ? "text-red-600" : remainingAmount > 0 ? "text-orange-600" : "text-green-600"}`}>
-                                    ₹{remainingAmount.toFixed(2)}
-                                </span>
+                    <div className="bg-white p-3 rounded-lg border border-gray-200 flex flex-col justify-between">
+                        <div>
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-700 mb-3">Payment Summary</h3>
+                            <div className="space-y-2.5 mb-3 text-sm">
+                                <div className="flex justify-between text-gray-600"><span>Total Amount:</span><span className="font-semibold text-gray-900">₹{totalAmount.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-gray-600"><span>Discount:</span><span className="font-semibold text-indigo-600">₹{discountAmount.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-gray-600"><span>Total Paid:</span><span className="font-semibold text-green-600">₹{totalPaid.toFixed(2)}</span></div>
+                                <div className="flex justify-between border-t border-gray-200 pt-2 text-base">
+                                    <span className="font-bold text-gray-800">Remaining Amount:</span>
+                                    <span className={`font-bold ${remainingAmount < 0 ? "text-red-600" : remainingAmount > 0 ? "text-orange-600" : "text-green-600"}`}>
+                                        ₹{remainingAmount.toFixed(2)}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
