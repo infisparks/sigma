@@ -102,6 +102,13 @@ export default function OPDDashboard() {
     const router = useRouter();
     const { role } = useUserRole();
 
+    useEffect(() => {
+        const isPathoEntry = role === 'patho-entry' || role === 'patho_entry' || role === 'pathoentry' || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'pathoentry');
+        if (isPathoEntry) {
+            router.replace('/pathology/patient-entry');
+        }
+    }, [role, router]);
+
     // --- State ---
     const [records, setRecords] = useState<OPDRecord[]>([]);
     const [doctorList, setDoctorList] = useState<DoctorFee[]>([]);

@@ -61,6 +61,7 @@ export function RegistrationList({
   formatLocalDateTime,
 }: RegistrationListProps) {
   const { role, loading: roleLoading } = useUserRole()
+  const isPathoEntry = role === 'patho-entry' || role === 'patho_entry' || role === 'pathoentry' || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'pathoentry');
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -458,14 +459,27 @@ export function RegistrationList({
                               </>
                             )}
 
-                            {/* --- ANYONE CAN DELETE --- */}
-                            <button
-                              onClick={() => handleDeleteRegistration(r)}
-                              className="inline-flex items-center px-3.5 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 shadow-sm"
-                            >
-                              <TrashIcon className="h-4 w-4 mr-2" />
-                              Delete Registration
-                            </button>
+                            {/* --- PATHO-ENTRY VIEW (Can only edit entry details) --- */}
+                            {isPathoEntry && (
+                              <Link
+                                href={`/pathology/edit-patient/${r.id}`}
+                                className="inline-flex items-center px-3.5 py-2 bg-amber-600 text-white rounded-md text-sm font-medium hover:bg-amber-700 shadow-sm"
+                              >
+                                <PencilIcon className="h-4 w-4 mr-2" />
+                                Edit Details
+                              </Link>
+                            )}
+
+                            {/* --- ANYONE CAN DELETE (EXCEPT PATHO-ENTRY) --- */}
+                            {!isPathoEntry && (
+                              <button
+                                onClick={() => handleDeleteRegistration(r)}
+                                className="inline-flex items-center px-3.5 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 shadow-sm"
+                              >
+                                <TrashIcon className="h-4 w-4 mr-2" />
+                                Delete Registration
+                              </button>
+                            )}
                           </div>
                         </td>
                       </motion.tr>

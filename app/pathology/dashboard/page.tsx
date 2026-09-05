@@ -638,6 +638,12 @@ export default function Dashboard() {
 
   const handleDeleteRegistration = useCallback(
     async (r: Registration) => {
+      const isPathoEntry = role === 'patho-entry' || role === 'patho_entry' || role === 'pathoentry' || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'pathoentry');
+      if (isPathoEntry) {
+        alert("Permission denied: 'patho-entry' role cannot delete registrations.");
+        return;
+      }
+
       if (!confirm(`Delete registration for ${r.name}? This will permanently remove the registration record.`))
         return
 
@@ -671,7 +677,7 @@ export default function Dashboard() {
         alert("Error deleting: " + (e.message || "Unknown error"))
       }
     },
-    [fetchDashboardStats],
+    [fetchDashboardStats, role],
   )
 
   const handleToggleSelectAll = useCallback(() => {

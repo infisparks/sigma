@@ -176,6 +176,7 @@ export default function UnifiedPatientEntry() {
   const router = useRouter()
   const { role } = useUserRole()
   const isOtherHospital = role === 'otherhospital' || role === 'other hospital' || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'otherhospital');
+  const isPathoEntry = role === 'patho-entry' || role === 'patho_entry' || role === 'pathoentry' || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'pathoentry');
   const [activeTab, setActiveTab] = useState<ActiveTab>('OPD');
 
   // If role is otherhospital, force activeTab to always be OPD
@@ -184,6 +185,13 @@ export default function UnifiedPatientEntry() {
       setActiveTab('OPD');
     }
   }, [isOtherHospital, activeTab]);
+
+  // If role is patho-entry, force activeTab to always be Pathology
+  useEffect(() => {
+    if (isPathoEntry && activeTab !== 'Pathology') {
+      setActiveTab('Pathology');
+    }
+  }, [isPathoEntry, activeTab]);
 
   const [doctorList, setDoctorList] = useState<DoctorFee[]>([]) // DoctorList now holds fee data
   const [bloodRows, setBloodRows] = useState<BloodTestRow[]>([])
@@ -884,7 +892,9 @@ export default function UnifiedPatientEntry() {
 
             {/* 2. Service Tabs */}
             <div className="flex space-x-2 border-b border-gray-300 px-3 sm:px-6 pt-3 overflow-x-auto">
-              <Button type="button" onClick={() => setActiveTab('OPD')} className={cn("py-2 px-4 sm:px-6 rounded-t-lg font-semibold transition-colors duration-200 text-xs sm:text-sm whitespace-nowrap shrink-0", activeTab === 'OPD' ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><User className="mr-1.5 h-4 w-4" /> OPD Consultation</Button>
+              {!isPathoEntry && (
+                <Button type="button" onClick={() => setActiveTab('OPD')} className={cn("py-2 px-4 sm:px-6 rounded-t-lg font-semibold transition-colors duration-200 text-xs sm:text-sm whitespace-nowrap shrink-0", activeTab === 'OPD' ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><User className="mr-1.5 h-4 w-4" /> OPD Consultation</Button>
+              )}
               {!isOtherHospital && (
                 <Button type="button" onClick={() => setActiveTab('Pathology')} className={cn("py-2 px-4 sm:px-6 rounded-t-lg font-semibold transition-colors duration-200 text-xs sm:text-sm whitespace-nowrap shrink-0", activeTab === 'Pathology' ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700")}><FlaskConical className="mr-1.5 h-4 w-4" /> Pathology/Lab</Button>
               )}
@@ -893,7 +903,7 @@ export default function UnifiedPatientEntry() {
 
             {/* 3. Active Service Form */}
             <div className="min-h-[400px]">
-              {activeTab === 'OPD' && (
+              {activeTab === 'OPD' && !isPathoEntry && (
                 <OPDRegistration
                   patientData={patientData as any}
                   isExistingPatient={isPatientDataLocked}

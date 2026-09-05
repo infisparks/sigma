@@ -30,8 +30,10 @@ const LoginPage = () => {
           if (zdata?.role) userRole = zdata.role;
         }
 
-        const isOtherHospital = userRole && userRole.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'otherhospital';
-        if (isOtherHospital) {
+        const cleanedRole = userRole ? userRole.trim().toLowerCase().replace(/[\s_-]+/g, '') : '';
+        const isOtherHospital = cleanedRole === 'otherhospital';
+        const isPathoEntry = cleanedRole === 'pathoentry';
+        if (isOtherHospital || isPathoEntry) {
           router.replace('/pathology/patient-entry');
           return;
         }
@@ -57,7 +59,7 @@ const LoginPage = () => {
       } else {
         toast.success('Login successful!')
 
-        // Check if role is otherhospital to redirect directly
+        // Check if role is otherhospital or patho-entry to redirect directly
         let userRole: string | null = null;
         if (data.user) {
           const { data: udata } = await supabase.from('user').select('role').eq('id', data.user.id).single();
@@ -68,8 +70,10 @@ const LoginPage = () => {
           }
         }
 
-        const isOtherHospital = userRole && userRole.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'otherhospital';
-        if (isOtherHospital) {
+        const cleanedRole = userRole ? userRole.trim().toLowerCase().replace(/[\s_-]+/g, '') : '';
+        const isOtherHospital = cleanedRole === 'otherhospital';
+        const isPathoEntry = cleanedRole === 'pathoentry';
+        if (isOtherHospital || isPathoEntry) {
           router.push('/pathology/patient-entry');
         } else {
           router.push('/dashboard');

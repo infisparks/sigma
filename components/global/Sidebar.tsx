@@ -36,13 +36,13 @@ const pathologyMenuItems = [
     icon: UserPlus,
     label: 'Patient Entry',
     href: '/pathology/patient-entry',
-    roles: ['admin', 'staff', 'technician-staff', 'reception', 'receptionist', 'otherhospital', 'other hospital']
+    roles: ['admin', 'staff', 'technician-staff', 'reception', 'receptionist', 'otherhospital', 'other hospital', 'patho-entry', 'pathoentry', 'patho_entry']
   },
   {
     icon: LayoutDashboard,
     label: 'Pathology Dashboard',
     href: '/pathology/dashboard',
-    roles: ['admin', 'technician', 'phlebo', 'staff', 'technician-staff', 'reception', 'receptionist']
+    roles: ['admin', 'technician', 'phlebo', 'staff', 'technician-staff', 'reception', 'receptionist', 'patho-entry', 'pathoentry', 'patho_entry']
   },
   {
     icon: UserPlus,
@@ -112,7 +112,7 @@ const pathologyMenuItems = [
     icon: LogOut,
     label: 'Logout',
     href: 'logout-action',
-    roles: ['admin', 'technician', 'phlebo', "pharmacy", 'staff', 'doctor', 'technician-staff', 'otherhospital', 'other hospital']
+    roles: ['admin', 'technician', 'phlebo', "pharmacy", 'staff', 'doctor', 'technician-staff', 'otherhospital', 'other hospital', 'patho-entry', 'pathoentry', 'patho_entry']
   },
 ];
 
@@ -151,6 +151,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
       setActiveFlyout(null);
     }
   }, [isCollapsed]);
+
+  // Strict access control for 'patho-entry' role
+  useEffect(() => {
+    const isPathoEntry = role === 'patho-entry' || role === 'patho_entry' || role === 'pathoentry' || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'pathoentry');
+    if (!loading && isPathoEntry) {
+      const isAllowed = pathname.startsWith('/pathology/patient-entry') || 
+                        pathname.startsWith('/pathology/dashboard') || 
+                        pathname.startsWith('/pathology/edit-patient');
+      if (!isAllowed) {
+        router.replace('/pathology/patient-entry');
+      }
+    }
+  }, [role, loading, pathname, router]);
 
   // Strict access control for 'otherhospital' role
   useEffect(() => {

@@ -40,6 +40,13 @@ const OTHERHOSPITAL_ALLOWED_ROUTES = [
   '/pathology/opd'
 ];
 
+// Define allowed routes for patho-entry role (only pathology entry, dashboard view, and edit patient)
+const PATHO_ENTRY_ALLOWED_ROUTES = [
+  '/pathology/patient-entry',
+  '/pathology/dashboard',
+  '/pathology/edit-patient'
+];
+
 export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,15 +104,28 @@ export const UserRoleProvider = ({ children }: UserRoleProviderProps) => {
         }
       }
 
-      // Normalize role for 'other hospital' variations (e.g. "other hospital", "other_hospital", "otherhospital")
+      // Normalize role for 'other hospital' and 'patho-entry' variations
       if (userRole) {
         const cleanedRole = userRole.trim().toLowerCase().replace(/[\s_-]+/g, '');
         if (cleanedRole === 'otherhospital') {
           userRole = 'otherhospital';
+        } else if (cleanedRole === 'pathoentry') {
+          userRole = 'patho-entry';
         }
       }
 
       // 3. Enforce Role-Based Access Control
+      if (userRole === 'patho-entry') {
+        const isAllowed = PATHO_ENTRY_ALLOWED_ROUTES.some(route =>
+          pathname.startsWith(route)
+        );
+
+        if (!isAllowed) {
+          router.replace('/pathology/patient-entry');
+          return;
+        }
+      }
+
       if (userRole === 'otherhospital') {
         const isAllowed = OTHERHOSPITAL_ALLOWED_ROUTES.some(route =>
           pathname.startsWith(route)

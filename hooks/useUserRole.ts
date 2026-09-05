@@ -85,6 +85,8 @@ export function useUserRole() {
         const cleanedRole = userRole.trim().toLowerCase().replace(/[\s_-]+/g, '');
         if (cleanedRole === 'otherhospital') {
           userRole = 'otherhospital';
+        } else if (cleanedRole === 'pathoentry') {
+          userRole = 'patho-entry';
         }
       }
 

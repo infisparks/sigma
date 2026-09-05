@@ -57,6 +57,17 @@ function RestrictedLayout({
 
   useEffect(() => {
     if (loading) return;
+    const isPathoEntry = role === 'patho-entry' || role === 'patho_entry' || role === 'pathoentry' || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'pathoentry');
+    if (isPathoEntry) {
+      const isAllowed = pathname.startsWith('/pathology/patient-entry') || 
+                        pathname.startsWith('/pathology/dashboard') || 
+                        pathname.startsWith('/pathology/edit-patient');
+      if (!isAllowed) {
+        router.replace('/pathology/patient-entry');
+      }
+      return;
+    }
+
     const isOtherHospital = role === 'otherhospital' || role === 'other hospital' || (role && role.trim().toLowerCase().replace(/[\s_-]+/g, '') === 'otherhospital');
     if (isOtherHospital) {
       const isAllowed = pathname.startsWith('/pathology/patient-entry') || pathname.startsWith('/pathology/opd');
