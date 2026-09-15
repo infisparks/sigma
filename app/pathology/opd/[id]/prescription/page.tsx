@@ -7,7 +7,8 @@ import {
     ArrowLeft, Monitor, FileText, History, StickyNote,
     CheckCircle, Search, Check, List, Activity,
     FileOutput, Heart, Printer, Power, User, Stethoscope, FlaskConical, Code,
-    Camera, Upload, Loader2, Sparkles, AlertCircle, Trash2, Save
+    Camera, Upload, Loader2, Sparkles, AlertCircle, Trash2, Save,
+    ChevronDown, ChevronUp
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -205,13 +206,63 @@ function PrescriptionScanner({ onScanComplete }: { onScanComplete?: () => void }
     const { addMedicine } = usePrescription();
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [selectedModel, setSelectedModel] = useState('gemini-3.1-flash-lite-preview'); // Default model as requested
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash'); // Default to latest 3.8 Flash
 
-    // Custom models as requested by user
+    // Models list with details & badges
     const currentModels = [
-        { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite (Fast)' },
-        { id: 'gemini-3-flash-preview', name: 'Gemini 3.0 Flash (Heavy)' }
+        {
+            id: 'gemini-3.8-flash',
+            name: 'Gemini 3.8 Flash',
+            badge: 'New Stable',
+            badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+            description: 'Our most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows.'
+        },
+        {
+            id: 'gemini-3.7-flash',
+            name: 'Gemini 3.7 Flash',
+            badge: 'Stable',
+            badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+            description: 'Our previous-generation Flash model for complex coding, agentic workflows, and reliable multi-step execution.'
+        },
+        {
+            id: 'gemini-3.6-flash',
+            name: 'Gemini 3.6 Flash',
+            badge: 'Stable',
+            badgeColor: 'bg-blue-100 text-blue-800 border-blue-300',
+            description: 'Our previous-generation Flash model, balancing speed and multimodal capabilities across general agentic and everyday tasks.'
+        },
+        {
+            id: 'gemini-3.5-flash',
+            name: 'Gemini 3.5 Flash',
+            badge: 'Stable',
+            badgeColor: 'bg-slate-100 text-slate-700 border-slate-300',
+            description: 'Our legacy Flash model, providing baseline speed and foundational performance for routine, high-throughput workloads.'
+        },
+        {
+            id: 'gemini-3.5-flash-lite',
+            name: 'Gemini 3.5 Flash-Lite',
+            badge: 'Fast',
+            badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
+            description: 'Our fastest, most cost-effective 3.5 model for high-throughput execution.'
+        },
+        {
+            id: 'gemini-3.1-flash-lite-preview',
+            name: 'Gemini 3.1 Flash Lite',
+            badge: 'Preview',
+            badgeColor: 'bg-purple-100 text-purple-700 border-purple-200',
+            description: 'Lightweight preview model for fast baseline parsing.'
+        },
+        {
+            id: 'gemini-3-flash-preview',
+            name: 'Gemini 3.0 Flash',
+            badge: 'Preview',
+            badgeColor: 'bg-slate-100 text-slate-600 border-slate-200',
+            description: 'Multimodal preview model for general extraction tasks.'
+        }
     ];
+
+    const activeModelObj = currentModels.find(m => m.id === selectedModel) || currentModels[0];
 
     const importData = (data: any) => {
         // Only Rx (Medicines)
@@ -341,73 +392,128 @@ Only return the JSON object and nothing else.`;
                 <span>AI Scan</span>
             </button>
 
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog open={open} onOpenChange={(val) => {
+                setOpen(val);
+                if (!val) setIsDropdownOpen(false);
+            }}>
                 <DialogContent className="w-[94vw] max-w-md max-h-[90vh] flex flex-col bg-white border-0 shadow-2xl overflow-hidden rounded-2xl sm:rounded-3xl p-0">
-                    <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-700 px-5 py-6 sm:px-6 sm:py-8 text-white relative shrink-0">
-                        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                            <Sparkles className="w-32 h-32 rotate-12" />
+                    <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-700 px-5 py-5 sm:px-6 sm:py-6 text-white relative shrink-0">
+                        <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
+                            <Sparkles className="w-28 h-28 rotate-12" />
                         </div>
                         <DialogHeader>
-                            <DialogTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2.5 sm:gap-3">
-                                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
-                                    <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                            <DialogTitle className="text-lg sm:text-xl font-bold flex items-center gap-2.5">
+                                <div className="p-1.5 sm:p-2 bg-white/20 rounded-xl backdrop-blur-md">
+                                    <Camera className="w-5 h-5 text-white" />
                                 </div>
                                 AI Prescription Scanner
                             </DialogTitle>
                         </DialogHeader>
-                        <p className="text-purple-100 text-xs sm:text-sm mt-2 opacity-90">
-                            Upload a photo of the prescription and Gemini will automatically fill the form for you.
+                        <p className="text-purple-100 text-xs mt-1.5 opacity-90">
+                            Upload a photo of the prescription and Gemini will automatically extract medicines for you.
                         </p>
                     </div>
 
-                    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
-                        {/* Model Selector */}
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center px-1">
-                                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Engine Efficiency</label>
-                                <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full">Automated Selection</span>
+                    <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
+                        {/* Model Dropdown Selector */}
+                        <div className="space-y-1.5 relative">
+                            <div className="flex justify-between items-center px-0.5">
+                                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">AI Model Engine</label>
+                                <span className="text-[10px] text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100">
+                                    Active: {activeModelObj.name}
+                                </span>
                             </div>
-                            <div className="grid grid-cols-1 gap-2">
-                                {currentModels.map((m) => (
-                                    <button
-                                        key={m.id}
-                                        onClick={() => setSelectedModel(m.id)}
-                                        className={cn(
-                                            "flex items-center justify-between p-3 rounded-2xl border-2 transition-all text-left",
-                                            selectedModel === m.id 
-                                                ? "border-blue-600 bg-blue-50/50 shadow-sm" 
-                                                : "border-slate-100 hover:border-slate-200 hover:bg-slate-50"
-                                        )}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={cn(
-                                                "w-2 h-2 rounded-full",
-                                                selectedModel === m.id ? "bg-blue-600 animate-pulse" : "bg-slate-300"
-                                            )} />
-                                            <span className={cn(
-                                                "text-sm font-medium",
-                                                selectedModel === m.id ? "text-blue-900" : "text-slate-600"
-                                            )}>{m.name}</span>
+
+                            {/* Dropdown Selector Trigger */}
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsDropdownOpen(prev => !prev)}
+                                    className="w-full flex items-center justify-between p-2.5 sm:p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 hover:border-purple-300 rounded-xl transition-all text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                                >
+                                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                        <div className="w-7 h-7 rounded-lg bg-purple-100/80 flex items-center justify-center shrink-0 border border-purple-200 text-purple-700">
+                                            <Sparkles className="w-3.5 h-3.5" />
                                         </div>
-                                        {selectedModel === m.id && <Check className="w-4 h-4 text-blue-600" />}
-                                    </button>
-                                ))}
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="text-xs sm:text-sm font-bold text-slate-800 truncate">{activeModelObj.name}</span>
+                                                <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded border", activeModelObj.badgeColor)}>
+                                                    {activeModelObj.badge}
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                                                {activeModelObj.description}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="shrink-0 text-slate-400 pl-1">
+                                        {isDropdownOpen ? <ChevronUp className="w-4 h-4 text-purple-600" /> : <ChevronDown className="w-4 h-4" />}
+                                    </div>
+                                </button>
+
+                                {/* Dropdown Menu Options */}
+                                {isDropdownOpen && (
+                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in slide-in-from-top-1 duration-150">
+                                        {currentModels.map((m) => {
+                                            const isSelected = selectedModel === m.id;
+                                            return (
+                                                <button
+                                                    key={m.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedModel(m.id);
+                                                        setIsDropdownOpen(false);
+                                                    }}
+                                                    className={cn(
+                                                        "w-full flex items-start justify-between p-2.5 sm:p-3 transition-colors text-left",
+                                                        isSelected ? "bg-purple-50/80" : "hover:bg-slate-50"
+                                                    )}
+                                                >
+                                                    <div className="min-w-0 pr-2 flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={cn(
+                                                                "w-2 h-2 rounded-full shrink-0",
+                                                                isSelected ? "bg-purple-600 ring-2 ring-purple-200 animate-pulse" : "bg-slate-300"
+                                                            )} />
+                                                            <span className={cn(
+                                                                "text-xs sm:text-sm font-bold",
+                                                                isSelected ? "text-purple-900" : "text-slate-800"
+                                                            )}>
+                                                                {m.name}
+                                                            </span>
+                                                            <span className={cn("text-[9px] font-semibold px-1.5 py-0.2 rounded border shrink-0", m.badgeColor)}>
+                                                                {m.badge}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-500 mt-1 leading-snug pl-4">
+                                                            {m.description}
+                                                        </p>
+                                                    </div>
+                                                    {isSelected && (
+                                                        <Check className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
                         {/* Upload/Camera Area */}
                         <div className="relative">
                             {loading ? (
-                                <div className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
+                                <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
                                     <div className="relative">
-                                        <div className="absolute inset-0 bg-blue-400 blur-xl opacity-20 animate-pulse" />
-                                        <Loader2 className="w-12 h-12 text-blue-600 animate-spin relative" />
+                                        <div className="absolute inset-0 bg-purple-400 blur-xl opacity-20 animate-pulse" />
+                                        <Loader2 className="w-10 h-10 text-purple-600 animate-spin relative" />
                                     </div>
-                                    <p className="text-sm font-bold text-slate-900 mt-4">Parsing Prescription...</p>
-                                    <p className="text-xs text-slate-500 text-center max-w-[200px] mt-1">Extracting text and organizing medical data via {selectedModel}</p>
+                                    <p className="text-sm font-bold text-slate-900 mt-3">Parsing Prescription...</p>
+                                    <p className="text-xs text-slate-500 text-center max-w-[240px] mt-1">Extracting medicines and dosages via {activeModelObj.name}</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-3 sm:gap-4">
                                     <input 
                                         type="file" 
                                         id="prescription-camera" 
@@ -418,13 +524,13 @@ Only return the JSON object and nothing else.`;
                                     />
                                     <label 
                                         htmlFor="prescription-camera"
-                                        className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 rounded-3xl transition-all cursor-pointer hover:border-indigo-500 hover:bg-indigo-50/30 group"
+                                        className="flex flex-col items-center justify-center p-5 sm:p-6 border-2 border-dashed border-slate-200 rounded-2xl transition-all cursor-pointer hover:border-purple-500 hover:bg-purple-50/30 group"
                                     >
-                                        <div className="p-4 bg-slate-100 rounded-2xl group-hover:bg-indigo-100 transition-colors mb-3">
-                                            <Camera className="w-8 h-8 text-slate-500 group-hover:text-indigo-600" />
+                                        <div className="p-3 bg-slate-100 rounded-xl group-hover:bg-purple-100 transition-colors mb-2">
+                                            <Camera className="w-6 h-6 text-slate-500 group-hover:text-purple-600" />
                                         </div>
-                                        <p className="text-sm font-bold text-slate-900 group-hover:text-indigo-700">Take Photo</p>
-                                        <p className="text-[10px] text-slate-500 mt-1">Use Device Camera</p>
+                                        <p className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-purple-700">Take Photo</p>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">Device Camera</p>
                                     </label>
 
                                     <input 
@@ -436,22 +542,22 @@ Only return the JSON object and nothing else.`;
                                     />
                                     <label 
                                         htmlFor="prescription-upload"
-                                        className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 rounded-3xl transition-all cursor-pointer hover:border-blue-500 hover:bg-blue-50/30 group"
+                                        className="flex flex-col items-center justify-center p-5 sm:p-6 border-2 border-dashed border-slate-200 rounded-2xl transition-all cursor-pointer hover:border-indigo-500 hover:bg-indigo-50/30 group"
                                     >
-                                        <div className="p-4 bg-slate-100 rounded-2xl group-hover:bg-blue-100 transition-colors mb-3">
-                                            <Upload className="w-8 h-8 text-slate-500 group-hover:text-blue-600" />
+                                        <div className="p-3 bg-slate-100 rounded-xl group-hover:bg-indigo-100 transition-colors mb-2">
+                                            <Upload className="w-6 h-6 text-slate-500 group-hover:text-indigo-600" />
                                         </div>
-                                        <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700">Upload File</p>
-                                        <p className="text-[10px] text-slate-500 mt-1">Gallery or Files</p>
+                                        <p className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-indigo-700">Upload File</p>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">Gallery or Files</p>
                                     </label>
                                 </div>
                             )}
                         </div>
 
-                        <div className="flex items-center gap-3 p-4 bg-orange-50 rounded-2xl border border-orange-100">
-                            <AlertCircle className="w-5 h-5 text-orange-500 shrink-0" />
-                            <p className="text-[10px] text-orange-800 font-medium">
-                                AI extraction may occasionally miss details. Please review all fields after scanning for accuracy and manual correction.
+                        <div className="flex items-center gap-2.5 p-3 bg-amber-50/80 rounded-xl border border-amber-200/60">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <p className="text-[10px] text-amber-800 font-medium leading-normal">
+                                AI extraction may occasionally miss details. Please review all extracted medicines after scanning for clinical accuracy.
                             </p>
                         </div>
                     </div>
