@@ -207,7 +207,7 @@ function PrescriptionScanner({ onScanComplete }: { onScanComplete?: () => void }
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash'); // Default to latest 3.8 Flash
+    const [selectedModel, setSelectedModel] = useState('gemini-3-flash-preview'); // Default to Gemini 3.0 Flash
 
     // Models list with details & badges
     const currentModels = [
