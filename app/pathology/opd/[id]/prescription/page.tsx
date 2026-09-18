@@ -268,8 +268,27 @@ function PrescriptionScanner({ onScanComplete }: { onScanComplete?: () => void }
         // Only Rx (Medicines)
         if (Array.isArray(data.medicines)) {
             data.medicines.forEach((m: any) => {
+                let rawUnit = String(m.unit || '').trim();
+                let rawDosage = String(m.dosage || '').trim();
+
+                // If unit contains numbers (e.g. "5mg", "10ml", "500 mg"), extract the number to dosage if needed and clean unit
+                const unitMatch = rawUnit.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)$/);
+                if (unitMatch) {
+                    if (!rawDosage || rawDosage === '1') {
+                        rawDosage = unitMatch[1];
+                    }
+                    rawUnit = unitMatch[2];
+                } else {
+                    // Remove any numbers from unit so it only contains unit letters (mg, ml, etc.)
+                    rawUnit = rawUnit.replace(/[0-9]/g, '').trim();
+                }
+
+                // If unit is empty, default based on type
+                const defaultUnit = (m.type?.toLowerCase() === 'syrup' || m.type?.toLowerCase() === 'susp' || m.type?.toLowerCase() === 'drop') ? 'ml' : 'mg';
+                const finalUnit = rawUnit || defaultUnit;
+
                 // Normalize Dosage (AI often returns 0.5 or 'half', UI wants '1/2')
-                let normalizedDosage = String(m.dosage || '1').toLowerCase();
+                let normalizedDosage = (rawDosage || '1').toLowerCase();
                 if (normalizedDosage === '0.5' || normalizedDosage === 'half') normalizedDosage = '1/2';
                 if (normalizedDosage === '0.25' || normalizedDosage === 'quarter') normalizedDosage = '1/4';
                 if (normalizedDosage === '1.5') normalizedDosage = '1 1/2';
@@ -278,7 +297,7 @@ function PrescriptionScanner({ onScanComplete }: { onScanComplete?: () => void }
                     id: Math.random().toString(36).substr(2, 9),
                     name: m.name || '',
                     type: m.type || 'Tab',
-                    unit: m.unit || (m.type?.toLowerCase() === 'syrup' ? 'ml' : 'mg'),
+                    unit: finalUnit,
                     dosage: normalizedDosage,
                     duration: (() => {
                         const d = (m.duration || '5d').toLowerCase();
@@ -294,7 +313,7 @@ function PrescriptionScanner({ onScanComplete }: { onScanComplete?: () => void }
                         }
                         return d;
                     })(),
-                    note: m.note || '',
+                    note: '', // Do NOT pick instruction or note of medicine
                     timing: m.timing || { bb: false, ab: true, bl: false, al: true, bd: false, ad: true }
                 });
             });
@@ -322,21 +341,30 @@ function PrescriptionScanner({ onScanComplete }: { onScanComplete?: () => void }
   "medicines": [
     { 
       "name": "...", 
-      "type": "Tab/Syrup/Cap/Inj/...",
-      "unit": "mg/ml/...",
-      "dosage": "Clinical fraction (if '0-0-0.5', dosage is '1/2'; if '1-0-1', dosage is '1')", 
-      "duration": "Days like '3d', '7d', '8d', '15d', etc.", 
+      "type": "Tab/Cap/Syrup/Inj/Susp/Drop/Cream/Oint",
+      "unit": "mg/ml/gm/mcg/drops/puff/IU",
+      "dosage": "1, 2, 1.5, 1/2, 3, 4, 5, etc.", 
+      "duration": "Days like '3d', '5d', '7d', '14d', '1m', etc.", 
       "timing": { "bb": boolean, "ab": boolean, "bl": boolean, "al": boolean, "bd": boolean, "ad": boolean },
-      "note": "..."
+      "note": ""
     }
   ]
 }
-RULES for Medicine Timings:
-- For Tablets/Capsules: The 'dosage' is the numeric multiplier per dose (e.g., if frequency is '1-0-1', 'dosage' is '1'). The strength (like '40 mg') should be extracted into the 'unit' field.
-- For Syrups: Extract the volume (e.g., '10') into 'dosage' and 'ml' into 'unit'.
-- If the frequency is '1/2 - 0 - 1/2', set 'dosage': '0.5' and mapping timings accordingly.
-- If notes say 'After Breakfast', 'After Lunch', 'After Dinner', map to 'ab', 'al', 'ad' respectively.
-- If notes say 'Before...', map to 'bb', 'bl', 'bd'.
+
+STRICT EXTRACTION RULES:
+1. NO NOTES / INSTRUCTIONS: Do NOT extract instructions or notes of medicine. Keep "note": "" empty for all medicines.
+2. TYPE: Identify the medicine type/form strictly (e.g., 'Tab', 'Cap', 'Syrup', 'Inj', 'Susp', 'Drop', 'Cream', 'Oint').
+3. UNIT: The "unit" field must ONLY contain the measurement unit string (e.g., "mg", "ml", "gm", "mcg", "drops", "puff", "IU"). NEVER include any numbers in the unit field (e.g. NEVER write "5mg" as unit; the unit is only "mg").
+4. DOSAGE PER INTAKE: The numeric quantity/dose per intake MUST be placed in "dosage" (e.g., "1", "2", "1.5", "1/2", "0.5", "3", "4", "5", etc.).
+   - If the prescription says "5mg", the dosage per intake is "5" and unit is "mg".
+   - If the prescription says "10ml", the dosage per intake is "10" and unit is "ml".
+   - If the prescription says "1.5" or "2 tab" per intake, the dosage is "1.5" or "2", and type is "Tab".
+5. TIMING: Map intake schedule to boolean flags:
+   - "bb" = Before Breakfast, "ab" = After Breakfast
+   - "bl" = Before Lunch, "al" = After Lunch
+   - "bd" = Before Dinner, "ad" = After Dinner
+   - If frequency is 1-0-1 (morning and night after meal), set "ab": true, "ad": true.
+6. DURATION: Extract duration in format like '3d', '5d', '7d', '14d', '1m', '3m'.
 
 Only return the JSON object and nothing else.`;
 
