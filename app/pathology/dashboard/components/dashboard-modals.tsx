@@ -148,6 +148,7 @@ export function DashboardModals({
       } else {
         alert("Bill sent on WhatsApp!");
       }
+      
     } catch (e: any) {
       console.error("Error sending bill on WhatsApp:", e);
       alert(`Error sending bill on WhatsApp: ${e.message || 'Unknown error'}`);
