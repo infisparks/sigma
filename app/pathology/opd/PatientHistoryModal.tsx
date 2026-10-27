@@ -85,7 +85,7 @@ const PatientHistoryModal: React.FC<PatientHistoryModalProps> = ({ uhid, patient
 
     return (
         <Dialog open={true} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[900px] max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-[900px] max-h-[88vh] overflow-hidden flex flex-col p-4 sm:p-6">
                 <DialogHeader className="border-b pb-4">
                     <div className="flex items-center justify-between">
                         <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-900">

@@ -455,123 +455,123 @@ export default function OPDDashboard() {
             </div>
 
             {/* --- Quick Stats --- */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
                 <Card 
                     onClick={() => setStatusFilter('all')}
                     className={cn(
-                        "border-none shadow-sm bg-white ring-1 transition-all cursor-pointer hover:shadow-md",
+                        "border-none shadow-xs bg-white ring-1 transition-all cursor-pointer hover:shadow-md",
                         statusFilter === 'all' ? "ring-2 ring-blue-500 bg-blue-50/20" : "ring-slate-200/60"
                     )}
                 >
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-600">
-                            {filterType === 'all' ? 'Filtered Patients' : 'Total Patients'}
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-4 pb-1 sm:pb-2">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-slate-600">
+                            {filterType === 'all' ? 'Filtered' : 'Patients'}
                         </CardTitle>
-                        <Users className="h-4 w-4 text-blue-600" />
+                        <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600 shrink-0" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-slate-900">{stats.totalPatients}</div>
-                        <p className="text-[11px] text-slate-400 mt-1">All OPD Registrations</p>
+                    <CardContent className="p-3 sm:p-4 pt-0">
+                        <div className="text-xl sm:text-2xl font-bold text-slate-900">{stats.totalPatients}</div>
+                        <p className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">Total Registrations</p>
                     </CardContent>
                 </Card>
 
                 <Card 
                     onClick={() => setStatusFilter(prev => prev === 'finalized' ? 'all' : 'finalized')}
                     className={cn(
-                        "border-none shadow-sm bg-white ring-1 transition-all cursor-pointer hover:shadow-md",
+                        "border-none shadow-xs bg-white ring-1 transition-all cursor-pointer hover:shadow-md",
                         statusFilter === 'finalized' ? "ring-2 ring-emerald-500 bg-emerald-50/20" : "ring-slate-200/60"
                     )}
                 >
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-600">Total Finalize</CardTitle>
-                        <CheckCircle className="h-4 w-4 text-emerald-600" />
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-4 pb-1 sm:pb-2">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-slate-600">Finalized</CardTitle>
+                        <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 shrink-0" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-emerald-600">{stats.totalFinalized}</div>
-                        <p className="text-[11px] text-emerald-700/80 font-medium mt-1">Completed</p>
+                    <CardContent className="p-3 sm:p-4 pt-0">
+                        <div className="text-xl sm:text-2xl font-bold text-emerald-600">{stats.totalFinalized}</div>
+                        <p className="text-[10px] sm:text-[11px] text-emerald-700/80 font-medium mt-0.5">Completed</p>
                     </CardContent>
                 </Card>
 
                 <Card 
                     onClick={() => setStatusFilter(prev => prev === 'draft' ? 'all' : 'draft')}
                     className={cn(
-                        "border-none shadow-sm bg-white ring-1 transition-all cursor-pointer hover:shadow-md",
+                        "border-none shadow-xs bg-white ring-1 transition-all cursor-pointer hover:shadow-md",
                         statusFilter === 'draft' ? "ring-2 ring-amber-500 bg-amber-50/20" : "ring-slate-200/60"
                     )}
                 >
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-600">Remaining</CardTitle>
-                        <AlertCircle className="h-4 w-4 text-amber-500" />
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-4 pb-1 sm:pb-2">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-slate-600">Remaining</CardTitle>
+                        <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500 shrink-0" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-amber-600">{stats.totalRemaining}</div>
-                        <p className="text-[11px] text-amber-700/80 font-medium mt-1">Pending / Draft</p>
+                    <CardContent className="p-3 sm:p-4 pt-0">
+                        <div className="text-xl sm:text-2xl font-bold text-amber-600">{stats.totalRemaining}</div>
+                        <p className="text-[10px] sm:text-[11px] text-amber-700/80 font-medium mt-0.5">Pending / Draft</p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-none shadow-sm bg-white ring-1 ring-slate-200/60">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-600">Revenue</CardTitle>
-                        <CreditCard className="h-4 w-4 text-emerald-600" />
+                <Card className="border-none shadow-xs bg-white ring-1 ring-slate-200/60">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-4 pb-1 sm:pb-2">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-slate-600">Revenue</CardTitle>
+                        <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 shrink-0" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-slate-900">{formatCurrency(stats.totalRevenue)}</div>
-                        <div className="flex gap-3 mt-1.5 pt-1.5 border-t border-slate-100/50">
+                    <CardContent className="p-3 sm:p-4 pt-0">
+                        <div className="text-xl sm:text-2xl font-bold text-slate-900">{formatCurrency(stats.totalRevenue)}</div>
+                        <div className="flex gap-2 sm:gap-3 mt-1 pt-1 border-t border-slate-100/50">
                             <div className="flex items-center gap-1">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Cash:</span>
-                                <span className="text-[11px] font-black text-slate-600">{formatCurrency(stats.cashRevenue)}</span>
+                                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">C:</span>
+                                <span className="text-[10px] sm:text-[11px] font-black text-slate-600">{formatCurrency(stats.cashRevenue)}</span>
                             </div>
                             <div className="flex items-center gap-1">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Online:</span>
-                                <span className="text-[11px] font-black text-blue-600">{formatCurrency(stats.onlineRevenue)}</span>
+                                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">O:</span>
+                                <span className="text-[10px] sm:text-[11px] font-black text-blue-600">{formatCurrency(stats.onlineRevenue)}</span>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="border-none shadow-sm bg-white ring-1 ring-slate-200/60">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-600">Pending Dues</CardTitle>
-                        <AlertCircle className="h-4 w-4 text-rose-500" />
+                <Card className="col-span-2 sm:col-span-1 border-none shadow-xs bg-white ring-1 ring-slate-200/60">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-4 pb-1 sm:pb-2">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-slate-600">Pending Dues</CardTitle>
+                        <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-500 shrink-0" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-rose-600">{formatCurrency(stats.totalDue)}</div>
-                        <p className="text-[11px] text-slate-400 mt-1">Unpaid Balance</p>
+                    <CardContent className="p-3 sm:p-4 pt-0">
+                        <div className="text-xl sm:text-2xl font-bold text-rose-600">{formatCurrency(stats.totalDue)}</div>
+                        <p className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">Unpaid Balance</p>
                     </CardContent>
                 </Card>
             </div>
 
             {/* --- Advanced Filters & Search --- */}
-            <Card className="border shadow-sm bg-white overflow-hidden">
-                <div className="p-4 border-b bg-white flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center sticky top-0 z-10">
+            <Card className="border shadow-xs bg-white overflow-hidden">
+                <div className="p-3 sm:p-4 border-b bg-white flex flex-col xl:flex-row gap-3 sm:gap-4 justify-between items-start xl:items-center">
 
                     {/* 1. Date Toggle Buttons */}
-                    <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-                        <div className="bg-slate-100 p-1 rounded-lg flex items-center shrink-0">
+                    <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 w-full xl:w-auto">
+                        <div className="bg-slate-100 p-1 rounded-lg flex items-center shrink-0 overflow-x-auto max-w-full no-scrollbar">
                             <button
                                 onClick={() => handleFilterChange('today')}
-                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${filterType === 'today' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                className={`px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${filterType === 'today' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
                                 Today
                             </button>
                             <button
                                 onClick={() => handleFilterChange('yesterday')}
-                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${filterType === 'yesterday' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                className={`px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${filterType === 'yesterday' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
                                 Yesterday
                             </button>
                             <button
                                 onClick={() => handleFilterChange('all')}
-                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${filterType === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                className={`px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${filterType === 'all' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
                                 All Time
                             </button>
                             <button
                                 onClick={() => handleFilterChange('custom')}
-                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${filterType === 'custom' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                className={`px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${filterType === 'custom' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
                                 Custom
@@ -580,55 +580,57 @@ export default function OPDDashboard() {
 
                         {/* Custom Date Inputs (Only visible if Custom) */}
                         {filterType === 'custom' && (
-                            <div className="flex gap-2 animate-in fade-in slide-in-from-left-2">
-                                <Input type="date" className="w-36 h-9" value={customStartDate} onChange={e => { setCustomStartDate(e.target.value); setPage(0); }} />
-                                <Input type="date" className="w-36 h-9" value={customEndDate} onChange={e => { setCustomEndDate(e.target.value); setPage(0); }} />
+                            <div className="flex gap-2 animate-in fade-in slide-in-from-left-2 w-full sm:w-auto">
+                                <Input type="date" className="flex-1 sm:w-36 h-9 text-xs" value={customStartDate} onChange={e => { setCustomStartDate(e.target.value); setPage(0); }} />
+                                <Input type="date" className="flex-1 sm:w-36 h-9 text-xs" value={customEndDate} onChange={e => { setCustomEndDate(e.target.value); setPage(0); }} />
                             </div>
                         )}
 
-                        {/* Doctor Filter */}
-                        <Select value={selectedDoctorId} onValueChange={(val) => { setSelectedDoctorId(val); setPage(0); }}>
-                            <SelectTrigger className="w-[180px] h-9 bg-slate-50">
-                                <SelectValue placeholder="All Doctors" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="0">All Doctors</SelectItem>
-                                {doctorList.map(d => (
-                                    <SelectItem key={d.id} value={String(d.id)}>{d.doctor_name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full xl:w-auto">
+                            {/* Doctor Filter */}
+                            <Select value={selectedDoctorId} onValueChange={(val) => { setSelectedDoctorId(val); setPage(0); }}>
+                                <SelectTrigger className="w-full sm:w-[170px] h-9 bg-slate-50 text-xs sm:text-sm">
+                                    <SelectValue placeholder="All Doctors" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="0">All Doctors</SelectItem>
+                                    {doctorList.map(d => (
+                                        <SelectItem key={d.id} value={String(d.id)}>{d.doctor_name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
 
-                        {/* Hospital Filter */}
-                        <Select value={selectedHospital} onValueChange={(val) => { setSelectedHospital(val); setPage(0); }}>
-                            <SelectTrigger className="w-[180px] h-9 bg-blue-50 border-blue-200">
-                                <SelectValue placeholder="All Hospitals" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="All">All Hospitals</SelectItem>
-                                <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
-                                <SelectItem value="Rehmania Hospital">Rehmania Hospital</SelectItem>
-                                <SelectItem value="Jeevdani Hospital">Jeevdani Hospital</SelectItem>
-                                <SelectItem value="Dausup Hospital">Dausup Hospital</SelectItem>
-                            </SelectContent>
-                        </Select>
+                            {/* Hospital Filter */}
+                            <Select value={selectedHospital} onValueChange={(val) => { setSelectedHospital(val); setPage(0); }}>
+                                <SelectTrigger className="w-full sm:w-[170px] h-9 bg-blue-50 border-blue-200 text-xs sm:text-sm">
+                                    <SelectValue placeholder="All Hospitals" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="All">All Hospitals</SelectItem>
+                                    <SelectItem value="Cigma Clinic">Cigma Clinic</SelectItem>
+                                    <SelectItem value="Rehmania Hospital">Rehmania Hospital</SelectItem>
+                                    <SelectItem value="Jeevdani Hospital">Jeevdani Hospital</SelectItem>
+                                    <SelectItem value="Dausup Hospital">Dausup Hospital</SelectItem>
+                                </SelectContent>
+                            </Select>
 
-                        {/* Status Filter */}
-                        <Select value={statusFilter} onValueChange={(val: any) => { setStatusFilter(val); setPage(0); }}>
-                            <SelectTrigger className={cn(
-                                "w-[160px] h-9 transition-colors",
-                                statusFilter === 'finalized' ? "bg-emerald-50 border-emerald-300 text-emerald-700" :
-                                statusFilter === 'draft' ? "bg-amber-50 border-amber-300 text-amber-700" :
-                                "bg-slate-50 border-slate-200"
-                            )}>
-                                <SelectValue placeholder="All Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status ({stats.totalPatients})</SelectItem>
-                                <SelectItem value="finalized">Finalized ({stats.totalFinalized})</SelectItem>
-                                <SelectItem value="draft">Remaining ({stats.totalRemaining})</SelectItem>
-                            </SelectContent>
-                        </Select>
+                            {/* Status Filter */}
+                            <Select value={statusFilter} onValueChange={(val: any) => { setStatusFilter(val); setPage(0); }}>
+                                <SelectTrigger className={cn(
+                                    "w-full sm:w-[150px] h-9 transition-colors text-xs sm:text-sm",
+                                    statusFilter === 'finalized' ? "bg-emerald-50 border-emerald-300 text-emerald-700" :
+                                    statusFilter === 'draft' ? "bg-amber-50 border-amber-300 text-amber-700" :
+                                    "bg-slate-50 border-slate-200"
+                                )}>
+                                    <SelectValue placeholder="All Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Status ({stats.totalPatients})</SelectItem>
+                                    <SelectItem value="finalized">Finalized ({stats.totalFinalized})</SelectItem>
+                                    <SelectItem value="draft">Remaining ({stats.totalRemaining})</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
 
                     {/* 2. Intelligent Search Bar */}
@@ -705,105 +707,234 @@ export default function OPDDashboard() {
                             )}
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader className="bg-slate-50/80 sticky top-0">
-                                    <TableRow>
-                                        <TableHead className="w-[120px]">UHID</TableHead>
-                                        <TableHead>Patient Info</TableHead>
-                                        <TableHead>Doctor</TableHead>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead className="text-center">Report</TableHead>
-                                        <TableHead className="text-right">Total</TableHead>
-                                        <TableHead className="text-right">Status</TableHead>
-                                        <TableHead className="w-[80px]"></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {displayedRecords.map((r) => {
-                                        const due = r.total_fees - (r.discount_amount || 0) - r.amount_paid;
-                                        const netTotal = r.total_fees - (r.discount_amount || 0);
-                                        return (
-                                            <TableRow
-                                                key={r.id}
-                                                className="hover:bg-slate-50/50 cursor-pointer transition-colors"
-                                                onClick={() => router.push(`/pathology/opd/${r.id}/prescription`)}
-                                            >
-                                                <TableCell className="font-medium">
-                                                    <span className="text-slate-700">{r.uhid}</span>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="font-medium text-slate-900">{r.patient_name}</div>
-                                                    <div className="text-[10px] text-slate-500 font-bold">
-                                                        {r.hospital_name || 'No Hospital'}
+                        <>
+                            {/* --- Mobile Card List (md:hidden) --- */}
+                            <div className="block md:hidden divide-y divide-slate-100">
+                                {displayedRecords.map((r) => {
+                                    const due = r.total_fees - (r.discount_amount || 0) - r.amount_paid;
+                                    const netTotal = r.total_fees - (r.discount_amount || 0);
+                                    return (
+                                        <div
+                                            key={r.id}
+                                            className="p-3.5 space-y-2.5 bg-white hover:bg-slate-50/70 transition-colors"
+                                            onClick={() => router.push(`/pathology/opd/${r.id}/prescription`)}
+                                        >
+                                            {/* Header: Name, UHID & Payment Status */}
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <div className="font-semibold text-slate-900 text-sm truncate">
+                                                        {r.patient_name || "Unknown Patient"}
                                                     </div>
-                                                    <div className="text-[10px] text-slate-400">
-                                                        {r.patient_number ? `+91 ${r.patient_number}` : 'No Number'}
+                                                    <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
+                                                        <span className="font-mono font-medium text-slate-600">{r.uhid}</span>
+                                                        <span>•</span>
+                                                        <span>{formatDate(r.created_at)}</span>
                                                     </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <Badge variant="secondary" className="text-[10px] px-1 h-5">DR</Badge>
-                                                        <span className="text-slate-600 text-sm truncate max-w-[150px]">{r.doctor_name}</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-slate-500 text-sm">
-                                                    {formatDate(r.created_at)}
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                    {r.is_finalized ? (
-                                                        <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-100 flex items-center gap-1 mx-auto w-fit">
-                                                            <CheckCircle className="w-3 h-3" /> Finalized
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge variant="outline" className="text-slate-400 font-normal mx-auto w-fit border-slate-200">
-                                                            Draft
-                                                        </Badge>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="text-right font-medium">
-                                                    {r.discount_amount > 0 ? (
-                                                        <div className="flex flex-col items-end">
-                                                            <span className="text-slate-900">{formatCurrency(netTotal)}</span>
-                                                            <span className="text-[10px] text-slate-400 line-through">{formatCurrency(r.total_fees)}</span>
-                                                        </div>
-                                                    ) : (
-                                                        formatCurrency(r.total_fees)
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="text-right">
+                                                </div>
+                                                <div>
                                                     {due <= 0 ? (
-                                                        <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none">Paid</Badge>
+                                                        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-none text-[10px] px-2 py-0.5">Paid</Badge>
                                                     ) : (
-                                                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-2 py-0.5">
                                                             Due: {formatCurrency(due)}
                                                         </Badge>
                                                     )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex gap-1 justify-end">
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-emerald-600" onClick={(e) => { e.stopPropagation(); router.push(`/pathology/opd/${r.id}/prescription`); }}>
-                                                            <Pill className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); setSelectedRecordId(r.id); setIsModalOpen(true); }}>
-                                                            <FilePenLine className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-amber-600" title="Visit History" onClick={(e) => { e.stopPropagation(); setHistoryUhid(r.uhid); setHistoryPatientName(r.patient_name || ''); setIsHistoryModalOpen(true); }}>
-                                                            <History className="h-4 w-4" />
-                                                        </Button>
-                                                        {(role === 'admin' || role === 'staff' || role === 'reception' || role === 'receptionist') && (
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={(e) => { e.stopPropagation(); handleDeleteRecord(r); }}>
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
+                                                </div>
+                                            </div>
+
+                                            {/* Details: Doctor, Hospital, Fees, Status */}
+                                            <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50/80 p-2.5 rounded-lg border border-slate-100">
+                                                <div className="min-w-0">
+                                                    <div className="text-[10px] uppercase font-bold text-slate-400">Doctor</div>
+                                                    <div className="font-medium text-slate-700 truncate mt-0.5">{r.doctor_name || "Not assigned"}</div>
+                                                    <div className="text-[10px] text-slate-400 truncate">{r.hospital_name || 'No Hospital'}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-[10px] uppercase font-bold text-slate-400">Total Fee</div>
+                                                    <div className="font-bold text-slate-900 mt-0.5">
+                                                        {formatCurrency(netTotal)}
+                                                        {r.discount_amount > 0 && (
+                                                            <span className="text-[10px] text-slate-400 line-through ml-1">{formatCurrency(r.total_fees)}</span>
                                                         )}
                                                     </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        )
-                                    })}
-                                </TableBody>
-                            </Table>
-                        </div>
+                                                    <div className="mt-0.5">
+                                                        {r.is_finalized ? (
+                                                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                                                                <CheckCircle className="w-2.5 h-2.5" /> Finalized
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-block text-[10px] text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">
+                                                                Draft
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Mobile Actions Toolbar */}
+                                            <div className="flex items-center justify-between pt-1 gap-1">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-8 text-xs font-medium border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        router.push(`/pathology/opd/${r.id}/prescription`);
+                                                    }}
+                                                >
+                                                    <Pill className="h-3.5 w-3.5 mr-1" />
+                                                    Prescription
+                                                </Button>
+
+                                                <div className="flex items-center gap-1">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-8 px-2.5 text-xs text-blue-600 border-blue-200 bg-blue-50/50 hover:bg-blue-100"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedRecordId(r.id);
+                                                            setIsModalOpen(true);
+                                                        }}
+                                                    >
+                                                        <FilePenLine className="h-3.5 w-3.5 mr-1" />
+                                                        Edit
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-slate-400 hover:text-amber-600"
+                                                        title="Visit History"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setHistoryUhid(r.uhid);
+                                                            setHistoryPatientName(r.patient_name || '');
+                                                            setIsHistoryModalOpen(true);
+                                                        }}
+                                                    >
+                                                        <History className="h-4 w-4" />
+                                                    </Button>
+                                                    {(role === 'admin' || role === 'staff' || role === 'reception' || role === 'receptionist') && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteRecord(r);
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* --- Desktop Table View (hidden md:block) --- */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <Table>
+                                    <TableHeader className="bg-slate-50/80 sticky top-0">
+                                        <TableRow>
+                                            <TableHead className="w-[120px]">UHID</TableHead>
+                                            <TableHead>Patient Info</TableHead>
+                                            <TableHead>Doctor</TableHead>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead className="text-center">Report</TableHead>
+                                            <TableHead className="text-right">Total</TableHead>
+                                            <TableHead className="text-right">Status</TableHead>
+                                            <TableHead className="w-[80px]"></TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {displayedRecords.map((r) => {
+                                            const due = r.total_fees - (r.discount_amount || 0) - r.amount_paid;
+                                            const netTotal = r.total_fees - (r.discount_amount || 0);
+                                            return (
+                                                <TableRow
+                                                    key={r.id}
+                                                    className="hover:bg-slate-50/50 cursor-pointer transition-colors"
+                                                    onClick={() => router.push(`/pathology/opd/${r.id}/prescription`)}
+                                                >
+                                                    <TableCell className="font-medium">
+                                                        <span className="text-slate-700">{r.uhid}</span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="font-medium text-slate-900">{r.patient_name}</div>
+                                                        <div className="text-[10px] text-slate-500 font-bold">
+                                                            {r.hospital_name || 'No Hospital'}
+                                                        </div>
+                                                        <div className="text-[10px] text-slate-400">
+                                                            {r.patient_number ? `+91 ${r.patient_number}` : 'No Number'}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-2">
+                                                            <Badge variant="secondary" className="text-[10px] px-1 h-5">DR</Badge>
+                                                            <span className="text-slate-600 text-sm truncate max-w-[150px]">{r.doctor_name}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-slate-500 text-sm">
+                                                        {formatDate(r.created_at)}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        {r.is_finalized ? (
+                                                            <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-100 flex items-center gap-1 mx-auto w-fit">
+                                                                <CheckCircle className="w-3 h-3" /> Finalized
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-slate-400 font-normal mx-auto w-fit border-slate-200">
+                                                                Draft
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium">
+                                                        {r.discount_amount > 0 ? (
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="text-slate-900">{formatCurrency(netTotal)}</span>
+                                                                <span className="text-[10px] text-slate-400 line-through">{formatCurrency(r.total_fees)}</span>
+                                                            </div>
+                                                        ) : (
+                                                            formatCurrency(r.total_fees)
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        {due <= 0 ? (
+                                                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none">Paid</Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                                                Due: {formatCurrency(due)}
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex gap-1 justify-end">
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-emerald-600" onClick={(e) => { e.stopPropagation(); router.push(`/pathology/opd/${r.id}/prescription`); }}>
+                                                                <Pill className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); setSelectedRecordId(r.id); setIsModalOpen(true); }}>
+                                                                <FilePenLine className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-amber-600" title="Visit History" onClick={(e) => { e.stopPropagation(); setHistoryUhid(r.uhid); setHistoryPatientName(r.patient_name || ''); setIsHistoryModalOpen(true); }}>
+                                                                <History className="h-4 w-4" />
+                                                            </Button>
+                                                            {(role === 'admin' || role === 'staff' || role === 'reception' || role === 'receptionist') && (
+                                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={(e) => { e.stopPropagation(); handleDeleteRecord(r); }}>
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </>
                     )}
                 </CardContent>
 

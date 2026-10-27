@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, X, FileText, Save, Plus, Heart, Scale, Stethoscope, FilePenLine, UserCircle, Phone, Activity } from 'lucide-react';
+import { Loader2, X, FileText, Save, Plus, Heart, Scale, Stethoscope, FilePenLine, UserCircle, Phone, Activity, CreditCard } from 'lucide-react';
 import { openUniversalBillInNewTabProgrammatically, type BillServiceItem, type UniversalBillData, type DoctorLite } from "../patient-entry/universal-bill-generator";
 
 // --- Helper Functions (Duplicated for self-sufficiency) ---
@@ -391,9 +391,10 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
 
     if (isLoading) {
         return (
-            <Dialog open={true}>
-                <DialogContent className="sm:max-w-[800px] flex items-center justify-center py-10">
-                    <Loader2 className="mr-2 h-6 w-6 animate-spin text-blue-600" /> <span className="text-lg text-gray-700">Loading record data...</span>
+            <Dialog open={true} onOpenChange={() => onClose(false)}>
+                <DialogContent className="w-[90vw] max-w-[420px] p-6 flex flex-col items-center justify-center text-center rounded-2xl shadow-xl">
+                    <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mb-3" />
+                    <span className="text-sm font-semibold text-slate-700">Loading OPD record details...</span>
                 </DialogContent>
             </Dialog>
         );
@@ -401,77 +402,163 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
 
     if (!record) {
         return (
-            <Dialog open={true}>
-                <DialogContent className="sm:max-w-[800px]"><div className="text-red-500">Record not found.</div><Button onClick={() => onClose(false)}>Close</Button></DialogContent>
+            <Dialog open={true} onOpenChange={() => onClose(false)}>
+                <DialogContent className="w-[90vw] max-w-[420px] p-6 text-center rounded-2xl shadow-xl">
+                    <div className="text-rose-500 font-semibold mb-3">Record not found.</div>
+                    <Button onClick={() => onClose(false)} className="w-full bg-slate-800 hover:bg-slate-900 text-white">Close</Button>
+                </DialogContent>
             </Dialog>
         );
     }
 
-
     return (
         <Dialog open={true} onOpenChange={() => onClose(false)}>
-            <DialogContent className="sm:max-w-[1100px]"> {/* Expanded width for more details */}
-                <DialogHeader>
-                    <DialogTitle className="flex items-center justify-between">
-                        <span className="flex items-center"><FilePenLine className="mr-2 h-6 w-6 text-blue-600" /> Edit OPD Registration: {opdId}</span>
-                        <Button variant="ghost" size="sm" onClick={() => onClose(false)}><X className="h-5 w-5" /></Button>
-                    </DialogTitle>
+            <DialogContent className="w-[96vw] max-w-[96vw] sm:max-w-[1100px] h-[92vh] sm:h-auto max-h-[92vh] sm:max-h-[88vh] p-0 flex flex-col gap-0 overflow-hidden rounded-xl sm:rounded-2xl border border-slate-200 shadow-2xl bg-slate-50/50">
+                {/* Fixed / Sticky Header */}
+                <DialogHeader className="p-3.5 sm:p-5 border-b border-slate-100 bg-white sticky top-0 z-20 flex flex-row items-center justify-between pr-12 shrink-0 space-y-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                            <FilePenLine className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 text-left">
+                            <DialogTitle className="text-sm sm:text-base md:text-lg font-bold text-slate-800 truncate">
+                                Edit OPD Registration #{opdId}
+                            </DialogTitle>
+                            <p className="text-[11px] sm:text-xs text-slate-500 truncate">
+                                UHID: <span className="font-semibold text-slate-700">{record.uhid}</span>
+                                {record.patient_detail?.name ? ` • ${record.patient_detail.name}` : ''}
+                            </p>
+                        </div>
+                    </div>
                 </DialogHeader>
 
-                <form onSubmit={handleUpdate}>
-                    <div className="grid grid-cols-3 gap-4 mb-4">
-                        {/* 1. Patient Details Card */}
-                        <div className="col-span-1 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <h3 className="text-md font-bold text-blue-800 mb-3 flex items-center"><UserCircle className="h-4 w-4 mr-2" /> Patient Information (UHID: {record.uhid})</h3>
-                            <div className="space-y-2">
-                                {/* Title */}
-                                <div><Label className="text-xs">Title</Label>
-                                    <Select value={watchedFields.title} onValueChange={(v) => setValue("title", v)}><SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                        <SelectContent className="z-[200]">{[".", "MR", "MRS", "MAST", "MISS", "MS", "BABY", "SMT", "BABY OF", "DR"].map((t) => (<SelectItem key={t} value={t}>{t === "." ? "NoTitle" : t}</SelectItem>))}</SelectContent></Select></div>
-
-                                {/* Name */}
-                                <div><Label className="text-xs">Full Name</Label>
-                                    <Input {...register("name", { required: true })} className="h-8" placeholder="Name" /></div>
-
-                                {/* Contact */}
-                                <div><Label className="text-xs flex items-center"><Phone className="h-3 w-3 mr-1" /> Contact Number</Label>
-                                    <Input {...register("number", { required: true, pattern: { value: /^[0-9]{10}$/, message: "10 digits" } })} className="h-8" placeholder="10-digit mobile" /></div>
-
-                                {/* Age & Unit */}
-                                <div className='grid grid-cols-3 gap-2'>
-                                    <div className='col-span-2'><Label className="text-xs">Age</Label>
-                                        <Input type="number" {...register("age", { required: true, valueAsNumber: true })} className="h-8" placeholder="Age" /></div>
-                                    <div><Label className="text-xs">Unit</Label>
-                                        <Select value={watchedFields.dayType} onValueChange={(v) => setValue("dayType", v as any)}><SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                            <SelectContent className="z-[200]"> <SelectItem value="year">Yr</SelectItem> <SelectItem value="month">Mon</SelectItem> <SelectItem value="day">Day</SelectItem> </SelectContent></Select></div>
+                <form onSubmit={handleUpdate} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    {/* Scrollable Container with Smooth Touch Scrolling */}
+                    <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5 space-y-4 touch-pan-y">
+                        {/* Section 1: Top 3 Cards (Patient Info, Consultation Details, Vitals) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
+                            {/* 1. Patient Details Card */}
+                            <div className="p-3.5 sm:p-4 bg-white rounded-xl border border-blue-100 shadow-xs ring-1 ring-blue-500/10">
+                                <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-blue-100/80">
+                                    <h3 className="text-xs sm:text-sm font-bold text-blue-900 flex items-center">
+                                        <UserCircle className="h-4 w-4 mr-1.5 text-blue-600 shrink-0" />
+                                        Patient Information
+                                    </h3>
+                                    <span className="text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full border border-blue-200">
+                                        UHID: {record.uhid}
+                                    </span>
                                 </div>
+                                <div className="space-y-2.5">
+                                    {/* Title + Name */}
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div className="col-span-1">
+                                            <Label className="text-[11px] font-medium text-slate-600 mb-1 block">Title</Label>
+                                            <Select value={watchedFields.title} onValueChange={(v) => setValue("title", v)}>
+                                                <SelectTrigger className="h-8 text-xs bg-slate-50/50">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="z-[300]">
+                                                    {[".", "MR", "MRS", "MAST", "MISS", "MS", "BABY", "SMT", "BABY OF", "DR"].map((t) => (
+                                                        <SelectItem key={t} value={t}>{t === "." ? "NoTitle" : t}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="col-span-2">
+                                            <Label className="text-[11px] font-medium text-slate-600 mb-1 block">Full Name *</Label>
+                                            <Input
+                                                {...register("name", { required: true })}
+                                                className="h-8 text-xs bg-slate-50/50"
+                                                placeholder="Patient Name"
+                                            />
+                                        </div>
+                                    </div>
 
-                                {/* Gender */}
-                                <div><Label className="text-xs">Gender</Label>
-                                    <Select value={watchedFields.gender} onValueChange={(v) => setValue("gender", v)}><SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                        <SelectContent className="z-[200]"><SelectItem value="male">Male</SelectItem><SelectItem value="female">Female</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+                                    {/* Contact + Gender */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <Label className="text-[11px] font-medium text-slate-600 mb-1 flex items-center">
+                                                <Phone className="h-2.5 w-2.5 mr-1 text-slate-400" /> Contact *
+                                            </Label>
+                                            <Input
+                                                {...register("number", { required: true, pattern: { value: /^[0-9]{10}$/, message: "10 digits" } })}
+                                                className="h-8 text-xs bg-slate-50/50"
+                                                placeholder="10-digit number"
+                                                type="tel"
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label className="text-[11px] font-medium text-slate-600 mb-1 block">Gender</Label>
+                                            <Select value={watchedFields.gender} onValueChange={(v) => setValue("gender", v)}>
+                                                <SelectTrigger className="h-8 text-xs bg-slate-50/50">
+                                                    <SelectValue placeholder="Gender" />
+                                                </SelectTrigger>
+                                                <SelectContent className="z-[300]">
+                                                    <SelectItem value="male">Male</SelectItem>
+                                                    <SelectItem value="female">Female</SelectItem>
+                                                    <SelectItem value="other">Other</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
 
-                                {/* Address */}
-                                <div><Label className="text-xs">Address</Label>
-                                    <Input {...register("address")} className="h-8" placeholder="Address" /></div>
-                            </div>
-                        </div>
+                                    {/* Age + Unit */}
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div className="col-span-2">
+                                            <Label className="text-[11px] font-medium text-slate-600 mb-1 block">Age *</Label>
+                                            <Input
+                                                type="number"
+                                                {...register("age", { required: true, valueAsNumber: true })}
+                                                className="h-8 text-xs bg-slate-50/50"
+                                                placeholder="Age"
+                                            />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <Label className="text-[11px] font-medium text-slate-600 mb-1 block">Unit</Label>
+                                            <Select value={watchedFields.dayType} onValueChange={(v) => setValue("dayType", v as any)}>
+                                                <SelectTrigger className="h-8 text-xs bg-slate-50/50">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="z-[300]">
+                                                    <SelectItem value="year">Yr</SelectItem>
+                                                    <SelectItem value="month">Mon</SelectItem>
+                                                    <SelectItem value="day">Day</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
 
-
-                        {/* 2. Consultation & Vitals Section */}
-                        <div className="col-span-2 grid grid-cols-2 gap-4">
-                            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                <h3 className="text-md font-bold text-gray-700 mb-3">Consultation Details</h3>
-                                <div className="space-y-3">
-                                    {/* Treating Doctor */}
+                                    {/* Address */}
                                     <div>
-                                        <Label className="text-sm">Treating Doctor *</Label>
+                                        <Label className="text-[11px] font-medium text-slate-600 mb-1 block">Address</Label>
+                                        <Input
+                                            {...register("address")}
+                                            className="h-8 text-xs bg-slate-50/50"
+                                            placeholder="Address / Location"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 2. Consultation Details Card */}
+                            <div className="p-3.5 sm:p-4 bg-white rounded-xl border border-slate-200 shadow-xs ring-1 ring-slate-100">
+                                <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-slate-100">
+                                    <h3 className="text-xs sm:text-sm font-bold text-slate-800 flex items-center">
+                                        <Stethoscope className="h-4 w-4 mr-1.5 text-indigo-600 shrink-0" />
+                                        Consultation Details
+                                    </h3>
+                                </div>
+                                <div className="space-y-2.5">
+                                    <div>
+                                        <Label className="text-[11px] font-medium text-slate-600 mb-1 block">Treating Doctor *</Label>
                                         <Select
                                             value={String(watchedFields.treatingDoctorId)}
                                             onValueChange={(v) => setValue("treatingDoctorId", Number(v))}
                                         >
-                                            <SelectTrigger className="h-9"><SelectValue placeholder="Select Treating Doctor" /></SelectTrigger>
-                                            <SelectContent className="max-h-60 overflow-y-auto z-[200]">
+                                            <SelectTrigger className="h-8 text-xs bg-slate-50/50 w-full">
+                                                <SelectValue placeholder="Select Treating Doctor" />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-60 overflow-y-auto z-[300]">
                                                 {doctorList.map((d) => (
                                                     <SelectItem key={d.id} value={String(d.id)}>{d.doctor_name}</SelectItem>
                                                 ))}
@@ -479,151 +566,279 @@ const OPDRecordEditModal: React.FC<OPDRecordEditModalProps> = ({ opdId, doctorLi
                                         </Select>
                                     </div>
 
-                                    {/* Visit Category */}
-                                    <div>
-                                        <Label className="text-sm">Visit Type *</Label>
-                                        <Select
-                                            value={watchedFields.visitCategory}
-                                            onValueChange={(v) => setValue("visitCategory", v as any)}
-                                        >
-                                            <SelectTrigger className="h-9"><SelectValue placeholder="Select Visit Type" /></SelectTrigger>
-                                            <SelectContent className="z-[200]">
-                                                <SelectItem value="First Visit">First Visit</SelectItem>
-                                                <SelectItem value="Follow Up">Follow Up</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <Label className="text-[11px] font-medium text-slate-600 mb-1 block">Visit Type *</Label>
+                                            <Select
+                                                value={watchedFields.visitCategory}
+                                                onValueChange={(v) => setValue("visitCategory", v as any)}
+                                            >
+                                                <SelectTrigger className="h-8 text-xs bg-slate-50/50">
+                                                    <SelectValue placeholder="Visit Type" />
+                                                </SelectTrigger>
+                                                <SelectContent className="z-[300]">
+                                                    <SelectItem value="First Visit">First Visit</SelectItem>
+                                                    <SelectItem value="Follow Up">Follow Up</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div>
+                                            <Label className="text-[11px] font-medium text-slate-600 mb-1 block">Calculated Fee</Label>
+                                            <div className="h-8 px-2.5 rounded-md border border-indigo-200 bg-indigo-50/80 text-indigo-800 font-bold text-xs flex items-center">
+                                                ₹{totalFees.toFixed(2)}
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    {/* Referring Doctor */}
                                     <div>
-                                        <Label className="text-sm">Referring Doctor</Label>
+                                        <Label className="text-[11px] font-medium text-slate-600 mb-1 block">Referring Doctor</Label>
                                         <Input
                                             {...register("referringDoctorName")}
-                                            className="h-9"
+                                            className="h-8 text-xs bg-slate-50/50"
                                             placeholder="External/Internal Referral"
                                         />
-                                    </div>
-
-                                    {/* Calculated Fee Display */}
-                                    <div>
-                                        <Label className="text-sm">Calculated Fee</Label>
-                                        <Input type="text" value={`₹${totalFees.toFixed(2)}`} readOnly className="h-9 font-bold bg-blue-100 cursor-not-allowed" />
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                                <h3 className="text-md font-bold text-gray-700 mb-3">Vitals</h3>
-                                <div className="space-y-3">
+                            {/* 3. Vitals Card */}
+                            <div className="p-3.5 sm:p-4 bg-white rounded-xl border border-amber-100 shadow-xs ring-1 ring-amber-500/10 md:col-span-2 lg:col-span-1">
+                                <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-amber-100/80">
+                                    <h3 className="text-xs sm:text-sm font-bold text-amber-900 flex items-center">
+                                        <Activity className="h-4 w-4 mr-1.5 text-amber-600 shrink-0" />
+                                        Vitals
+                                    </h3>
+                                    <span className="text-[10px] text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">Optional</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
                                     <div>
-                                        <Label className="text-sm flex items-center"><Heart className="h-3 w-3 mr-1" /> BP (Systolic/Diastolic)</Label>
-                                        <Input {...register("bp")} className="h-9" placeholder="e.g., 120/80" />
+                                        <Label className="text-[11px] font-medium text-slate-600 mb-1 flex items-center">
+                                            <Heart className="h-2.5 w-2.5 mr-1 text-rose-500" /> BP
+                                        </Label>
+                                        <Input {...register("bp")} className="h-8 text-xs bg-slate-50/50" placeholder="120/80" />
                                     </div>
                                     <div>
-                                        <Label className="text-sm flex items-center"><Stethoscope className="h-3 w-3 mr-1" /> Pulse (BPM)</Label>
-                                        <Input type="number" inputMode="numeric" {...register("pulse", { valueAsNumber: true })} className="h-9" placeholder="e.g., 72" />
+                                        <Label className="text-[11px] font-medium text-slate-600 mb-1 flex items-center">
+                                            <Stethoscope className="h-2.5 w-2.5 mr-1 text-indigo-500" /> Pulse (BPM)
+                                        </Label>
+                                        <Input
+                                            type="number"
+                                            inputMode="numeric"
+                                            {...register("pulse", { valueAsNumber: true })}
+                                            className="h-8 text-xs bg-slate-50/50"
+                                            placeholder="72"
+                                        />
                                     </div>
                                     <div>
-                                        <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> SpO2 (%)</Label>
-                                        <Input type="text" inputMode="numeric" {...register("spo2")} className="h-9" placeholder="e.g., 99%" />
+                                        <Label className="text-[11px] font-medium text-slate-600 mb-1 flex items-center">
+                                            <Activity className="h-2.5 w-2.5 mr-1 text-teal-500" /> SpO2 (%)
+                                        </Label>
+                                        <Input
+                                            type="text"
+                                            inputMode="numeric"
+                                            {...register("spo2")}
+                                            className="h-8 text-xs bg-slate-50/50"
+                                            placeholder="98"
+                                        />
                                     </div>
                                     <div>
-                                        <Label className="text-sm flex items-center"><Activity className="h-3 w-3 mr-1" /> Sugar (mg/dL)</Label>
-                                        <Input type="text" inputMode="numeric" {...register("sugar")} className="h-9" placeholder="e.g., 110" />
+                                        <Label className="text-[11px] font-medium text-slate-600 mb-1 flex items-center">
+                                            <Activity className="h-2.5 w-2.5 mr-1 text-amber-500" /> Sugar (mg/dL)
+                                        </Label>
+                                        <Input
+                                            type="text"
+                                            inputMode="numeric"
+                                            {...register("sugar")}
+                                            className="h-8 text-xs bg-slate-50/50"
+                                            placeholder="110"
+                                        />
                                     </div>
-                                    <div>
-                                        <Label className="text-sm flex items-center"><Scale className="h-3 w-3 mr-1" /> Weight (Kg)</Label>
-                                        <Input type="number" step="0.1" inputMode="decimal" {...register("weight", { valueAsNumber: true })} className="h-9" placeholder="e.g., 65.5" />
+                                    <div className="col-span-2">
+                                        <Label className="text-[11px] font-medium text-slate-600 mb-1 flex items-center">
+                                            <Scale className="h-2.5 w-2.5 mr-1 text-purple-500" /> Weight (Kg)
+                                        </Label>
+                                        <Input
+                                            type="number"
+                                            step="0.1"
+                                            inputMode="decimal"
+                                            {...register("weight", { valueAsNumber: true })}
+                                            className="h-8 text-xs bg-slate-50/50"
+                                            placeholder="65.5"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 2: Payments and Financial Summary */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 sm:gap-4">
+                            {/* 4. Payment Details Card */}
+                            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs">
+                                <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-slate-100">
+                                    <h3 className="text-xs sm:text-sm font-bold text-slate-800 flex items-center">
+                                        <CreditCard className="h-4 w-4 mr-1.5 text-emerald-600 shrink-0" />
+                                        Payment Entries
+                                    </h3>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleAddPaymentEntry}
+                                        className="h-7 text-xs px-2.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 font-medium"
+                                    >
+                                        <Plus className="h-3 w-3 mr-1" /> Add Payment
+                                    </Button>
+                                </div>
+
+                                <div className="mb-3">
+                                    <Label className="text-[11px] font-medium text-slate-600 mb-1 block">Discount (₹)</Label>
+                                    <Input
+                                        type="number"
+                                        step="0.01"
+                                        {...register("discountAmount", { valueAsNumber: true })}
+                                        placeholder="0"
+                                        className="h-8 text-xs bg-slate-50/50"
+                                    />
+                                </div>
+
+                                <div className="max-h-48 overflow-y-auto space-y-2 pr-0.5">
+                                    {paymentFields.length === 0 ? (
+                                        <div className="text-center py-5 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-slate-400 text-xs">
+                                            No payment entries yet. Click &quot;+ Add Payment&quot; to record a payment.
+                                        </div>
+                                    ) : (
+                                        paymentFields.map((field, idx) => (
+                                            <div key={field.id} className="border border-slate-200 rounded-lg p-2.5 bg-slate-50/60 shadow-xs">
+                                                <div className="flex items-center justify-between mb-1.5">
+                                                    <span className="text-[11px] font-bold text-slate-700">Payment #{idx + 1}</span>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-5 w-5 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                                        onClick={() => removePayment(idx)}
+                                                    >
+                                                        <X className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <Label className="text-[10px] text-slate-500 font-medium mb-0.5 block">Amount (₹)</Label>
+                                                        <Input
+                                                            type="number"
+                                                            step="0.01"
+                                                            {...register(`paymentEntries.${idx}.amount`, { valueAsNumber: true })}
+                                                            className="h-7 text-xs bg-white"
+                                                            placeholder="0.00"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <Label className="text-[10px] text-slate-500 font-medium mb-0.5 block">Mode</Label>
+                                                        <Select
+                                                            value={watchedFields.paymentEntries[idx]?.paymentMode}
+                                                            onValueChange={(v) => setValue(`paymentEntries.${idx}.paymentMode` as any, v as any)}
+                                                        >
+                                                            <SelectTrigger className="h-7 text-xs bg-white">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent className="z-[300]">
+                                                                <SelectItem value="online">Online</SelectItem>
+                                                                <SelectItem value="cash">Cash</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 5. Summary Card */}
+                            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+                                <div>
+                                    <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-slate-100">
+                                        <h3 className="text-xs sm:text-sm font-bold text-slate-800">Financial Summary</h3>
+                                        <span className={`text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-full ${remainingAmount <= 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                                            {remainingAmount <= 0 ? "Fully Paid" : "Payment Pending"}
+                                        </span>
+                                    </div>
+
+                                    <div className="space-y-2 text-xs sm:text-sm bg-slate-50/70 p-3 rounded-lg border border-slate-100">
+                                        <div className="flex justify-between items-center text-slate-600">
+                                            <span>Calculated Fee:</span>
+                                            <span className="font-semibold text-slate-900">₹{totalFees.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-slate-600">
+                                            <span>Discount:</span>
+                                            <span className="font-semibold text-amber-600">-₹{watchedDiscount.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-slate-600">
+                                            <span>Total Paid:</span>
+                                            <span className="font-semibold text-emerald-600">₹{totalPaid.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-t border-slate-200 pt-2 font-bold text-xs sm:text-sm">
+                                            <span className="text-slate-800">Remaining Amount:</span>
+                                            <span className={remainingAmount < 0 ? "text-rose-600" : remainingAmount > 0 ? "text-amber-600" : "text-emerald-600"}>
+                                                ₹{remainingAmount.toFixed(2)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center space-x-2.5 py-3 mt-3 border-t border-slate-100">
+                                        <Checkbox
+                                            id="edit-send-whatsapp"
+                                            checked={watchedFields.sendWhatsApp}
+                                            onCheckedChange={(checked) => setValue("sendWhatsApp", !!checked)}
+                                            className="data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                                        />
+                                        <Label htmlFor="edit-send-whatsapp" className="text-xs sm:text-sm font-medium cursor-pointer flex items-center gap-1.5 text-slate-700">
+                                            <span className="text-emerald-600">📱</span>
+                                            Send WhatsApp Payment Notification
+                                        </Label>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-
-                    {/* --- 3. Payments and Summary Section --- */}
-                    <div className="grid grid-cols-2 gap-4">
-                        {/* Payment Details */}
-                        <div className="bg-white p-3 rounded-lg border">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-lg font-semibold text-gray-700">Payment Entries</h3>
-                                <Button type="button" variant="outline" size="sm" onClick={handleAddPaymentEntry}><Plus className="h-4 w-4 mr-1" /> Add Payment</Button>
-                            </div>
-
-                            <div className="mb-3">
-                                <Label className="text-sm">Discount (₹)</Label>
-                                <Input
-                                    type="number"
-                                    step="0.01"
-                                    {...register("discountAmount", { valueAsNumber: true })}
-                                    placeholder="0"
-                                    className="h-9"
-                                />
-                            </div>
-
-                            <div className="max-h-40 overflow-y-auto space-y-2">
-                                {paymentFields.map((field, idx) => (
-                                    <div key={field.id} className="border rounded-lg p-2 bg-gray-50">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium">Payment {idx + 1}</span>
-                                            <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removePayment(idx)}>
-                                                <X className="h-3 w-3 text-red-500" />
-                                            </Button>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <Label className="text-xs">Amount (₹)</Label>
-                                                <Input type="number" step="0.01" {...register(`paymentEntries.${idx}.amount`, { valueAsNumber: true })} className="h-8" placeholder="Amount" />
-                                            </div>
-                                            <div>
-                                                <Label className="xs">Mode</Label>
-                                                <Select value={watchedFields.paymentEntries[idx]?.paymentMode} onValueChange={(v) => setValue(`paymentEntries.${idx}.paymentMode` as any, v as any)}>
-                                                    <SelectTrigger className="h-8"> <SelectValue /> </SelectTrigger>
-                                                    <SelectContent className="z-[200]"><SelectItem value="online">Online</SelectItem><SelectItem value="cash">Cash</SelectItem></SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                    {/* Fixed / Sticky Footer with Touch-Friendly Action Buttons */}
+                    <div className="border-t border-slate-200 bg-white p-3 sm:p-4 px-4 sm:px-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+                        <div className="flex items-center justify-between sm:justify-start gap-4">
+                            <div className="text-xs sm:text-sm text-slate-600">
+                                Remaining Due:{" "}
+                                <span
+                                    className={`font-bold ${
+                                        remainingAmount > 0
+                                            ? "text-amber-600"
+                                            : remainingAmount < 0
+                                            ? "text-rose-600"
+                                            : "text-emerald-600"
+                                    }`}
+                                >
+                                    ₹{remainingAmount.toFixed(2)}
+                                </span>
                             </div>
                         </div>
 
-                        {/* Summary */}
-                        <div className="bg-white p-3 rounded-lg border flex flex-col justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold text-gray-700 mb-3">Summary</h3>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between"><span>Calculated Fee:</span><span className="font-medium">₹{totalFees.toFixed(2)}</span></div>
-                                    <div className="flex justify-between"><span>Discount:</span><span className="font-medium">₹{watchedDiscount.toFixed(2)}</span></div>
-                                    <div className="flex justify-between"><span>Total Paid:</span><span className="font-medium">₹{totalPaid.toFixed(2)}</span></div>
-                                    <div className="flex justify-between border-t pt-2">
-                                        <span className="font-semibold">Remaining Amount:</span>
-                                        <span className={`font-semibold ${remainingAmount < 0 ? "text-red-600" : remainingAmount > 0 ? "text-orange-600" : "text-green-600"}`}>
-                                            ₹{remainingAmount.toFixed(2)}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="flex items-center space-x-2 py-4 border-t mt-2">
-                                    <Checkbox
-                                        id="edit-send-whatsapp"
-                                        checked={watchedFields.sendWhatsApp}
-                                        onCheckedChange={(checked) => setValue("sendWhatsApp", !!checked)}
-                                    />
-                                    <Label htmlFor="edit-send-whatsapp" className="text-sm font-medium cursor-pointer flex items-center gap-2">
-                                        <span className="text-green-600 text-lg">📱</span>
-                                        Send WhatsApp Notification
-                                    </Label>
-                                </div>
-                            </div>
-
-                            {/* Action Buttons */}
-                            <div className="flex justify-end gap-2 mt-4">
-                                <Button type="button" variant="outline" onClick={handleDownloadBill}><FileText className="h-4 w-4 mr-2" /> Download Bill</Button>
-                                <Button type="submit" disabled={isUpdating} className="bg-blue-600 hover:bg-blue-700">
-                                    {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                                    Save Changes
-                                </Button>
-                            </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleDownloadBill}
+                                className="flex-1 sm:flex-initial h-9 sm:h-10 px-4 text-xs sm:text-sm font-medium border-slate-200 hover:bg-slate-50 text-slate-700 shadow-xs"
+                            >
+                                <FileText className="h-4 w-4 mr-1.5 text-slate-500" />
+                                Download Bill
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={isUpdating}
+                                className="flex-1 sm:flex-initial h-9 sm:h-10 px-5 text-xs sm:text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs"
+                            >
+                                {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
+                                Save Changes
+                            </Button>
                         </div>
                     </div>
                 </form>
